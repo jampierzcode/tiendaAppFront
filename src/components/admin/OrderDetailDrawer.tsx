@@ -52,7 +52,7 @@ export interface Pedido {
   code: string;
   status: EstadoPedido;
   customerName: string;
-  customerPhone: string;
+  customerPhone: string | null;
   deliveryMethod: string;
   deliveryAddress: string | null;
   deliveryCity: string | null;
@@ -322,15 +322,22 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
             <section>
               <p className="eyebrow mb-2">Cliente</p>
               <p className="font-semibold text-ink">{pedido.customerName}</p>
-              <a
-                href={`https://wa.me/${pedido.customerPhone.replace(/\D/g, "")}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-1 inline-flex items-center gap-1.5 text-[13px] text-brand-600 hover:underline"
-              >
-                <TbBrandWhatsapp className="text-base" />
-                {pedido.customerPhone}
-              </a>
+              {/* Una venta de mostrador no tiene teléfono: el cliente pagó y
+                  se fue. Antes se llamaba a .replace() sobre null y la
+                  pantalla entera se quedaba en blanco. */}
+              {pedido.customerPhone ? (
+                <a
+                  href={`https://wa.me/${pedido.customerPhone.replace(/\D/g, "")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-1 inline-flex items-center gap-1.5 text-[13px] text-brand-600 hover:underline"
+                >
+                  <TbBrandWhatsapp className="text-base" />
+                  {pedido.customerPhone}
+                </a>
+              ) : (
+                <p className="mt-1 text-[13px] text-muted">Sin teléfono registrado</p>
+              )}
               <p className="mt-1.5 text-[13px] text-ink-soft">
                 {pedido.deliveryMethod === "recojo"
                   ? "Recojo en tienda"

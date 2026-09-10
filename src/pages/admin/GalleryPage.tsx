@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Button, Empty, Spin, Upload, message } from "antd";
+import { Button, Empty, Popconfirm, Spin, Upload, message } from "antd";
 import { motion } from "motion/react";
-import { TbTrash, TbUpload } from "react-icons/tb";
+import { TbLoader2, TbTrash, TbUpload } from "react-icons/tb";
 import { useGallery } from "../../hooks/useGallery";
 import PageHeader from "../../components/ui/PageHeader";
 
@@ -86,16 +86,29 @@ export default function GalleryPage() {
                 </span>
               </figcaption>
 
-              <Button
-                size="small"
-                danger
-                type="primary"
-                icon={<TbTrash />}
-                loading={borrando === img.id}
-                onClick={() => borrar(img.id)}
-                aria-label={`Eliminar ${img.name ?? "imagen"}`}
-                className="absolute right-2 top-2 opacity-0 transition group-hover:opacity-100 focus:opacity-100"
-              />
+              {/* Siempre visible, no solo al pasar el ratón: en una tablet
+                  no hay hover y el botón era inalcanzable. El círculo oscuro
+                  translúcido lo hace legible sobre cualquier foto. */}
+              <Popconfirm
+                title="¿Eliminar esta foto?"
+                description="Se borra del bucket y quien la use se queda sin imagen."
+                okText="Eliminar"
+                cancelText="Cancelar"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => borrar(img.id)}
+              >
+                <button
+                  type="button"
+                  aria-label={`Eliminar ${img.name ?? "imagen"}`}
+                  className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-ink/45 text-white backdrop-blur-sm transition hover:bg-danger focus-visible:bg-danger focus-visible:outline-none"
+                >
+                  {borrando === img.id ? (
+                    <TbLoader2 size={15} className="animate-spin" />
+                  ) : (
+                    <TbTrash size={15} />
+                  )}
+                </button>
+              </Popconfirm>
             </motion.figure>
           ))}
         </div>

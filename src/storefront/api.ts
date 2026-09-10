@@ -58,6 +58,8 @@ export interface Variacion {
   price: number;
   originalPrice: number | null;
   label: string;
+  /** Foto propia de la variación. Si es null se usa la del producto. */
+  imageUrl: string | null;
   attributes: {
     attributeId: number;
     attributeName: string;

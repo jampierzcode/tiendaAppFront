@@ -51,8 +51,11 @@ export const AuthContext = createContext<AuthContextType>({
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
+  // El token vive en localStorage, no en sessionStorage: en una tienda se
+  // cierra y se reabre el navegador todo el día, y volver a pedir la
+  // contraseña en cada pestaña nueva no aporta seguridad, solo estorba.
   const [auth, setAuth] = useState<AuthState>({
-    token: sessionStorage.getItem("token") || null,
+    token: localStorage.getItem("token") || null,
     user: null,
   });
   const [businessesByUser, setBusinessesByUser] = useState<Business[] | null>(
@@ -69,7 +72,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { success: false, message: "No se recibió token del servidor." };
       }
 
-      sessionStorage.setItem("token", data.token);
+      localStorage.setItem("token", data.token);
 
       await fetchMe(data.token);
       return { success: true };
@@ -122,7 +125,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // 🔹 LOGOUT
   const logout = () => {
-    sessionStorage.removeItem("token");
+    localStorage.removeItem("token");
     setAuth({ token: null, user: null });
   };
 

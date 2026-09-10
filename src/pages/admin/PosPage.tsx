@@ -1,8 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Empty, Input, InputNumber, Modal, Select, Spin, message } from "antd";
 import { AnimatePresence, motion } from "motion/react";
-import { TbCash, TbPrinter, TbSearch, TbShoppingCart, TbTrash, TbX } from "react-icons/tb";
+import {
+  TbCash,
+  TbChevronDown,
+  TbPhoto,
+  TbPrinter,
+  TbSearch,
+  TbShoppingCart,
+  TbTrash,
+  TbX,
+} from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
+import GalleryModal from "../../components/admin/GalleryModal";
 import PageHeader from "../../components/ui/PageHeader";
 import TicketPrint, { type DatosTicket } from "../../components/admin/TicketPrint";
 
@@ -51,6 +61,11 @@ export default function PosPage() {
   const [descuento, setDescuento] = useState(0);
   const [metodo, setMetodo] = useState("efectivo");
   const [recibido, setRecibido] = useState<number | null>(null);
+  const [referencia, setReferencia] = useState("");
+  const [notaPago, setNotaPago] = useState("");
+  const [comprobante, setComprobante] = useState<{ id: number; url: string } | null>(null);
+  const [galeriaAbierta, setGaleriaAbierta] = useState(false);
+  const [detallesAbiertos, setDetallesAbiertos] = useState(false);
   const [cobrando, setCobrando] = useState(false);
   const [ticket, setTicket] = useState<DatosTicket | null>(null);
   const buscadorRef = useRef<any>(null);
@@ -149,7 +164,15 @@ export default function PosPage() {
     try {
       const r = await apiTienda.post("/pos/sell", {
         items: carrito.map((l) => ({ variationId: l.variationId, quantity: l.cantidad })),
-        payments: [{ method: metodo, amount: montoPago }],
+        payments: [
+          {
+            method: metodo,
+            amount: montoPago,
+            reference: referencia.trim() || null,
+            note: notaPago.trim() || null,
+            receiptImageId: comprobante?.id ?? null,
+          },
+        ],
         discountPercentage: descuento,
       });
 
@@ -161,6 +184,10 @@ export default function PosPage() {
       setCarrito([]);
       setDescuento(0);
       setRecibido(null);
+      setReferencia("");
+      setNotaPago("");
+      setComprobante(null);
+      setDetallesAbiertos(false);
     } catch (e: any) {
       message.error(e?.response?.data?.message ?? "No se pudo cerrar la venta");
     } finally {
@@ -364,6 +391,10 @@ export default function PosPage() {
                   onChange={(v) => {
                     setMetodo(v);
                     setRecibido(null);
+                    // En Yape, Plin o transferencia el número de operación y la
+                    // captura son la prueba de que el dinero entró: el bloque se
+                    // abre solo para que no se cierre la venta sin ellos.
+                    if (v !== "efectivo") setDetallesAbiertos(true);
                   }}
                   options={metodos}
                   className="w-full"
@@ -397,6 +428,105 @@ export default function PosPage() {
                     )}
                   </motion.div>
                 )}
+
+                {/* Datos opcionales del cobro. Van plegados para que la venta
+                    en efectivo, que es la mayoría, siga siendo de un solo
+                    clic. */}
+                <div className="rounded-xl border border-line-soft">
+                  <button
+                    type="button"
+                    onClick={() => setDetallesAbiertos((v) => !v)}
+                    className="flex w-full items-center justify-between px-3 py-2 text-[12px] font-medium text-ink-soft"
+                  >
+                    Comprobante, operación y nota
+                    <TbChevronDown
+                      className={`transition-transform ${
+                        detallesAbiertos ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {detallesAbiertos && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="space-y-3 border-t border-line-soft p-3">
+                          <div>
+                            <label
+                              htmlFor="operacion"
+                              className="mb-1 block text-[11px] font-medium text-muted"
+                            >
+                              Número de operación
+                            </label>
+                            <Input
+                              id="operacion"
+                              value={referencia}
+                              onChange={(e) => setReferencia(e.target.value)}
+                              placeholder="0012345"
+                            />
+                          </div>
+
+                          <div>
+                            <span className="mb-1 block text-[11px] font-medium text-muted">
+                              Comprobante
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-line bg-canvas">
+                                {comprobante ? (
+                                  <img
+                                    src={comprobante.url}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="grid h-full place-items-center text-[9px] text-muted">
+                                    Sin foto
+                                  </div>
+                                )}
+                              </div>
+                              <Button
+                                size="small"
+                                icon={<TbPhoto />}
+                                onClick={() => setGaleriaAbierta(true)}
+                              >
+                                {comprobante ? "Cambiar" : "Subir captura"}
+                              </Button>
+                              {comprobante && (
+                                <Button
+                                  size="small"
+                                  type="text"
+                                  danger
+                                  onClick={() => setComprobante(null)}
+                                >
+                                  Quitar
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+
+                          <div>
+                            <label
+                              htmlFor="nota-cobro"
+                              className="mb-1 block text-[11px] font-medium text-muted"
+                            >
+                              Nota
+                            </label>
+                            <Input
+                              id="nota-cobro"
+                              value={notaPago}
+                              onChange={(e) => setNotaPago(e.target.value)}
+                              placeholder="Cliente frecuente, cambio pendiente…"
+                            />
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
 
               <Button
@@ -415,6 +545,12 @@ export default function PosPage() {
           )}
         </div>
       </div>
+
+      <GalleryModal
+        open={galeriaAbierta}
+        onClose={() => setGaleriaAbierta(false)}
+        onSelect={(img) => setComprobante(img)}
+      />
 
       {/* Ticket recién emitido */}
       <Modal

@@ -17,6 +17,7 @@ import {
 } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { apiTienda } from "../../api/apiTienda";
+import GalleryModal from "./GalleryModal";
 
 const { Text } = Typography;
 
@@ -55,7 +56,8 @@ interface Variation {
   price: number;
   stock: number;
   weight: number;
-  price_modifier?: number;
+  businessImageId?: number | null;
+  businessImage?: { id: number; url: string } | null;
   attributes: VariationAttribute[];
 }
 
@@ -63,6 +65,7 @@ interface VariationFormModalProps {
   open: boolean;
   onClose: () => void;
   productId: number;
+  product: any;
   attributes: Attribute[];
   variationToEdit: Variation | null;
   onSaved: () => void;
@@ -72,16 +75,44 @@ interface VariationFormModalProps {
  * Modal secundario: crear / editar UNA variación
  * con "carrito" de atributos (filas dinámicas atributo + value)
  */
+/**
+ * SKU sugerido: el del producto más las iniciales de cada valor elegido, que
+ * es la convención que ya se usa a mano (VB-1003-S-NEG). Se recalcula mientras
+ * el vendedor elige atributos, y deja de tocarse en cuanto lo escribe él.
+ */
+function sugerirSku(product: any, partes: string[]) {
+  const base = (product?.sku || product?.slug || "VAR")
+    .toString()
+    .toUpperCase()
+    .replace(/[^A-Z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  const sufijos = partes.map((v) =>
+    v
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, "")
+      .slice(0, 3)
+  );
+
+  return [base, ...sufijos].filter(Boolean).join("-");
+}
+
 function VariationFormModal({
   open,
   onClose,
   productId,
+  product,
   attributes,
   variationToEdit,
   onSaved,
 }: VariationFormModalProps) {
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [imagen, setImagen] = useState<{ id: number; url: string } | null>(null);
+  const [skuManual, setSkuManual] = useState(false);
 
   type AttributeRow = {
     key: string;
@@ -96,6 +127,7 @@ function VariationFormModal({
     if (!open) {
       form.resetFields();
       setAttributeRows([]);
+      setImagen(null);
       return;
     }
 
@@ -105,8 +137,16 @@ function VariationFormModal({
         price: variationToEdit.price,
         stock: variationToEdit.stock,
         weight: variationToEdit.weight,
-        price_modifier: variationToEdit.price_modifier ?? 0,
       });
+
+      setImagen(
+        variationToEdit.businessImage
+          ? {
+              id: variationToEdit.businessImage.id,
+              url: variationToEdit.businessImage.url,
+            }
+          : null
+      );
 
       const rows: AttributeRow[] = variationToEdit.attributes.map((a) => ({
         key: String(a.id),
@@ -115,11 +155,34 @@ function VariationFormModal({
       }));
 
       setAttributeRows(rows.length ? rows : [{ key: "0" }]);
+      setSkuManual(true);
     } else {
       form.resetFields();
       setAttributeRows([{ key: "0" }]);
+      setImagen(null);
+      setSkuManual(false);
+      // El precio de la variación casi siempre es el del producto: se
+      // prellena y el vendedor solo lo toca si esta talla o color cuesta
+      // distinto. El stock no se adivina, ese sí lo pone él.
+      form.setFieldsValue({
+        price: product?.price != null ? Number(product.price) : undefined,
+      });
     }
   }, [open, variationToEdit, form]);
+
+  // SKU sugerido en vivo mientras se eligen atributos.
+  useEffect(() => {
+    if (!open || variationToEdit || skuManual) return;
+
+    const partes = attributeRows
+      .map((r) => {
+        const attr = attributes.find((a) => a.id === r.attributeId);
+        return attr?.values.find((v) => v.id === r.valueId)?.value;
+      })
+      .filter((v): v is string => Boolean(v));
+
+    form.setFieldsValue({ sku: sugerirSku(product, partes) });
+  }, [open, attributeRows, attributes, product, variationToEdit, skuManual, form]);
 
   const usedAttributeIds = useMemo(
     () =>
@@ -198,7 +261,7 @@ function VariationFormModal({
           price: values.price,
           stock: values.stock,
           weight: values.weight || 0,
-          price_modifier: values.price_modifier || 0,
+          business_image_id: imagen?.id ?? null,
         });
         variationId = res.data.data.id;
       } else {
@@ -207,7 +270,7 @@ function VariationFormModal({
           price: values.price,
           stock: values.stock,
           weight: values.weight || 0,
-          price_modifier: values.price_modifier || 0,
+          business_image_id: imagen?.id ?? null,
         });
         variationId = variationToEdit.id;
       }
@@ -334,20 +397,62 @@ function VariationFormModal({
             );
           })}
         </Space>
+        {/* Foto de la variación */}
+        <Form.Item
+          label="Foto de la variación"
+          className="mt-4"
+          extra="Opcional. Si la dejas vacía se usa la imagen principal del producto."
+        >
+          <div className="flex items-center gap-3">
+            <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-50">
+              {imagen ? (
+                <img
+                  src={imagen.url}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="grid h-full place-items-center text-[10px] text-gray-400">
+                  Sin foto
+                </div>
+              )}
+            </div>
+            <Space>
+              <Button onClick={() => setGalleryOpen(true)}>
+                {imagen ? "Cambiar" : "Elegir de la galería"}
+              </Button>
+              {imagen && (
+                <Button type="text" danger onClick={() => setImagen(null)}>
+                  Quitar
+                </Button>
+              )}
+            </Space>
+          </div>
+        </Form.Item>
+
         {/* Datos básicos de la variación */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <Form.Item
             name="sku"
             label="SKU"
             rules={[{ required: true, message: "Ingresa un SKU" }]}
+            extra={
+              variationToEdit || skuManual
+                ? undefined
+                : "Se arma solo con el producto y los atributos. Puedes cambiarlo."
+            }
           >
-            <Input placeholder="SKU de la variación" />
+            <Input
+              placeholder="SKU de la variación"
+              onChange={() => setSkuManual(true)}
+            />
           </Form.Item>
 
           <Form.Item
             name="price"
             label="Precio"
             rules={[{ required: true, message: "Ingresa un precio" }]}
+            extra={variationToEdit ? undefined : "Viene del producto. Cámbialo solo si esta variación cuesta distinto."}
           >
             <InputNumber
               min={0}
@@ -376,11 +481,14 @@ function VariationFormModal({
             />
           </Form.Item>
 
-          <Form.Item name="price_modifier" label="Modificador de precio">
-            <InputNumber className="w-full" placeholder="Ej. +5, -10, etc." />
-          </Form.Item>
         </div>
       </Form>
+
+      <GalleryModal
+        open={galleryOpen}
+        onClose={() => setGalleryOpen(false)}
+        onSelect={(img) => setImagen(img)}
+      />
     </Modal>
   );
 }
@@ -524,12 +632,28 @@ export default function VariationModal({
                 className="rounded-xl shadow-sm border border-gray-100 flex flex-col justify-between"
               >
                 <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <Text strong>{v.sku}</Text>
+                  <div className="flex items-start gap-3">
+                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-gray-100 bg-gray-50">
+                      {v.businessImage ? (
+                        <img
+                          src={v.businessImage.url}
+                          alt=""
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="grid h-full place-items-center text-[9px] text-gray-400">
+                          Sin foto
+                        </div>
+                      )}
+                    </div>
                     <div>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        ID: {v.id}
-                      </Text>
+                      <Text strong>{v.sku}</Text>
+                      <div>
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          ID: {v.id}
+                        </Text>
+                      </div>
                     </div>
                   </div>
                   <div className="text-right">
@@ -614,6 +738,7 @@ export default function VariationModal({
         open={formOpen}
         onClose={() => setFormOpen(false)}
         productId={product?.id}
+        product={product}
         attributes={attributes}
         variationToEdit={variationToEdit}
         onSaved={handleFormSaved}

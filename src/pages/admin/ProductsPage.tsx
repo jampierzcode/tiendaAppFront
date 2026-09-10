@@ -6,13 +6,20 @@ import {
   Input,
   Tag,
   message,
-  Popconfirm,
+  Modal,
   Dropdown,
   type MenuProps,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
-import { HiOutlineDotsVertical } from "react-icons/hi";
+import {
+  TbColorSwatch,
+  TbDotsVertical,
+  TbEye,
+  TbEyeOff,
+  TbPencil,
+  TbTrash,
+} from "react-icons/tb";
 import { useBusiness } from "../../context/BusinessContext";
 import ProductFormModal from "../../components/admin/ProductFormModal";
 import { apiTienda } from "../../api/apiTienda";
@@ -105,6 +112,28 @@ export default function ProductsPage(): React.ReactElement {
     } catch (err) {
       console.error(err);
       message.error("No se pudo eliminar el producto");
+    }
+  };
+
+  /**
+   * Desactivar no borra: el producto sale de la tienda pública y del buscador
+   * de caja, pero conserva su historial de ventas y su stock. Es lo que se
+   * quiere cuando algo se agota por temporada y volverá.
+   */
+  const cambiarEstado = async (row: Product) => {
+    const nuevo = row.status === "activo" ? "inactivo" : "activo";
+    try {
+      await apiTienda.put(`/products/${row.id}`, { status: nuevo });
+      message.success(
+        nuevo === "activo"
+          ? `"${row.name}" vuelve a estar visible en la tienda`
+          : `"${row.name}" ya no aparece en la tienda ni en la caja`
+      );
+      fetchProducts();
+    } catch (error: any) {
+      message.error(
+        error?.response?.data?.message ?? "No se pudo cambiar el estado"
+      );
     }
   };
 
@@ -211,58 +240,51 @@ export default function ProductsPage(): React.ReactElement {
         title: "Acciones",
         key: "actions",
         render: (_, row) => {
+          // Los items van con la API de Antd (icon + label + danger) en vez de
+          // botones metidos dentro de la etiqueta: así heredan el tema del
+          // panel, el foco por teclado y el rojo de "peligro" sin pintarlo a
+          // mano. Los iconos son Tabler, que es el juego que usa el resto.
           const items: MenuProps["items"] = [
             {
               key: "edit",
-              label: (
-                <button
-                  className="w-full text-left px-3 py-1 hover:bg-gray-100 rounded"
-                  onClick={() => handleEdit(row)}
-                >
-                  ✏️ Editar
-                </button>
-              ),
+              icon: <TbPencil size={16} />,
+              label: "Editar",
+              onClick: () => handleEdit(row),
             },
             {
               key: "variations",
-              label: (
-                <button
-                  className="w-full text-left px-3 py-1 hover:bg-gray-100 rounded"
-                  onClick={() => handleVariations(row)}
-                >
-                  🧩 Variaciones
-                </button>
-              ),
+              icon: <TbColorSwatch size={16} />,
+              label: "Variaciones",
+              onClick: () => handleVariations(row),
             },
             {
+              key: "status",
+              icon:
+                row.status === "activo" ? <TbEyeOff size={16} /> : <TbEye size={16} />,
+              label: row.status === "activo" ? "Desactivar" : "Activar",
+              onClick: () => cambiarEstado(row),
+            },
+            { type: "divider" },
+            {
               key: "delete",
-              label: (
-                <Popconfirm
-                  title="¿Eliminar producto?"
-                  okText="Sí"
-                  cancelText="No"
-                  onConfirm={() => handleDelete(row)}
-                >
-                  <button className="w-full text-left px-3 py-1 hover:bg-red-50 text-red-600 rounded">
-                    🗑️ Eliminar
-                  </button>
-                </Popconfirm>
-              ),
+              icon: <TbTrash size={16} />,
+              label: "Eliminar",
+              danger: true,
+              onClick: () =>
+                Modal.confirm({
+                  title: "¿Eliminar producto?",
+                  content: `Se eliminará "${row.name}" con sus variaciones. No se puede deshacer.`,
+                  okText: "Eliminar",
+                  cancelText: "Cancelar",
+                  okButtonProps: { danger: true },
+                  onOk: () => handleDelete(row),
+                }),
             },
           ];
 
           return (
-            <Dropdown
-              menu={{ items }}
-              placement="bottomRight"
-              trigger={["click"]}
-              overlayClassName="rounded-lg shadow-lg"
-            >
-              <Button
-                type="text"
-                icon={<HiOutlineDotsVertical size={18} />}
-                className="hover:bg-gray-100"
-              />
+            <Dropdown menu={{ items }} placement="bottomRight" trigger={["click"]}>
+              <Button type="text" icon={<TbDotsVertical size={18} />} />
             </Dropdown>
           );
         },

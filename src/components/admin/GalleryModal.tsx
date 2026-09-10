@@ -1,11 +1,7 @@
 import React, { useState } from "react";
-import { Modal, Upload, Button, Spin, Input, Tooltip, message, Empty } from "antd";
-import {
-  PlusOutlined,
-  DeleteOutlined,
-  CheckCircleTwoTone,
-  SearchOutlined,
-} from "@ant-design/icons";
+import { Modal, Upload, Button, Spin, Input, Popconfirm, message, Empty } from "antd";
+import { PlusOutlined, CheckCircleTwoTone, SearchOutlined } from "@ant-design/icons";
+import { TbTrash } from "react-icons/tb";
 import { useGallery } from "../../hooks/useGallery";
 
 interface GalleryModalProps {
@@ -153,23 +149,30 @@ const GalleryModal: React.FC<GalleryModalProps> = ({ open, onClose, onSelect }) 
               {selected === img.id && (
                 <CheckCircleTwoTone
                   twoToneColor="#52c41a"
-                  className="absolute right-2 top-2 text-xl"
+                  className="absolute left-2 top-2 text-xl"
                 />
               )}
 
-              <Tooltip title="Eliminar del bucket">
-                <Button
-                  size="small"
-                  icon={<DeleteOutlined />}
-                  danger
-                  type="primary"
-                  className="absolute bottom-9 right-2"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(img.id);
-                  }}
-                />
-              </Tooltip>
+              {/* Mismo control que en la Galería: arriba a la derecha, sobre
+                  un círculo translúcido que se lee en cualquier foto, y con
+                  confirmación porque borrar del bucket no se deshace. */}
+              <Popconfirm
+                title="¿Eliminar esta foto?"
+                description="Se borra del bucket y quien la use se queda sin imagen."
+                okText="Eliminar"
+                cancelText="Cancelar"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => handleDelete(img.id)}
+              >
+                <button
+                  type="button"
+                  aria-label="Eliminar del bucket"
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full bg-ink/45 text-white backdrop-blur-sm transition hover:bg-danger focus-visible:bg-danger focus-visible:outline-none"
+                >
+                  <TbTrash size={15} />
+                </button>
+              </Popconfirm>
             </div>
           ))}
         </div>

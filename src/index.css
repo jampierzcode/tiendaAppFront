@@ -133,6 +133,23 @@
   }
 }
 
+/* Antd le da al InputNumber un ancho fijo de 90px y mete su CSS en el <head>
+   sin capa. Tailwind 4 pone sus utilidades en `@layer utilities`, y en la
+   cascada lo que va sin capa gana a lo que va en una capa, sin importar la
+   especificidad: por eso `className="w-full"` no le hacía nada y el campo se
+   quedaba corto, cortando textos como "¿Con cuánto paga?".
+
+   Van los dos selectores porque la raíz del componente cambia: con `prefix` o
+   `suffix` (el "S/" de la caja) Antd envuelve todo en un `affix-wrapper` y la
+   clase aterriza ahí, no en `.ant-input-number`.
+
+   Esta regla tiene que quedarse fuera de `@layer` por lo mismo de arriba:
+   dentro de una capa volvería a perder contra Antd. */
+.ant-input-number.w-full,
+.ant-input-number-affix-wrapper.w-full {
+  width: 100%;
+}
+
 /* Quien pidió menos movimiento en su sistema no debería recibir animaciones
    de entrada, transiciones compartidas ni resortes. */
 @media (prefers-reduced-motion: reduce) {

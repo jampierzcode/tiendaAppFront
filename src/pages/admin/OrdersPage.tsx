@@ -24,7 +24,7 @@ interface Pedido {
   status: EstadoPedido;
   channel: string;
   customerName: string;
-  customerPhone: string;
+  customerPhone: string | null;
   deliveryMethod: string;
   deliveryAddress: string | null;
   deliveryCity: string | null;

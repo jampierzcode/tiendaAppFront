@@ -4,6 +4,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Space,
   Spin,
   Switch,
   Tabs,
@@ -35,6 +36,7 @@ interface Config {
   primaryColor: string;
   secondaryColor: string;
   bannerImageId: number | null;
+  bannerImage?: { id: number; url: string } | null;
   currencySymbol: string;
   shippingCost: number;
   freeShippingFrom: number | null;
@@ -60,8 +62,11 @@ export default function StoreSettingsPage() {
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [qr, setQr] = useState<string | null>(null);
-  const [galeriaAbierta, setGaleriaAbierta] = useState(false);
+  // La misma galería sirve para la portada y para el logo; este estado dice
+  // a cuál de los dos volverá la imagen elegida.
+  const [galeria, setGaleria] = useState<null | "banner" | "logo">(null);
   const [banner, setBanner] = useState<{ id: number; url: string } | null>(null);
+  const logoUrl = Form.useWatch("logo_url", form);
 
   const urlTienda = config ? `${window.location.origin}/t/${config.slug}` : "";
 
@@ -71,6 +76,7 @@ export default function StoreSettingsPage() {
       .then((r) => {
         const d = r.data.data as Config;
         setConfig(d);
+        setBanner(d.bannerImage ?? null);
         form.setFieldsValue({
           ...d,
           whatsapp_phone: d.whatsappPhone,
@@ -301,14 +307,51 @@ export default function StoreSettingsPage() {
                             </div>
                           )}
                         </div>
-                        <Button onClick={() => setGaleriaAbierta(true)}>
-                          Elegir de la galería
+                        <Button onClick={() => setGaleria("banner")}>
+                          {banner ? "Cambiar" : "Elegir de la galería"}
                         </Button>
                       </div>
                     </Form.Item>
 
-                    <Form.Item name="logo_url" label="URL del logo">
-                      <Input placeholder="https://…" />
+                    {/* El logo se guarda como URL, no como id de imagen, así
+                        que lo que se elige de la galería es su URL. El campo
+                        sigue existiendo oculto para no cambiar el contrato de
+                        la API. */}
+                    <Form.Item name="logo_url" hidden>
+                      <Input />
+                    </Form.Item>
+
+                    <Form.Item
+                      label="Logo"
+                      extra="Se ve en la cabecera de tu tienda. Cuadrado o casi cuadrado queda mejor."
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-lg border border-line bg-canvas">
+                          {logoUrl ? (
+                            <img
+                              src={logoUrl}
+                              alt=""
+                              className="h-full w-full object-contain"
+                            />
+                          ) : (
+                            <span className="text-[11px] text-muted">Sin logo</span>
+                          )}
+                        </div>
+                        <Space>
+                          <Button onClick={() => setGaleria("logo")}>
+                            {logoUrl ? "Cambiar" : "Elegir de la galería"}
+                          </Button>
+                          {logoUrl && (
+                            <Button
+                              type="text"
+                              danger
+                              onClick={() => form.setFieldsValue({ logo_url: null })}
+                            >
+                              Quitar
+                            </Button>
+                          )}
+                        </Space>
+                      </div>
                     </Form.Item>
                   </div>
                 ),
@@ -407,9 +450,15 @@ export default function StoreSettingsPage() {
       </div>
 
       <GalleryModal
-        open={galeriaAbierta}
-        onClose={() => setGaleriaAbierta(false)}
-        onSelect={(img) => setBanner(img)}
+        open={galeria !== null}
+        onClose={() => setGaleria(null)}
+        onSelect={(img) => {
+          if (galeria === "logo") {
+            form.setFieldsValue({ logo_url: img.url });
+          } else {
+            setBanner(img);
+          }
+        }}
       />
     </>
   );

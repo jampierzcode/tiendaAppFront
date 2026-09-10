@@ -39,7 +39,7 @@ const perteneceALaCuenta = (url: string) =>
   );
 
 apiTienda.interceptors.request.use((config) => {
-  const token = sessionStorage.getItem("token");
+  const token = localStorage.getItem("token");
   if (token) config.headers.Authorization = `Bearer ${token}`;
 
   // Con FormData el navegador tiene que poner el Content-Type él mismo,
@@ -74,8 +74,8 @@ apiTienda.interceptors.response.use(
   (response) => response,
   (error) => {
     // El token venció o fue revocado: se limpia la sesión y se vuelve al login.
-    if (error.response?.status === 401 && sessionStorage.getItem("token")) {
-      sessionStorage.removeItem("token");
+    if (error.response?.status === 401 && localStorage.getItem("token")) {
+      localStorage.removeItem("token");
       if (window.location.pathname !== "/") window.location.href = "/";
     }
     return Promise.reject(error);
