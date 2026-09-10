@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Corre lo mismo que el despliegue antes de dejarte subir nada a GitHub.
+# Saltárselo puntualmente: git push --no-verify
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+echo "▸ pre-push: compilando como en producción…"
+
+# --force ignora el caché de tsc: sin esto, `tsc -b` puede dar por bueno lo
+# que en un servidor recién clonado sí revisa y falla.
+npx tsc -b --force
+npx vite build >/dev/null
+
+echo "▸ pre-push: build correcto. Subiendo."
