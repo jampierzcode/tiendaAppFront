@@ -1,6 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
 import {
-  Card,
   Button,
   Input,
   Table,
@@ -14,8 +13,8 @@ import {
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
-import { GiSettingsKnobs } from "react-icons/gi";
 import { apiTienda } from "../../api/apiTienda";
+import PageHeader from "../../components/ui/PageHeader";
 import { useBusiness } from "../../context/BusinessContext";
 
 interface AttributeValue {
@@ -277,15 +276,12 @@ export default function ProductAttributesPage() {
   ];
 
   return (
-    <Card
-      title={
-        <span>
-          <GiSettingsKnobs size={20} className="mr-2" />
-          Atributos del negocio
-        </span>
-      }
-      extra={
-        <Space>
+    <>
+      <PageHeader
+        titulo="Atributos"
+        descripcion="Talla, color, material… Son las variantes con las que se arma cada producto y con las que el cliente filtra en tu tienda."
+        acciones={
+        <Space wrap>
           <Input.Search
             placeholder="Buscar atributos..."
             value={search}
@@ -303,8 +299,10 @@ export default function ProductAttributesPage() {
             Nuevo atributo
           </Button>
         </Space>
-      }
-    >
+        }
+      />
+
+      <div className="card overflow-hidden">
       <Table
         rowKey="id"
         dataSource={filteredAttributes}
@@ -407,6 +405,7 @@ export default function ProductAttributesPage() {
           pagination={false}
         />
       </Modal>
-    </Card>
+      </div>
+    </>
   );
 }

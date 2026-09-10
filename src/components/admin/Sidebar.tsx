@@ -1,174 +1,308 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, useNavigate, useParams } from "react-router-dom";
-import { Select, Spin } from "antd";
-import { BsArrowLeftShort, BsArrowRightShort } from "react-icons/bs";
-import { IoSpeedometerOutline } from "react-icons/io5";
+import { AnimatePresence, motion } from "motion/react";
+import { Tooltip } from "antd";
+import {
+  IoStorefrontOutline,
+  IoSpeedometerOutline,
+  IoReceiptOutline,
+} from "react-icons/io5";
+import { BiCategoryAlt, BiPackage, BiSliderAlt } from "react-icons/bi";
+import {
+  TbBox,
+  TbCashRegister,
+  TbChartHistogram,
+  TbLogout,
+  TbPhoto,
+  TbSelector,
+  TbTruckLoading,
+  TbUsers,
+} from "react-icons/tb";
+import { MdOutlineDiscount } from "react-icons/md";
+import { HiOutlineChevronLeft } from "react-icons/hi2";
 
 import { useAuth } from "../../context/AuthContext";
 import { apiTienda } from "../../api/apiTienda";
-import LogoutButton from "./LogoutButton";
-import { BiAddToQueue, BiCategoryAlt, BiPackage } from "react-icons/bi";
 
 interface SidebarProps {
   open: boolean;
-  setOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setOpen: (v: boolean) => void;
+  /** En móvil el sidebar es un cajón que se superpone. */
+  movilAbierto: boolean;
+  cerrarMovil: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ open, setOpen }) => {
-  const { auth } = useAuth();
+interface Negocio {
+  uuid: string;
+  name: string;
+}
+
+export default function Sidebar({
+  open,
+  setOpen,
+  movilAbierto,
+  cerrarMovil,
+}: SidebarProps) {
+  const { auth, logout } = useAuth();
   const { uuid_business } = useParams();
   const navigate = useNavigate();
 
-  const [businesses, setBusinesses] = useState<
-    { uuid: string; name: string }[]
-  >([]);
-  const [loading, setLoading] = useState(true);
+  const [negocios, setNegocios] = useState<Negocio[]>([]);
+  const [selectorAbierto, setSelectorAbierto] = useState(false);
 
-  const handlerSidebar = () => setOpen(!open);
-
-  // 🔹 Trae empresas del usuario logueado
   useEffect(() => {
-    const fetchBusinesses = async () => {
-      try {
-        const res = await apiTienda.get(`/businesses/byUser`);
-        setBusinesses(res.data.data || []);
-      } catch (error) {
-        console.error("Error fetching businesses:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    if (auth.user?.id) fetchBusinesses();
+    if (!auth.user?.id) return;
+    apiTienda
+      .get("/businesses/byUser")
+      .then((r) => setNegocios(r.data.data ?? []))
+      .catch(() => undefined);
   }, [auth.user?.id]);
 
-  const menu = [
+  const negocioActual = negocios.find((n) => n.uuid === uuid_business);
+
+  const secciones = [
     {
-      is_title_head: false,
       items: [
         {
-          title: "Dashboard",
+          titulo: "Resumen",
           url: `/b/${uuid_business}/dashboard`,
-          icon: <IoSpeedometerOutline />,
+          icono: <IoSpeedometerOutline />,
+        },
+        {
+          titulo: "Mostrador",
+          url: `/b/${uuid_business}/pos`,
+          icono: <TbCashRegister />,
+        },
+        {
+          titulo: "Pedidos",
+          url: `/b/${uuid_business}/orders`,
+          icono: <IoReceiptOutline />,
+        },
+        {
+          titulo: "Clientes",
+          url: `/b/${uuid_business}/customers`,
+          icono: <TbUsers />,
+        },
+        {
+          titulo: "Reportes",
+          url: `/b/${uuid_business}/reports`,
+          icono: <TbChartHistogram />,
         },
       ],
     },
     {
-      is_title_head: true,
-      title_head: "Catalogo",
+      titulo: "Catálogo",
+      items: [
+        { titulo: "Productos", url: `/b/${uuid_business}/products`, icono: <BiPackage /> },
+        { titulo: "Categorías", url: `/b/${uuid_business}/categories`, icono: <BiCategoryAlt /> },
+        { titulo: "Atributos", url: `/b/${uuid_business}/attributes`, icono: <BiSliderAlt /> },
+        { titulo: "Inventario", url: `/b/${uuid_business}/inventory`, icono: <TbBox /> },
+        { titulo: "Galería", url: `/b/${uuid_business}/gallery`, icono: <TbPhoto /> },
+        { titulo: "Descuentos", url: `/b/${uuid_business}/discounts`, icono: <MdOutlineDiscount /> },
+      ],
+    },
+    {
+      titulo: "Abastecimiento",
       items: [
         {
-          title: "Productos",
-          url: `/b/${uuid_business}/products`,
-          icon: <BiPackage />,
+          titulo: "Compras",
+          url: `/b/${uuid_business}/purchases`,
+          icono: <TbTruckLoading />,
         },
+      ],
+    },
+    {
+      titulo: "Tienda online",
+      items: [
         {
-          title: "Categorías",
-          url: `/b/${uuid_business}/categories`,
-          icon: <BiCategoryAlt />,
-        },
-        {
-          title: "Atributos",
-          url: `/b/${uuid_business}/attributes`,
-          icon: <BiAddToQueue />,
+          titulo: "Mi tienda",
+          url: `/b/${uuid_business}/store`,
+          icono: <IoStorefrontOutline />,
         },
       ],
     },
   ];
 
-  return (
-    <div className="position">
-      <div
-        className={`min-h-[100vh] z-20 bg-primary shadow-lg text-light-font p-5 pt-8 ${
-          open
-            ? "translate-x-0 md:translate-x-0 w-60 md:w-60"
-            : "-translate-x-20 w-20 md:translate-x-0 md:block md:w-20"
-        } duration-300 fixed md:relative block`}
-      >
-        {open ? (
-          <BsArrowLeftShort
-            onClick={handlerSidebar}
-            className="hidden md:block bg-white text-primary rounded-full absolute -right-3 top-9 text-3xl border border-dark-purple cursor-pointer"
-          />
-        ) : (
-          <BsArrowRightShort
-            onClick={handlerSidebar}
-            className="hidden md:block bg-white text-primary rounded-full absolute -right-3 top-9 text-3xl border border-primary cursor-pointer"
-          />
-        )}
-        {/* 🔹 Selector de empresa */}
-        {open && (
-          <div className="mb-4">
-            {loading ? (
-              <Spin size="small" />
-            ) : (
-              <Select
-                value={uuid_business}
-                onChange={(value) => navigate(`/b/${value}/products`)}
-                className="w-full"
-                size="middle"
-                options={businesses.map((b) => ({
-                  label: b.name,
-                  value: b.uuid,
-                }))}
-              />
-            )}
-          </div>
-        )}
-        {/* 🔹 Usuario */}
-        <div className="w-full py-[20px] inline-flex items-center gap-2 px-2 bg-gray-100 rounded mb-4">
-          <img
-            src="https://img.freepik.com/free-psd/3d-illustration-human-avatar-profile_23-2150671142.jpg"
-            className="w-6 h-6 rounded-full block cursor-pointer mr-2"
-            alt=""
-          />
-          <div className={`${!open && "scale-0"} overflow-hidden`}>
-            <h1 className="text-lg font-bold">{auth?.user?.name}</h1>
-            <h1 className="text-sm">{auth?.user?.email}</h1>
-            <span className="text-sm font-bold">admin</span>
-          </div>
+  const contenido = (open: boolean) => (
+    <div className="flex h-full flex-col">
+      {/* Marca */}
+      <div className="flex items-center gap-2.5 px-4 pb-1 pt-5">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/15 text-[15px] font-extrabold text-white ring-1 ring-white/20">
+          {negocioActual?.name?.charAt(0) ?? "T"}
         </div>
-
-        {/* 🔹 Menú */}
-        <nav className="pt-2 flex flex-col gap-2">
-          {menu.map((section, index) => (
-            <div key={index}>
-              {section.is_title_head && (
-                <span className="text-secondary font-bold w-full text-sm text-nowrap text-ellipsis overflow-hidden">
-                  {section.title_head}
-                </span>
-              )}
-              {section.items.map((item, idx) => (
-                <NavLink
-                  key={idx}
-                  to={item.url}
-                  className={({ isActive }) =>
-                    isActive
-                      ? "bg-secondary text-primary font-bold text-sm p-2 flex gap-3 items-center rounded"
-                      : "p-2 text-white text-sm hover:bg-secondary hover:text-primary rounded flex gap-3 items-center"
-                  }
-                >
-                  <span className="text-xl">{item.icon}</span>
-                  <span className={`text-sm flex-1 ${!open && "hidden"}`}>
-                    {item.title}
-                  </span>
-                </NavLink>
-              ))}
-            </div>
-          ))}
-        </nav>
-
-        <LogoutButton open={open} />
+        {open && (
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-bold leading-tight text-white">
+              {negocioActual?.name ?? "Tu tienda"}
+            </p>
+            <p className="text-[11px] leading-tight text-white/50">Panel de gestión</p>
+          </div>
+        )}
       </div>
 
-      {/* 🔹 Fondo oscuro al abrir en móvil */}
-      <div
-        onClick={() => setOpen(false)}
-        className={`${
-          open ? "" : "hidden"
-        } block md:hidden w-full bg-gray-900 opacity-50 absolute top-0 h-full left-0 z-10`}
-      ></div>
+      {/* Selector de negocio, solo si hay más de uno */}
+      {open && negocios.length > 1 && (
+        <div className="relative mt-4 px-3">
+          <button
+            onClick={() => setSelectorAbierto((v) => !v)}
+            className="flex w-full items-center justify-between gap-2 rounded-lg bg-white/10 px-3 py-2 text-left text-[13px] font-medium text-white transition hover:bg-white/15"
+          >
+            <span className="truncate">{negocioActual?.name ?? "Elegir tienda"}</span>
+            <TbSelector className="shrink-0 text-white/60" />
+          </button>
+
+          <AnimatePresence>
+            {selectorAbierto && (
+              <motion.ul
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.15 }}
+                className="absolute inset-x-3 z-30 mt-1 overflow-hidden rounded-lg bg-white py-1 shadow-lg"
+              >
+                {negocios.map((n) => (
+                  <li key={n.uuid}>
+                    <button
+                      onClick={() => {
+                        setSelectorAbierto(false);
+                        navigate(`/b/${n.uuid}/dashboard`);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-[13px] transition hover:bg-brand-50 ${
+                        n.uuid === uuid_business
+                          ? "font-semibold text-brand-600"
+                          : "text-ink-soft"
+                      }`}
+                    >
+                      {n.name}
+                    </button>
+                  </li>
+                ))}
+              </motion.ul>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* Navegación */}
+      <nav className="scroll-fino mt-5 flex-1 space-y-5 overflow-y-auto px-3 pb-4">
+        {secciones.map((seccion, i) => (
+          <div key={i}>
+            {seccion.titulo && open && (
+              <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.11em] text-white/40">
+                {seccion.titulo}
+              </p>
+            )}
+            {seccion.titulo && !open && i > 0 && (
+              <div className="mx-3 mb-2 h-px bg-white/10" />
+            )}
+
+            <ul className="space-y-0.5">
+              {seccion.items.map((item) => (
+                <li key={item.url}>
+                  <Tooltip
+                    title={!open ? item.titulo : ""}
+                    placement="right"
+                    mouseEnterDelay={0.3}
+                  >
+                    <NavLink
+                      to={item.url}
+                      onClick={cerrarMovil}
+                      className={({ isActive }) =>
+                        `group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition ${
+                          isActive
+                            ? "bg-white text-brand-700 shadow-sm"
+                            : "text-white/75 hover:bg-white/10 hover:text-white"
+                        } ${!open ? "justify-center px-0" : ""}`
+                      }
+                    >
+                      <span className="shrink-0 text-lg">{item.icono}</span>
+                      {open && <span className="truncate">{item.titulo}</span>}
+                    </NavLink>
+                  </Tooltip>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </nav>
+
+      {/* Usuario y salida */}
+      <div className="border-t border-white/10 p-3">
+        <div className={`flex items-center gap-2.5 ${!open ? "justify-center" : ""}`}>
+          <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/15 text-[11px] font-bold uppercase text-white">
+            {auth.user?.name?.slice(0, 2)}
+          </div>
+          {open && (
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[12px] font-semibold text-white">
+                {auth.user?.name}
+              </p>
+              <p className="truncate text-[11px] text-white/50">{auth.user?.email}</p>
+            </div>
+          )}
+          <Tooltip title="Cerrar sesión" placement="right">
+            <button
+              onClick={() => {
+                logout();
+                navigate("/");
+              }}
+              aria-label="Cerrar sesión"
+              className={`rounded-lg p-2 text-white/60 transition hover:bg-white/10 hover:text-white ${
+                !open ? "hidden" : ""
+              }`}
+            >
+              <TbLogout className="text-lg" />
+            </button>
+          </Tooltip>
+        </div>
+      </div>
     </div>
   );
-};
 
-export default Sidebar;
+  return (
+    <>
+      {/* Escritorio */}
+      <aside
+        className={`relative hidden shrink-0 bg-gradient-to-b from-brand-700 via-brand-800 to-brand-950 transition-[width] duration-300 md:block ${
+          open ? "w-[248px]" : "w-[76px]"
+        }`}
+      >
+        {contenido(open)}
+
+        <button
+          onClick={() => setOpen(!open)}
+          aria-label={open ? "Contraer menú" : "Expandir menú"}
+          className="absolute -right-3 top-7 z-20 grid h-6 w-6 place-items-center rounded-full border border-line bg-white text-ink-soft shadow-sm transition hover:text-brand-600"
+        >
+          <HiOutlineChevronLeft
+            className={`text-xs transition-transform duration-300 ${open ? "" : "rotate-180"}`}
+          />
+        </button>
+      </aside>
+
+      {/* Móvil */}
+      <AnimatePresence>
+        {movilAbierto && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={cerrarMovil}
+              className="fixed inset-0 z-40 bg-ink/50 md:hidden"
+            />
+            <motion.aside
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", stiffness: 380, damping: 38 }}
+              className="fixed inset-y-0 left-0 z-50 w-[248px] bg-gradient-to-b from-brand-700 via-brand-800 to-brand-950 md:hidden"
+            >
+              {contenido(true)}
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}

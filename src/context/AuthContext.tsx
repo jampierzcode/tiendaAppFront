@@ -101,7 +101,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
 
       const data = response.data;
-      console.log(data);
       setBusinessesByUser(data.user.businesses);
       setAuth({ token, user: data.user || data.data || null });
     } catch (error) {

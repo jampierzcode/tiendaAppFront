@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
 import {
-  Card,
   Table,
   Button,
   Space,
@@ -17,6 +16,7 @@ import { HiOutlineDotsVertical } from "react-icons/hi";
 import { useBusiness } from "../../context/BusinessContext";
 import ProductFormModal from "../../components/admin/ProductFormModal";
 import { apiTienda } from "../../api/apiTienda";
+import PageHeader from "../../components/ui/PageHeader";
 import ProductVariationsModal from "../../components/admin/ProductVariationsModal";
 
 interface VariationAttribute {
@@ -69,7 +69,7 @@ export default function ProductsPage(): React.ReactElement {
     if (!business) return;
     setLoading(true);
     try {
-      const res = await apiTienda(`/products/byBusiness/${business.id}`, {
+      const res = await apiTienda("/products", {
         params: { page, perPage: pageSize, search },
       });
       const list: Product[] = res.data.data ?? res.data;
@@ -273,10 +273,11 @@ export default function ProductsPage(): React.ReactElement {
 
   return (
     <>
-      <Card
-        title={`Productos (${business?.name ?? "Sin empresa"})`}
-        extra={
-          <Space>
+      <PageHeader
+        titulo="Productos"
+        descripcion="Tu catálogo. Cada producto puede tener varias tallas y colores, cada una con su propio stock."
+        acciones={
+          <Space wrap>
             <Input.Search
               placeholder="Buscar producto…"
               allowClear
@@ -307,6 +308,7 @@ export default function ProductsPage(): React.ReactElement {
         }
       />
 
+      <div className="card overflow-hidden">
       <Table
         className="w-full"
         rowKey="id"
@@ -324,6 +326,7 @@ export default function ProductsPage(): React.ReactElement {
           },
         }}
       />
+      </div>
 
       {openModal && (
         <ProductFormModal

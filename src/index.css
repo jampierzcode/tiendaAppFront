@@ -1,8 +1,167 @@
 @import "tailwindcss";
+
+/*
+| Sistema de diseño
+|--------------------------------------------------------------------------
+| La paleta sale de la proforma de Peacky Marketing: el violeta profundo del
+| fondo, el violeta vivo de los iconos y el azul claro de las píldoras.
+| El lienzo es un gris con sesgo lavanda para que el blanco de las tarjetas
+| tenga contra qué recortarse.
+*/
 @theme {
-  --color-primary: #0a30bc;
-  --color-secondary: #ddae5e;
-  --color-accent: #10b981;
-  --color-dark: #0f172a;
-  --color-light: #f8fafc;
+  /* Violeta de marca */
+  --color-brand-50: #f0eefe;
+  --color-brand-100: #e0dcfd;
+  --color-brand-200: #c4bcfb;
+  --color-brand-300: #a294f7;
+  --color-brand-400: #8168f2;
+  --color-brand-500: #5b2be8;
+  --color-brand-600: #4a1fd0;
+  --color-brand-700: #3a18a8;
+  --color-brand-800: #2a1080;
+  --color-brand-900: #1c0a5e;
+  --color-brand-950: #120640;
+
+  /* Azul claro de las píldoras de la proforma */
+  --color-sky-brand: #8ab6ff;
+
+  /* Neutros con sesgo lavanda: un gris puro se ve sin decidir */
+  --color-canvas: #f5f6fc;
+  --color-ink: #151243;
+  --color-ink-soft: #4b4870;
+  --color-muted: #7c7a9c;
+  --color-line: #e6e6f2;
+  --color-line-soft: #f0f0f8;
+
+  /* Estados */
+  --color-ok: #12805c;
+  --color-ok-bg: #e2f5ee;
+  --color-warn: #9a6206;
+  --color-warn-bg: #fdf0d9;
+  --color-danger: #c0263a;
+  --color-danger-bg: #fde8ea;
+  --color-info: #1e5fbd;
+  --color-info-bg: #e4eefc;
+
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    letter-spacing: -0.018em;
+    text-wrap: balance;
+  }
+
+  /* Donde hay cifras en columna, que se alineen */
+  table td,
+  table th,
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brand-500);
+    outline-offset: 2px;
+  }
+
+  /* Barras de scroll discretas dentro del panel */
+  .scroll-fino::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scroll-fino::-webkit-scrollbar-thumb {
+    background: rgb(255 255 255 / 0.18);
+    border-radius: 999px;
+  }
+  .scroll-fino::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  /* Tarjeta: el contenedor por defecto del panel */
+  .card {
+    background: #fff;
+    border: 1px solid var(--color-line);
+    border-radius: 14px;
+  }
+
+  /* Etiqueta pequeña en versalitas, para encabezados de sección */
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  /* Banda de formulario dentro de una tarjeta.
+     Antd le pone 24px de margen inferior a cada Form.Item, que se suman al
+     padding de la banda y dejan el hueco de abajo mucho mayor que el de
+     arriba. Aquí se anula el del último. */
+  .banda-form > :last-child,
+  .banda-form > :last-child > .ant-form-item:last-child,
+  .banda-form > .ant-form-item:last-child {
+    margin-bottom: 0;
+  }
+
+  /* Píldoras de estado. El color va siempre acompañado de texto. */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+}
+
+/* Quien pidió menos movimiento en su sistema no debería recibir animaciones
+   de entrada, transiciones compartidas ni resortes. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Al imprimir solo sale el ticket, no el panel entero alrededor. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #ticket-impresion,
+  #ticket-impresion * {
+    visibility: visible;
+  }
+  #ticket-impresion {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 72mm;
+  }
+  @page {
+    margin: 0;
+  }
 }

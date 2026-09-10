@@ -38,7 +38,6 @@ export const BusinessProvider = ({ children }: { children: ReactNode }) => {
       const response = await apiTienda.get(
         `/businesses/byUuid/${uuid_business}`
       );
-      console.log(response);
       setBusiness(response.data.data);
     } catch (error) {
       console.error("Error fetching business:", error);

@@ -1,74 +1,78 @@
-import { useState, useEffect } from "react";
-import axios from "axios";
-import { useBusiness } from "../context/BusinessContext";
+import { useCallback, useEffect, useState } from "react";
 import { apiTienda } from "../api/apiTienda";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-const UPLOAD_IMAGE_URL = import.meta.env.VITE_UPLOAD_IMAGE_URL;
 
 export interface GalleryImage {
   id: number;
   url: string;
-  name?: string;
+  name?: string | null;
+  type?: string;
+  sizeBytes?: number | null;
+  contentType?: string | null;
 }
 
+/**
+ * Galería de imágenes del negocio.
+ *
+ * Todo pasa por `apiTienda`, que ya pone el token y el prefijo de la tienda.
+ * Antes la subida iba a un servicio PHP aparte y el borrado se hacía con
+ * axios pelado, sin token ni negocio: cualquiera podía borrar imágenes de
+ * cualquier tienda.
+ */
 export const useGallery = () => {
   const [images, setImages] = useState<GalleryImage[]>([]);
   const [loading, setLoading] = useState(false);
-  const { business } = useBusiness();
+  const [uploading, setUploading] = useState(false);
 
-  const fetchImages = async () => {
+  const fetchImages = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await apiTienda.get(
-        `/business-images/byBusiness/${business?.id}`
-      );
+      const res = await apiTienda.get("/business-images");
       setImages(res.data.data || []);
     } catch (err) {
       console.error("Error al cargar imágenes:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const uploadImage = async (files: File[]) => {
-    const formData = new FormData();
+  /** Sube al bucket y registra en la galería en una sola llamada. */
+  const uploadImages = useCallback(
+    async (files: File[], type = "producto") => {
+      const formData = new FormData();
+      files.forEach((file) => formData.append("images", file));
+      formData.append("type", type);
 
-    // Agregar todos los archivos bajo la misma clave "files"
-    files.forEach((file) => {
-      formData.append("files[]", file);
-    });
-    formData.append("folder", business?.name ? business?.name : "business");
+      try {
+        setUploading(true);
+        const res = await apiTienda.post("/business-images/upload", formData);
+        await fetchImages();
+        return res.data as {
+          data: GalleryImage[];
+          rechazadas: string[];
+          message: string;
+        };
+      } finally {
+        setUploading(false);
+      }
+    },
+    [fetchImages]
+  );
+
+  const deleteImage = useCallback(async (id: number) => {
+    // Optimista, pero se revierte si el servidor rechaza el borrado.
+    const anterior = images;
+    setImages((prev) => prev.filter((img) => img.id !== id));
     try {
-      setLoading(true);
-      const res = await axios.post(UPLOAD_IMAGE_URL, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      await fetchImages();
-      return res.data;
+      await apiTienda.delete(`/business-images/${id}`);
     } catch (err) {
-      console.error("Error al subir imagen:", err);
+      setImages(anterior);
       throw err;
-    } finally {
-      setLoading(false);
     }
-  };
-
-  const deleteImage = async (id: number) => {
-    try {
-      setLoading(true);
-      await axios.delete(`${API_BASE_URL}/business-images/${id}`);
-      setImages((prev) => prev.filter((img) => img.id !== id));
-    } catch (err) {
-      console.error("Error al eliminar imagen:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [images]);
 
   useEffect(() => {
     fetchImages();
-  }, []);
+  }, [fetchImages]);
 
-  return { images, loading, uploadImage, deleteImage, fetchImages };
+  return { images, loading, uploading, uploadImages, deleteImage, fetchImages };
 };

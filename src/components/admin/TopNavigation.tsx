@@ -1,65 +1,101 @@
-import React from "react";
-import { BsBellFill, BsJustifyRight } from "react-icons/bs";
-import dayjs from "dayjs";
-import { useAuth } from "../../context/AuthContext";
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+import { Tooltip, message } from "antd";
+import { TbMenu2, TbExternalLink, TbCopy, TbCheck } from "react-icons/tb";
+import { apiTienda } from "../../api/apiTienda";
 
-interface TopNavigationProps {
-  open: boolean;
-  setOpen: React.Dispatch<React.SetStateAction<boolean>>;
+interface Props {
+  abrirMovil: () => void;
 }
 
-const TopNavigation: React.FC<TopNavigationProps> = ({ open, setOpen }) => {
-  const { auth } = useAuth();
-  const lastConnection = dayjs().format("DD/MM • HH:mm");
+/**
+ * Barra superior: el acceso rápido a la tienda pública.
+ *
+ * Es lo que el dueño necesita a mano todo el día — ver cómo le quedó la
+ * tienda y copiar el enlace para pegarlo en su estado de WhatsApp.
+ */
+export default function TopNavigation({ abrirMovil }: Props) {
+  const { uuid_business } = useParams();
+  const [slug, setSlug] = useState<string | null>(null);
+  const [publica, setPublica] = useState(false);
+  const [copiado, setCopiado] = useState(false);
+
+  useEffect(() => {
+    if (!uuid_business) return;
+    apiTienda
+      .get(`/businesses/byUuid/${uuid_business}`)
+      .then((r) => {
+        setSlug(r.data.data?.slug ?? null);
+        setPublica(Boolean(r.data.data?.isPublic));
+      })
+      .catch(() => undefined);
+  }, [uuid_business]);
+
+  const urlTienda = slug ? `${window.location.origin}/t/${slug}` : null;
+
+  const copiar = async () => {
+    if (!urlTienda) return;
+    try {
+      await navigator.clipboard.writeText(urlTienda);
+      setCopiado(true);
+      setTimeout(() => setCopiado(false), 2000);
+    } catch {
+      message.error("No se pudo copiar el enlace");
+    }
+  };
 
   return (
-    <>
-      <div className="hidden bg-white lg:block p-6 border-b-2 border-gray-8">
-        <div className="hidden lg:flex items-center justify-between">
-          <div>
-            <h1 className="text-gray-2 text-xl font-semibold">
-              ¡Hola, {auth?.user?.name}!
-            </h1>
-            <span className="text-gray-5 text-xs rounded-lg bg-gray-9 px-3">
-              Tu última conexión: {lastConnection}
-            </span>
-          </div>
+    <header className="sticky top-0 z-30 border-b border-line bg-white/85 backdrop-blur">
+      <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-6">
+        <button
+          onClick={abrirMovil}
+          aria-label="Abrir menú"
+          className="rounded-lg p-2 text-ink-soft transition hover:bg-canvas md:hidden"
+        >
+          <TbMenu2 className="text-xl" />
+        </button>
 
-          <div className="flex items-center">
-            <div className="relative cursor-pointer">
-              <div className="rounded-full bg-dark-purple text-white text-xs flex items-center justify-center w-5 h-5 absolute -top-2 -right-2">
-                2
-              </div>
-              <BsBellFill className="text-xl ml-2 text-gray-400" />
-            </div>
+        <div className="ml-auto flex items-center gap-2">
+          {urlTienda && (
+            <>
+              <span
+                className={`pill ${publica ? "bg-ok-bg text-ok" : "bg-warn-bg text-warn"}`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    publica ? "bg-ok" : "bg-warn"
+                  }`}
+                />
+                {publica ? "Tienda publicada" : "Sin publicar"}
+              </span>
 
-            <div className="ml-3 flex items-center">
-              <div className="flex flex-row items-center">
-                <div className="rounded-full border-2 border-gray-2 h-10 w-10 flex justify-center items-center">
-                  <span className="text-gray-2 text-sm font-semibold uppercase">
-                    {auth?.user?.name?.substring(0, 2)}
-                  </span>
-                </div>
-                <div className="flex flex-col ml-2">
-                  <h3 className="text-sm font-semibold">{auth?.user?.name}</h3>
-                  <span className="text-gray-5 text-xs">
-                    {auth?.user?.email}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
+              <Tooltip title={copiado ? "¡Copiado!" : "Copiar enlace de la tienda"}>
+                <button
+                  onClick={copiar}
+                  aria-label="Copiar enlace de la tienda"
+                  className="rounded-lg border border-line p-2 text-ink-soft transition hover:border-brand-300 hover:text-brand-600"
+                >
+                  {copiado ? (
+                    <TbCheck className="text-base text-ok" />
+                  ) : (
+                    <TbCopy className="text-base" />
+                  )}
+                </button>
+              </Tooltip>
+
+              <a
+                href={urlTienda}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-[13px] font-semibold text-white transition hover:bg-brand-600"
+              >
+                <TbExternalLink className="text-base" />
+                <span className="hidden sm:inline">Ver mi tienda</span>
+              </a>
+            </>
+          )}
         </div>
       </div>
-
-      <div className="block md:hidden p-6">
-        <BsJustifyRight
-          onClick={() => setOpen(!open)}
-          className="bg-white text-dark-purple text-3xl cursor-pointer"
-        />
-      </div>
-    </>
+    </header>
   );
-};
-
-export default TopNavigation;
+}

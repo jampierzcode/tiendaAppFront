@@ -1,7 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import {
   Button,
-  Card,
   Input,
   message,
   Modal,
@@ -9,12 +8,11 @@ import {
   Table,
   Tag,
   Space,
-  Select,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { BiCategoryAlt } from "react-icons/bi";
 import { PlusOutlined } from "@ant-design/icons";
 import { apiTienda } from "../../api/apiTienda";
+import PageHeader from "../../components/ui/PageHeader";
 import { useBusiness } from "../../context/BusinessContext";
 
 interface Subcategory {
@@ -53,7 +51,7 @@ export function CategoriesPage() {
     if (!business) return;
     setLoading(true);
     try {
-      const res = await apiTienda.get(`/categories/byBusiness/${business.id}`);
+      const res = await apiTienda.get("/categories");
       setData(res.data.data || []);
     } catch (err) {
       console.error(err);
@@ -249,14 +247,12 @@ export function CategoriesPage() {
   ];
 
   return (
-    <Card
-      title={
-        <span>
-          <BiCategoryAlt size={20} className="mr-2" /> Categorías
-        </span>
-      }
-      extra={
-        <Space>
+    <>
+      <PageHeader
+        titulo="Categorías"
+        descripcion="Cómo se organiza tu tienda para el cliente. Cada categoría puede tener subcategorías."
+        acciones={
+        <Space wrap>
           <Input.Search
             placeholder="Buscar categorías..."
             value={search}
@@ -274,8 +270,10 @@ export function CategoriesPage() {
             Nueva categoría
           </Button>
         </Space>
-      }
-    >
+        }
+      />
+
+      <div className="card overflow-hidden">
       <Table
         rowKey="id"
         loading={loading}
@@ -353,6 +351,7 @@ export function CategoriesPage() {
           pagination={false}
         />
       </Modal>
-    </Card>
+      </div>
+    </>
   );
 }
