@@ -24,7 +24,7 @@ export function UsersPage(): React.ReactElement {
   const [saving, setSaving] = useState(false);
 
   const [roleOptions, setRoleOptions] = useState<
-    { value: string; label: string }[]
+    { value: number; label: string }[]
   >([]);
   const [businessOptions, setBusinessOptions] = useState<
     { value: number; label: string }[]
@@ -34,9 +34,7 @@ export function UsersPage(): React.ReactElement {
     try {
       const res = await apiTienda.get("/roles");
       const list: Role[] = res.data.data ?? res.data;
-      setRoleOptions(
-        list.map((r) => ({ value: r.code, label: r.name ?? r.code }))
-      );
+      setRoleOptions(list.map((r) => ({ value: r.id, label: r.name })));
     } catch (e) {
       console.error(e);
       message.error("No se pudieron cargar roles");
@@ -103,7 +101,7 @@ export function UsersPage(): React.ReactElement {
       const payload = {
         full_name: values.fullName ?? values.name,
         email: values.email,
-        role_code: values.roleCode,
+        rol_id: values.roleCode,
         status: values.status,
         restaurant_id: values.businessId ?? undefined,
         password: values.password ?? undefined,

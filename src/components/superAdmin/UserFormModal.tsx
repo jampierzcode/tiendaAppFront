@@ -16,7 +16,7 @@ export function UserFormModal({
   onSubmit: (v: any) => void;
   initialValues?: Partial<User>;
   loading?: boolean;
-  roleOptions?: { value: string; label: string }[];
+  roleOptions?: { value: number; label: string }[];
   businessOptions?: { value: number; label: string }[];
 }) {
   const [form] = Form.useForm();
@@ -26,7 +26,7 @@ export function UserFormModal({
       form.setFieldsValue({
         fullName: initialValues.name ?? initialValues.full_name,
         email: initialValues.email,
-        roleCode: initialValues.role?.code ?? undefined,
+        roleCode: initialValues.role?.id ?? initialValues.rol_id ?? undefined,
         businessId: initialValues.business?.id ?? initialValues.businessId,
         status: initialValues.status,
       });

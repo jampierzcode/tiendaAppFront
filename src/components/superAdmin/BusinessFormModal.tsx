@@ -2,7 +2,6 @@ import { Form, Input, Modal, Select, Upload, message } from "antd";
 import { useEffect, useState } from "react";
 import { PlusOutlined, LoadingOutlined } from "@ant-design/icons";
 import type { Business } from "../../types/main";
-import axios from "axios";
 import { apiTienda } from "../../api/apiTienda";
 
 export function BusinessFormModal({
@@ -51,24 +50,28 @@ export function BusinessFormModal({
     fetchAdmins();
   }, []);
 
-  // Subida de imagen a API multimedia
+  // Sube el logo al bucket a través del backend, igual que la galería del panel admin.
+  // El negocio ya debe existir (tener uuid): al crear uno nuevo hay que
+  // guardarlo primero y luego editarlo para ponerle logo.
   const handleUpload = async (file: File) => {
+    if (!initialValues?.uuid) {
+      message.error("Guarda el negocio primero para poder subirle un logo");
+      return;
+    }
+
     setUploading(true);
     const formData = new FormData();
-    formData.append("folder", "business_logos");
-    formData.append("files[]", file);
+    formData.append("images", file);
+    formData.append("type", "logo");
 
     try {
-      const res = await axios.post(
-        "http://localhost:8080/apienviosmultimedia/index.php",
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        }
+      const res = await apiTienda.post(
+        `/b/${initialValues.uuid}/business-images/upload`,
+        formData
       );
 
-      if (res.data.success && res.data.files?.length > 0) {
-        const url = res.data.files[0].url;
+      const url = res.data?.data?.[0]?.url;
+      if (url) {
         setLogoUrl(url);
         form.setFieldValue("logo_url", url);
         message.success("Logo subido correctamente");
