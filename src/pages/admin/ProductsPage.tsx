@@ -43,6 +43,13 @@ interface Variation {
 interface Product {
   id: number;
   name: string;
+  sku?: string | null;
+  categoryLinks?: {
+    categoryId: number;
+    subcategoryId: number | null;
+    category?: { name: string };
+    subcategory?: { name: string } | null;
+  }[];
   description?: string;
   price: number;
   stock: number;
@@ -195,16 +202,40 @@ export default function ProductsPage(): React.ReactElement {
         render: (text: string) => <strong>{text}</strong>,
       },
       {
-        title: "Descripción",
-        dataIndex: "description",
-        key: "description",
-        ellipsis: true,
+        title: "SKU",
+        dataIndex: "sku",
+        key: "sku",
+        width: 130,
+        render: (v: string | null) => v ?? "—",
+      },
+      {
+        title: "Categorías",
+        key: "categories",
+        render: (_, row) =>
+          row.categoryLinks?.length ? (
+            <Space size={[4, 4]} wrap>
+              {row.categoryLinks.map((l, i) => (
+                <Tag key={i}>
+                  {l.subcategory?.name
+                    ? `${l.category?.name} › ${l.subcategory.name}`
+                    : l.category?.name}
+                </Tag>
+              ))}
+            </Space>
+          ) : (
+            <Tag color="orange">Sin categoría</Tag>
+          ),
       },
       {
         title: "Precio",
         dataIndex: "price",
         key: "price",
-        render: (v: number) => `S/ ${Number(v).toFixed(2)}`,
+        render: (v: number) =>
+          Number(v) > 0 ? (
+            `S/ ${Number(v).toFixed(2)}`
+          ) : (
+            <Tag color="orange">Sin precio</Tag>
+          ),
       },
       {
         title: "Stock",
@@ -354,7 +385,13 @@ export default function ProductsPage(): React.ReactElement {
         <ProductFormModal
           open={openModal}
           onClose={() => setOpenModal(false)}
-          onSuccess={fetchProducts}
+          onSuccess={(abrirVariaciones) => {
+            fetchProducts();
+            if (abrirVariaciones) {
+              setSelectedProduct(abrirVariaciones);
+              setOpenVariationsModal(true);
+            }
+          }}
           editData={editData ?? undefined}
         />
       )}

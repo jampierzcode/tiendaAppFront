@@ -16,7 +16,10 @@ interface Props {
  * que más hace sentir la tienda como una app y no como una web.
  */
 export default function ProductCard({ producto, slugTienda, indice }: Props) {
-  const agotado = !producto.disponible;
+  // Sin precio no se puede comprar: se consulta. Tampoco está «agotado»: el
+  // stock todavía no se cargó.
+  const consultar = producto.price <= 0;
+  const agotado = !producto.disponible && !consultar;
 
   return (
     <motion.article
@@ -78,9 +81,15 @@ export default function ProductCard({ producto, slugTienda, indice }: Props) {
           </h3>
 
           <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-base font-semibold text-neutral-900">
-              {producto.currencySymbol} {producto.price.toFixed(2)}
-            </span>
+            {consultar ? (
+              <span className="text-sm font-semibold text-neutral-600">
+                Consultar precio
+              </span>
+            ) : (
+              <span className="text-base font-semibold text-neutral-900">
+                {producto.currencySymbol} {producto.price.toFixed(2)}
+              </span>
+            )}
             {producto.originalPrice && (
               <span className="text-xs text-neutral-400 line-through">
                 {producto.currencySymbol} {producto.originalPrice.toFixed(2)}

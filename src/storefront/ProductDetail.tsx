@@ -156,6 +156,17 @@ export default function ProductDetail() {
     });
   };
 
+  // Un producto (o la variación elegida) sin precio no entra al pedido: se
+  // consulta por WhatsApp con el nombre y el SKU ya escritos.
+  const consultarPrecio = (variacion?.price ?? producto?.price ?? 0) <= 0;
+  const urlConsulta = (() => {
+    const tel = tienda?.whatsappPhone?.replace(/\D/g, "");
+    if (!tel || !producto) return null;
+    const detalle = [producto.name, variacion?.label].filter(Boolean).join(" – ");
+    const texto = `Hola, quiero consultar el precio de: ${detalle}`;
+    return `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`;
+  })();
+
   const alAgregar = () => {
     if (!producto || !variacion) return;
 
@@ -320,7 +331,9 @@ export default function ProductDetail() {
 
           <div className="mt-2 flex items-baseline gap-3">
             <span className="text-2xl font-semibold">
-              {precio(variacion?.price ?? producto.price)}
+              {consultarPrecio
+                ? "Consultar precio"
+                : precio(variacion?.price ?? producto.price)}
             </span>
             {(variacion?.originalPrice ?? producto.originalPrice) && (
               <>
@@ -422,6 +435,8 @@ export default function ProductDetail() {
               aceptaPedidos={tienda?.aceptaPedidos ?? false}
               onAgregar={alAgregar}
               onVerCarrito={abrirCarrito}
+              consultarPrecio={consultarPrecio}
+              urlConsulta={urlConsulta}
             />
           </div>
         </div>
@@ -436,6 +451,8 @@ export default function ProductDetail() {
           aceptaPedidos={tienda?.aceptaPedidos ?? false}
           onAgregar={alAgregar}
           onVerCarrito={abrirCarrito}
+          consultarPrecio={consultarPrecio}
+          urlConsulta={urlConsulta}
         />
       </div>
     </div>
@@ -476,7 +493,11 @@ function BotonComprar({
   aceptaPedidos,
   onAgregar,
   onVerCarrito,
+  consultarPrecio,
+  urlConsulta,
 }: {
+  consultarPrecio: boolean;
+  urlConsulta: string | null;
   faltaElegir: boolean;
   sinStock: boolean;
   agregado: boolean;
@@ -484,6 +505,24 @@ function BotonComprar({
   onAgregar: () => void;
   onVerCarrito: () => void;
 }) {
+  if (consultarPrecio) {
+    return urlConsulta ? (
+      <a
+        href={urlConsulta}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block rounded-lg py-3.5 text-center text-sm font-semibold text-white"
+        style={{ backgroundColor: "var(--tienda-primario, #111827)" }}
+      >
+        Consultar precio por WhatsApp
+      </a>
+    ) : (
+      <div className="rounded-lg bg-neutral-100 py-3 text-center text-sm text-neutral-600">
+        Consulta el precio con la tienda
+      </div>
+    );
+  }
+
   if (!aceptaPedidos) {
     return (
       <div className="rounded-lg bg-neutral-100 py-3 text-center text-sm text-neutral-600">

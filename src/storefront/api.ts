@@ -26,6 +26,7 @@ export interface Tienda {
   freeShippingFrom: number | null;
   aceptaPedidos: boolean;
   phone: string | null;
+  whatsappPhone: string | null;
   address: string | null;
   city: string | null;
   schedule: string | null;
