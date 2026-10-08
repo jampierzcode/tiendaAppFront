@@ -39,6 +39,9 @@ export interface ProductoResumen {
   id: number;
   name: string;
   slug: string;
+  sku: string | null;
+  /** Subcategoría (o categoría) principal, para ubicar el producto de un vistazo. */
+  categoria: string | null;
   imageUrl: string | null;
   price: number;
   originalPrice: number | null;
@@ -72,6 +75,10 @@ export interface Variacion {
 
 export interface ProductoDetalle extends ProductoResumen {
   description: string | null;
+  categorias: {
+    category: { name: string; slug: string };
+    subcategory: { name: string; slug: string } | null;
+  }[];
   variations: Variacion[];
 }
 
@@ -90,6 +97,24 @@ export interface FiltroAtributo {
   values: { id: number; value: string; hexColor: string | null }[];
 }
 
+/** Opciones de filtro con cuántos productos hay detrás de cada una. */
+export interface Facetas {
+  categories: {
+    id: number;
+    name: string;
+    slug: string;
+    count: number;
+    subcategories: { id: number; name: string; slug: string; count: number }[];
+  }[];
+  attributes: {
+    id: number;
+    name: string;
+    type: string;
+    values: { id: number; value: string; hexColor: string | null; count: number }[];
+  }[];
+  tags: { name: string; slug: string; color: string | null; count: number }[];
+}
+
 const base = (slug: string) => `/store/${slug}`;
 
 export const obtenerTienda = (slug: string) =>
@@ -100,6 +125,14 @@ export const obtenerCategorias = (slug: string) =>
 
 export const obtenerFiltros = (slug: string) =>
   storeApi.get<{ data: FiltroAtributo[] }>(`${base(slug)}/filters`).then((r) => r.data.data);
+
+export const obtenerFacetas = (slug: string, params: Record<string, unknown> = {}) =>
+  storeApi.get<{ data: Facetas }>(`${base(slug)}/facets`, { params }).then((r) => r.data.data);
+
+export const obtenerRelacionados = (slug: string, productSlug: string) =>
+  storeApi
+    .get<{ data: ProductoResumen[] }>(`${base(slug)}/products/${productSlug}/related`)
+    .then((r) => r.data.data);
 
 export const obtenerProductos = (slug: string, params: Record<string, unknown>) =>
   storeApi

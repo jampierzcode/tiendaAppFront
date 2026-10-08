@@ -1,7 +1,14 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useOutletContext, useParams } from "react-router-dom";
-import { obtenerProducto, type ProductoDetalle, type Variacion } from "./api";
+import {
+  obtenerProducto,
+  obtenerRelacionados,
+  type ProductoDetalle,
+  type ProductoResumen,
+  type Variacion,
+} from "./api";
+import ProductCard from "./components/ProductCard";
 import { useStore } from "./StoreContext";
 
 /**
@@ -34,6 +41,19 @@ export default function ProductDetail() {
   const [indice, setIndice] = useState(0);
   const [zoom, setZoom] = useState(false);
   const [origen, setOrigen] = useState({ x: 50, y: 50 });
+  const [relacionados, setRelacionados] = useState<ProductoResumen[]>([]);
+
+  // Productos parecidos: mantienen al cliente comparando en vez de volver atrás.
+  useEffect(() => {
+    let vigente = true;
+    setRelacionados([]);
+    obtenerRelacionados(slug!, productSlug)
+      .then((r) => vigente && setRelacionados(r))
+      .catch(() => undefined);
+    return () => {
+      vigente = false;
+    };
+  }, [slug, productSlug]);
 
   useEffect(() => {
     let vigente = true;
@@ -215,16 +235,37 @@ export default function ProductDetail() {
   const foto = galeria[indice] ?? galeria[0] ?? null;
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 pb-28 md:pb-8">
-      <Link
-        to={`/t/${slug}`}
-        className="inline-flex items-center gap-1.5 text-sm text-neutral-600 hover:text-neutral-900"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="m15 18-6-6 6-6" />
-        </svg>
-        Seguir viendo
-      </Link>
+    <div className="mx-auto max-w-7xl px-4 py-5 pb-28 md:pb-8">
+      {/* Migas: de dónde viene y cómo volver a esa lista */}
+      <nav aria-label="Ruta" className="flex flex-wrap items-center gap-1.5 text-xs text-neutral-500">
+        <Link to={`/t/${slug}`} className="hover:text-neutral-900 hover:underline">
+          Inicio
+        </Link>
+        {producto.categorias[0] && (
+          <>
+            <span aria-hidden>›</span>
+            <Link
+              to={`/t/${slug}?category=${producto.categorias[0].category.slug}`}
+              className="hover:text-neutral-900 hover:underline"
+            >
+              {producto.categorias[0].category.name}
+            </Link>
+            {producto.categorias[0].subcategory && (
+              <>
+                <span aria-hidden>›</span>
+                <Link
+                  to={`/t/${slug}?category=${producto.categorias[0].category.slug}&subcategory=${producto.categorias[0].subcategory.slug}`}
+                  className="hover:text-neutral-900 hover:underline"
+                >
+                  {producto.categorias[0].subcategory.name}
+                </Link>
+              </>
+            )}
+          </>
+        )}
+        <span aria-hidden>›</span>
+        <span className="truncate text-neutral-900">{producto.name}</span>
+      </nav>
 
       <div className="mt-4 grid gap-8 md:grid-cols-2">
         <div>
@@ -253,7 +294,7 @@ export default function ProductDetail() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.22, ease: "easeOut" }}
-                  className="aspect-[3/4] w-full object-cover transition-transform duration-300"
+                  className="aspect-square w-full bg-neutral-50 object-contain p-3 transition-transform duration-300"
                   style={{
                     transform: zoom ? "scale(2)" : "scale(1)",
                     transformOrigin: `${origen.x}% ${origen.y}%`,
@@ -315,19 +356,27 @@ export default function ProductDetail() {
         <div>
           <div className="flex flex-wrap gap-1.5">
             {producto.tags.map((t) => (
-              <span
+              <Link
                 key={t.slug}
-                className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-white"
+                to={`/t/${slug}?tag=${t.slug}`}
+                className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-white hover:opacity-85"
                 style={{ backgroundColor: t.color ?? "#334155" }}
               >
                 {t.name}
-              </span>
+              </Link>
             ))}
           </div>
 
           <h1 className="mt-2 text-2xl font-bold leading-tight" style={{ textWrap: "balance" }}>
             {producto.name}
           </h1>
+
+          {(producto.sku || variacion?.sku) && (
+            <p className="mt-1 text-sm text-neutral-500">
+              Código:{" "}
+              <span className="font-mono text-neutral-800">{variacion?.sku ?? producto.sku}</span>
+            </p>
+          )}
 
           <div className="mt-2 flex items-baseline gap-3">
             <span className="text-2xl font-semibold">
@@ -348,7 +397,7 @@ export default function ProductDetail() {
           </div>
 
           {producto.description && (
-            <p className="mt-4 text-sm leading-relaxed text-neutral-600">{producto.description}</p>
+            <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-neutral-600">{producto.description}</p>
           )}
 
           {/* Selector de talla y color */}
@@ -441,6 +490,35 @@ export default function ProductDetail() {
           </div>
         </div>
       </div>
+
+      {relacionados.length > 0 && (
+        <section className="mt-14 border-t border-neutral-200 pt-8" aria-labelledby="relacionados">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 id="relacionados" className="text-lg font-semibold">
+              Productos relacionados
+            </h2>
+            {producto.categorias[0] && (
+              <Link
+                to={`/t/${slug}?category=${producto.categorias[0].category.slug}${
+                  producto.categorias[0].subcategory
+                    ? `&subcategory=${producto.categorias[0].subcategory.slug}`
+                    : ""
+                }`}
+                className="text-sm font-medium hover:underline"
+                style={{ color: "var(--tienda-secundario, #F59E0B)" }}
+              >
+                Ver más de{" "}
+                {producto.categorias[0].subcategory?.name ?? producto.categorias[0].category.name} →
+              </Link>
+            )}
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
+            {relacionados.slice(0, 8).map((p, i) => (
+              <ProductCard key={p.id} producto={p} slugTienda={slug!} indice={i} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* En móvil el botón vive fijo abajo: es donde llega el pulgar. */}
       <div className="fixed inset-x-0 bottom-0 z-20 border-t border-neutral-200 bg-white/95 p-3 backdrop-blur md:hidden">
