@@ -2,7 +2,7 @@ import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import type { Business, PageMeta } from "../../types/main";
 import { apiTienda } from "../../api/apiTienda";
-import { Button, Card, Input, message, Space, Table, Tag } from "antd";
+import { Button, Card, Input, Modal, message, Select, Space, Table, Tag } from "antd";
 import type { AxiosError } from "axios";
 import type { ColumnsType } from "antd/es/table";
 import { BusinessFormModal } from "../../components/superAdmin/BusinessFormModal";
@@ -22,6 +22,43 @@ export function BusinessesPage(): React.ReactElement {
   const [openModal, setOpenModal] = useState(false);
   const [editing, setEditing] = useState<Business | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Copiar catálogo (productos, insumos, recetas, modificadores) desde un molde.
+  const [cloneTarget, setCloneTarget] = useState<Business | null>(null);
+  const [cloneSource, setCloneSource] = useState<number | undefined>();
+  const [cloning, setCloning] = useState(false);
+  const [moldes, setMoldes] = useState<Business[]>([]);
+
+  const openClone = async (row: Business) => {
+    setCloneTarget(row);
+    setCloneSource(undefined);
+    try {
+      const res = await apiTienda.get("/businesses", { params: { perPage: 200 } });
+      setMoldes((res.data.data ?? res.data) as Business[]);
+    } catch {
+      message.error("No se pudo cargar la lista de negocios");
+    }
+  };
+
+  const handleClone = async () => {
+    if (!cloneTarget || !cloneSource) return;
+    try {
+      setCloning(true);
+      const res = await apiTienda.post(`/businesses/${cloneTarget.id}/clone-catalog`, {
+        source_business_id: cloneSource,
+      });
+      const d = res.data.data;
+      message.success(
+        `Copiado: ${d.products} productos, ${d.ingredients} insumos, ${d.recipes} recetas, ${d.modifierGroups} grupos de modificadores`
+      );
+      setCloneTarget(null);
+    } catch (err) {
+      const ax: any = err as AxiosError;
+      message.error(ax.response?.data?.message ?? "No se pudo copiar el catálogo");
+    } finally {
+      setCloning(false);
+    }
+  };
 
   const fetchList = async () => {
     setLoading(true);
@@ -132,9 +169,12 @@ export function BusinessesPage(): React.ReactElement {
       {
         title: "Acciones",
         key: "actions",
-        width: 220,
+        width: 330,
         render: (_: any, row) => (
           <Space>
+            <Button size="small" onClick={() => openClone(row)}>
+              Copiar catálogo
+            </Button>
             <Button size="small" onClick={() => openEdit(row)}>
               Editar
             </Button>
@@ -186,6 +226,33 @@ export function BusinessesPage(): React.ReactElement {
           },
         }}
       />
+
+      <Modal
+        open={!!cloneTarget}
+        title={`Copiar catálogo a «${cloneTarget?.name ?? ""}»`}
+        okText="Copiar"
+        cancelText="Cancelar"
+        okButtonProps={{ disabled: !cloneSource, loading: cloning }}
+        onOk={handleClone}
+        onCancel={() => setCloneTarget(null)}
+      >
+        <p>
+          Copia categorías, productos, insumos, recetas y modificadores del negocio
+          molde. No copia imágenes ni stock. Solo funciona si este negocio está
+          vacío.
+        </p>
+        <Select
+          style={{ width: "100%" }}
+          showSearch
+          optionFilterProp="label"
+          placeholder="Negocio molde"
+          value={cloneSource}
+          onChange={setCloneSource}
+          options={moldes
+            .filter((b) => b.id !== cloneTarget?.id)
+            .map((b) => ({ value: b.id, label: `${b.name} (#${b.id})` }))}
+        />
+      </Modal>
 
       <BusinessFormModal
         open={openModal}
