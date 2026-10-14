@@ -127,7 +127,7 @@ export default function ProductSheet({ plato, onClose }: Props) {
       >
         <div className="overflow-y-auto">
           {plato.imageUrl && (
-            <img src={plato.imageUrl} alt={plato.name} className="h-52 w-full object-cover" />
+            <img src={plato.imageUrl} alt={plato.name} className="h-52 max-h-[40vh] w-full object-cover sm:h-64" />
           )}
 
           <div className="p-5">

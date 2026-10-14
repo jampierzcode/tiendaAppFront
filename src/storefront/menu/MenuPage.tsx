@@ -15,6 +15,7 @@ export default function MenuPage() {
   const [carta, setCarta] = useState<CartaMenu | null>(null);
   const [error, setError] = useState(false);
   const [categoria, setCategoria] = useState<number | "todas">("todas");
+  const [subcategoria, setSubcategoria] = useState<number | null>(null);
   const [texto, setTexto] = useState("");
   const [elegido, setElegido] = useState<PlatoMenu | null>(null);
   const secciones = useRef<Record<number, HTMLElement | null>>({});
@@ -35,29 +36,46 @@ export default function MenuPage() {
       .map((c) => ({
         id: c.id,
         name: c.name,
+        subs: c.subcategories,
         platos: carta.products.filter((p) => p.categoryIds.includes(c.id) && coincide(p)),
       }))
       .filter((g) => g.platos.length > 0);
 
     // Platos sin categoría: no se pierden, van al final.
     const sueltos = carta.products.filter((p) => p.categoryIds.length === 0 && coincide(p));
-    if (sueltos.length) lista.push({ id: 0, name: "Otros", platos: sueltos });
+    if (sueltos.length) lista.push({ id: 0, name: "Otros", subs: [], platos: sueltos });
 
     return lista;
   }, [carta, texto]);
 
+  /** Dentro de una categoría, los platos se agrupan por subcategoría. */
+  const bloques = (g: (typeof grupos)[number]) => {
+    const conSub = g.subs
+      .map((s) => ({
+        id: s.id,
+        titulo: s.name as string | null,
+        platos: g.platos.filter((p) => p.subcategoryIds.includes(s.id)),
+      }))
+      .filter((b) => b.platos.length > 0);
+    const sueltos = g.platos.filter((p) => !p.subcategoryIds.some((id) => g.subs.some((s) => s.id === id)));
+    if (subcategoria !== null) return conSub.filter((b) => b.id === subcategoria);
+    return [
+      ...conSub,
+      ...(sueltos.length
+        ? [{ id: 0, titulo: conSub.length ? "Otros" : null, platos: sueltos }]
+        : []),
+    ];
+  };
+
+  /** Elegir una categoría la filtra: solo se ven sus platos. */
   const irA = (id: number | "todas") => {
     setCategoria(id);
-    if (id === "todas") {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-    const el = secciones.current[id];
-    if (el) {
-      const y = el.getBoundingClientRect().top + window.scrollY - 120;
-      window.scrollTo({ top: y, behavior: "smooth" });
-    }
+    setSubcategoria(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  const visibles = categoria === "todas" ? grupos : grupos.filter((g) => g.id === categoria);
+  const actual = categoria === "todas" ? null : grupos.find((g) => g.id === categoria) ?? null;
 
   if (error) {
     return <p className="p-8 text-center text-neutral-500">No pudimos cargar la carta.</p>;
@@ -109,6 +127,27 @@ export default function MenuPage() {
             );
           })}
         </nav>
+        {actual && actual.subs.length > 0 && (
+          <nav className="scroll-fino flex gap-2 overflow-x-auto px-4 pb-3" aria-label="Subcategorías">
+            {[{ id: null as number | null, name: "Todas" }, ...actual.subs].map((sc) => {
+              const on = subcategoria === sc.id;
+              return (
+                <button
+                  key={sc.id ?? "todas"}
+                  onClick={() => setSubcategoria(sc.id)}
+                  className="shrink-0 rounded-full border px-3 py-1 text-xs font-semibold transition"
+                  style={
+                    on
+                      ? { borderColor: "var(--tienda-primario)", color: "var(--tienda-primario)", backgroundColor: "#fff" }
+                      : { backgroundColor: "#fff", borderColor: "#e5e5e5", color: "#525252" }
+                  }
+                >
+                  {sc.name}
+                </button>
+              );
+            })}
+          </nav>
+        )}
       </div>
 
       {grupos.length === 0 && (
@@ -117,7 +156,7 @@ export default function MenuPage() {
         </p>
       )}
 
-      {grupos.map((g) => (
+      {visibles.map((g) => (
         <section
           key={g.id}
           ref={(el) => {
@@ -127,8 +166,15 @@ export default function MenuPage() {
         >
           <h2 className="text-lg font-extrabold text-neutral-900">{g.name}</h2>
 
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            {g.platos.map((p, i) => (
+          {bloques(g).map((b) => (
+          <div key={b.id} className="mt-3">
+            {b.titulo && (
+              <h3 className="mb-2 text-sm font-bold uppercase tracking-wide text-neutral-500">
+                {b.titulo}
+              </h3>
+            )}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {b.platos.map((p, i) => (
               <motion.article
                 key={p.id}
                 initial={{ opacity: 0, y: 12 }}
@@ -142,13 +188,13 @@ export default function MenuPage() {
                   className="flex flex-1 flex-col text-left"
                   aria-label={`Ver ${p.name}`}
                 >
-                  <div className="relative aspect-[4/3] bg-neutral-100">
+                  <div className="relative aspect-[4/3] max-h-40 w-full shrink-0 overflow-hidden bg-neutral-100 sm:max-h-48 lg:max-h-56">
                     {p.imageUrl ? (
                       <img
                         src={p.imageUrl}
                         alt=""
                         loading="lazy"
-                        className="h-full w-full object-cover"
+                        className="absolute inset-0 h-full w-full object-cover"
                       />
                     ) : (
                       <div className="grid h-full place-items-center text-3xl">🍽️</div>
@@ -195,6 +241,8 @@ export default function MenuPage() {
               </motion.article>
             ))}
           </div>
+          </div>
+          ))}
         </section>
       ))}
 

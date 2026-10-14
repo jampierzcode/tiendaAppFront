@@ -26,6 +26,8 @@ export interface Tienda {
   shippingCost: number;
   freeShippingFrom: number | null;
   aceptaPedidos: boolean;
+  paymentPolicy: "none" | "on_confirm" | "on_delivery";
+  paymentInstructions: string | null;
   phone: string | null;
   whatsappPhone: string | null;
   address: string | null;
@@ -204,12 +206,19 @@ export interface PlatoMenu {
   price: number;
   originalPrice: number | null;
   categoryIds: number[];
+  subcategoryIds: number[];
   tags: { name: string; color: string | null }[];
   modifierGroups: GrupoMenu[];
 }
 
 export interface CartaMenu {
-  categories: { id: number; name: string; slug: string; imageUrl: string | null }[];
+  categories: {
+    id: number;
+    name: string;
+    slug: string;
+    imageUrl: string | null;
+    subcategories: { id: number; name: string }[];
+  }[];
   products: PlatoMenu[];
 }
 
@@ -243,6 +252,9 @@ export interface SeguimientoPedido {
   deliveryMethod: string;
   tableLabel: string | null;
   total: number;
+  paidTotal: number;
+  paymentPolicy: "none" | "on_confirm" | "on_delivery";
+  paymentInstructions: string | null;
   currencySymbol: string;
   createdAt: string;
   items: { name: string; quantity: number; lineTotal: number; modifiers: string[]; note: string | null }[];

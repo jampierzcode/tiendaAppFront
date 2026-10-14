@@ -32,6 +32,7 @@ import StoreGate, { StoreIndex } from "./storefront/StoreGate";
 import OrderTracking from "./storefront/menu/OrderTracking";
 import ModifiersPage from "./pages/admin/ModifiersPage";
 import KitchenPage from "./pages/admin/KitchenPage";
+import ChatPage from "./pages/admin/ChatPage";
 import WhatsappPage from "./pages/admin/WhatsappPage";
 import IngredientsPage from "./pages/admin/IngredientsPage";
 
@@ -98,6 +99,7 @@ export default function App() {
             <Route path="reports" element={<ReportsPage />} />
             <Route path="modifiers" element={<ModifiersPage />} />
             <Route path="kitchen" element={<KitchenPage />} />
+            <Route path="chat" element={<ChatPage />} />
             <Route path="whatsapp" element={<WhatsappPage />} />
             <Route path="ingredients" element={<IngredientsPage />} />
             {/* Subruta desconocida dentro del panel: al inicio, que para un

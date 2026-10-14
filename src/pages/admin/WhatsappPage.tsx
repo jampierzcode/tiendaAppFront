@@ -43,6 +43,8 @@ export default function WhatsappPage() {
   const [plantillas, setPlantillas] = useState<Record<string, string>>({});
   const [guardando, setGuardando] = useState(false);
   const [editado, setEditado] = useState(false);
+  // Segundos desde que empezó a conectar: solo para mostrar progreso honesto.
+  const [segundos, setSegundos] = useState(0);
 
   const cargar = useCallback(async () => {
     try {
@@ -61,6 +63,16 @@ export default function WhatsappPage() {
     const t = setInterval(cargar, 2000);
     return () => clearInterval(t);
   }, [cargar]);
+
+  const conectando = estado?.status === "connecting";
+  useEffect(() => {
+    if (!conectando) {
+      setSegundos(0);
+      return;
+    }
+    const t = setInterval(() => setSegundos((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [conectando]);
 
   useEffect(() => {
     if (!estado?.qr) {
@@ -134,18 +146,43 @@ export default function WhatsappPage() {
               ) : (
                 <Spin />
               )}
+              <p className="mt-4 text-[13px] font-bold text-ink">Para vincular tu número:</p>
+              <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-[13px] leading-relaxed text-ink-soft">
+                <li>Abre <b>WhatsApp</b> en el celular del negocio.</li>
+                <li>
+                  Toca los <b>tres puntos ⋮</b> (Android) o <b>Configuración</b> (iPhone).
+                </li>
+                <li>
+                  Entra a <b>Dispositivos vinculados</b> y toca <b>Vincular un dispositivo</b>.
+                </li>
+                <li>Desbloquea el celular si te lo pide.</li>
+                <li>Apunta la cámara a este código hasta que lo reconozca.</li>
+              </ol>
               <p className="mt-3 text-[12px] leading-relaxed text-muted">
-                En el celular: WhatsApp → Dispositivos vinculados → Vincular un dispositivo, y
-                escanea este código.
+                El código cambia cada ~20 segundos; si falla, escanea el que se muestra ahora. Cuando
+                termine, este cuadro pasará a «Conectado».
               </p>
             </div>
           )}
 
           {estado.status === "connecting" && (
-            <p className="mt-4 text-[13px] text-muted">
-              Iniciando la sesión… si no avanza en un minuto, revisa que el servicio del bot esté
-              encendido.
-            </p>
+            <div className="mt-4 rounded-xl bg-canvas p-3.5">
+              <div className="flex items-center gap-2 text-[13px] font-semibold text-ink">
+                <Spin size="small" />
+                Preparando WhatsApp… {segundos}s
+              </div>
+              <ul className="mt-2 space-y-1 text-[12px] text-ink-soft">
+                <li>{segundos >= 2 ? "✓" : "…"} Pedido recibido por el servicio</li>
+                <li>{segundos >= 5 ? "✓" : "…"} Abriendo el navegador de WhatsApp</li>
+                <li>{segundos >= 25 ? "✓" : "…"} Descargando WhatsApp Web</li>
+                <li>… Generando tu código QR</li>
+              </ul>
+              <p className="mt-2 text-[12px] text-muted">
+                La primera vez puede tardar hasta un minuto. No cierres esta página.
+                {segundos > 90 &&
+                  " Si sigue sin avanzar, revisa que el servicio del bot esté encendido."}
+              </p>
+            </div>
           )}
 
           <div className="mt-5">

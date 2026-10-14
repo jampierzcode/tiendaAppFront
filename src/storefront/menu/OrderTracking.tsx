@@ -118,6 +118,33 @@ export default function OrderTracking() {
         )}
       </section>
 
+      {!cancelado && pedido.paymentPolicy !== "none" && (
+        <section className="rounded-3xl bg-white p-5 shadow-sm">
+          <h3 className="font-bold">Pago</h3>
+          {pedido.paidTotal >= pedido.total - 0.009 ? (
+            <p className="mt-2 rounded-2xl bg-green-50 p-3 text-sm font-semibold text-green-700">
+              ✓ Pagado
+            </p>
+          ) : (
+            <div className="mt-2 text-sm text-neutral-700">
+              <p className="font-semibold">
+                Pendiente: {precio(pedido.total - pedido.paidTotal)}
+              </p>
+              <p className="mt-1 text-neutral-500">
+                {pedido.paymentPolicy === "on_confirm"
+                  ? "Paga para que confirmemos tu pedido."
+                  : "Pagas al recibir tu pedido."}
+              </p>
+              {pedido.paymentInstructions && (
+                <p className="mt-2 whitespace-pre-line rounded-2xl bg-neutral-100 p-3 font-semibold">
+                  {pedido.paymentInstructions}
+                </p>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
       <section className="rounded-3xl bg-white p-5 shadow-sm">
         <h3 className="font-bold">Detalle</h3>
         <ul className="mt-3 divide-y divide-neutral-100">

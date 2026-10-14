@@ -8,20 +8,18 @@ import { precioUnitario, useMenuCart } from "./MenuCart";
 interface Props {
   abierto: boolean;
   onClose: () => void;
-  mesa: string | null;
 }
 
-type Metodo = "mesa" | "recojo" | "envio";
+type Metodo = "recojo" | "envio";
 
 const claveContacto = "menu-contacto";
 
-export default function CartSheet({ abierto, onClose, mesa }: Props) {
+export default function CartSheet({ abierto, onClose }: Props) {
   const { slug, tienda, precio } = useStore();
   const { lineas, subtotal, cambiarCantidad, quitar, vaciar } = useMenuCart();
   const navigate = useNavigate();
 
-  const [metodo, setMetodo] = useState<Metodo>(mesa ? "mesa" : "recojo");
-  const [mesaTexto, setMesaTexto] = useState(mesa ?? "");
+  const [metodo, setMetodo] = useState<Metodo>("recojo");
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
   const [direccion, setDireccion] = useState("");
@@ -41,13 +39,6 @@ export default function CartSheet({ abierto, onClose, mesa }: Props) {
       // sin datos guardados
     }
   }, []);
-
-  useEffect(() => {
-    if (mesa) {
-      setMesaTexto(mesa);
-      setMetodo("mesa");
-    }
-  }, [mesa]);
 
   useEffect(() => {
     if (!abierto) return;
@@ -72,7 +63,6 @@ export default function CartSheet({ abierto, onClose, mesa }: Props) {
     setError(null);
 
     if (!lineas.length) return;
-    if (metodo === "mesa" && !mesaTexto.trim()) return setError("Indica tu número de mesa");
     if (metodo === "envio" && !direccion.trim()) return setError("Falta la dirección de entrega");
 
     setEnviando(true);
@@ -82,7 +72,6 @@ export default function CartSheet({ abierto, onClose, mesa }: Props) {
         customerPhone: telefono,
         deliveryMethod: metodo,
         deliveryAddress: metodo === "envio" ? direccion : undefined,
-        tableLabel: metodo === "mesa" ? mesaTexto : undefined,
         note: nota || undefined,
         items: lineas.map((l) => ({
           productId: l.productId,
@@ -204,11 +193,29 @@ export default function CartSheet({ abierto, onClose, mesa }: Props) {
               </ul>
 
               <div className="mt-5 space-y-3">
+                {tienda.paymentPolicy !== "none" && (
+                  <div className="rounded-2xl bg-neutral-100 p-3 text-sm text-neutral-700">
+                    <p className="font-bold">
+                      {tienda.paymentPolicy === "on_confirm"
+                        ? "Pago por adelantado"
+                        : "Pago contra entrega"}
+                    </p>
+                    <p className="mt-0.5 text-[13px]">
+                      {tienda.paymentPolicy === "on_confirm"
+                        ? "Te enviaremos los datos por WhatsApp para pagar y confirmar tu pedido."
+                        : "Pagas al recibir tu pedido (efectivo, Yape, Plin o transferencia)."}
+                    </p>
+                    {tienda.paymentInstructions && (
+                      <p className="mt-1 whitespace-pre-line text-[13px] font-semibold">
+                        {tienda.paymentInstructions}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <p className="text-sm font-bold">¿Cómo lo quieres?</p>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {(
                     [
-                      ["mesa", "En mesa"],
                       ["recojo", "Recojo"],
                       ["envio", "Delivery"],
                     ] as const
@@ -233,15 +240,6 @@ export default function CartSheet({ abierto, onClose, mesa }: Props) {
                   ))}
                 </div>
 
-                {metodo === "mesa" && (
-                  <input
-                    className={campo}
-                    placeholder="Número de mesa"
-                    value={mesaTexto}
-                    onChange={(e) => setMesaTexto(e.target.value)}
-                    maxLength={30}
-                  />
-                )}
                 {metodo === "envio" && (
                   <input
                     className={campo}

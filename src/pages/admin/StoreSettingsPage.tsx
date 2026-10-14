@@ -22,6 +22,8 @@ import GalleryModal from "../../components/admin/GalleryModal";
 interface Config {
   slug: string;
   businessType?: "retail" | "restaurant";
+  paymentPolicy?: "none" | "on_confirm" | "on_delivery";
+  paymentInstructions?: string | null;
   name: string;
   description: string | null;
   logoUrl: string | null;
@@ -70,10 +72,8 @@ export default function StoreSettingsPage() {
   const [banner, setBanner] = useState<{ id: number; url: string } | null>(null);
   const logoUrl = Form.useWatch("logo_url", form);
 
-  const [mesaQr, setMesaQr] = useState("");
   const urlTienda = config ? `${window.location.origin}/t/${config.slug}` : "";
-  // En restaurante, cada mesa tiene su propio QR: el ?mesa= viaja hasta el pedido.
-  const urlQr = mesaQr.trim() ? `${urlTienda}?mesa=${encodeURIComponent(mesaQr.trim())}` : urlTienda;
+  const urlQr = urlTienda;
 
   useEffect(() => {
     apiTienda
@@ -93,6 +93,8 @@ export default function StoreSettingsPage() {
           is_public: d.isPublic,
           logo_url: d.logoUrl,
           business_type: d.businessType ?? "retail",
+          payment_policy: d.paymentPolicy ?? "none",
+          payment_instructions: d.paymentInstructions ?? "",
         });
       })
       .catch(() => message.error("No se pudo cargar la configuración"))
@@ -135,7 +137,7 @@ export default function StoreSettingsPage() {
     if (!qr || !config) return;
     const a = document.createElement("a");
     a.href = qr;
-    a.download = `qr-${config.slug}${mesaQr.trim() ? `-mesa-${mesaQr.trim()}` : ""}.png`;
+    a.download = `qr-${config.slug}.png`;
     a.click();
   };
 
@@ -203,6 +205,28 @@ export default function StoreSettingsPage() {
                           { value: "restaurant", label: "Restaurante / cafetería (carta digital)" },
                         ]}
                       />
+                    </Form.Item>
+
+                    <Form.Item
+                      name="payment_policy"
+                      label="Cobro del pedido"
+                      extra="Define cuándo se te pedirá registrar el pago (efectivo, Yape, Plin o transferencia con su código). Más adelante: links de pago con Culqi y otras pasarelas."
+                    >
+                      <Select
+                        options={[
+                          { value: "none", label: "Sin exigir: registro el pago cuando quiera" },
+                          { value: "on_confirm", label: "Por adelantado: al confirmar el pedido" },
+                          { value: "on_delivery", label: "Contra entrega: al entregar el pedido" },
+                        ]}
+                      />
+                    </Form.Item>
+
+                    <Form.Item
+                      name="payment_instructions"
+                      label="Instrucciones de pago para el cliente"
+                      extra="Lo ve el cliente en la carta y en el seguimiento de su pedido."
+                    >
+                      <Input.TextArea rows={2} maxLength={500} placeholder="Yape o Plin al 987 654 321 (Mi Negocio SAC)" />
                     </Form.Item>
 
                     <Form.Item name="description" label="Descripción">
@@ -443,15 +467,6 @@ export default function StoreSettingsPage() {
             )}
           </div>
 
-          {config?.businessType === "restaurant" && (
-            <Input
-              className="mt-3"
-              value={mesaQr}
-              onChange={(e) => setMesaQr(e.target.value)}
-              placeholder="Mesa (opcional): 5, Terraza 2…"
-              maxLength={30}
-            />
-          )}
 
           <p className="mt-3 break-all font-mono text-[11px] text-muted">{urlQr}</p>
 

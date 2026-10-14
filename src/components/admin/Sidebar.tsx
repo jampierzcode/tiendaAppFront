@@ -15,6 +15,7 @@ import {
   TbChartHistogram,
   TbChefHat,
   TbLogout,
+  TbMessageCircle,
   TbPhoto,
   TbSelector,
   TbTruckLoading,
@@ -32,6 +33,8 @@ interface SidebarProps {
   /** En móvil el sidebar es un cajón que se superpone. */
   movilAbierto: boolean;
   cerrarMovil: () => void;
+  /** Mensajes de WhatsApp sin leer: globito en «Mensajes». */
+  sinLeer?: number;
 }
 
 interface Negocio {
@@ -44,6 +47,7 @@ export default function Sidebar({
   setOpen,
   movilAbierto,
   cerrarMovil,
+  sinLeer = 0,
 }: SidebarProps) {
   const { auth, logout } = useAuth();
   const { uuid_business } = useParams();
@@ -72,11 +76,15 @@ export default function Sidebar({
           url: `/b/${uuid_business}/dashboard`,
           icono: <IoSpeedometerOutline />,
         },
-        {
-          titulo: "Mostrador",
-          url: `/b/${uuid_business}/pos`,
-          icono: <TbCashRegister />,
-        },
+        ...(esRestaurante
+          ? []
+          : [
+              {
+                titulo: "Mostrador",
+                url: `/b/${uuid_business}/pos`,
+                icono: <TbCashRegister />,
+              },
+            ]),
         {
           titulo: "Pedidos",
           url: `/b/${uuid_business}/orders`,
@@ -154,6 +162,12 @@ export default function Sidebar({
           titulo: "Mi tienda",
           url: `/b/${uuid_business}/store`,
           icono: <IoStorefrontOutline />,
+        },
+        {
+          titulo: "Mensajes",
+          url: `/b/${uuid_business}/chat`,
+          icono: <TbMessageCircle />,
+          badge: sinLeer,
         },
         {
           titulo: "WhatsApp",
@@ -258,6 +272,15 @@ export default function Sidebar({
                     >
                       <span className="shrink-0 text-lg">{item.icono}</span>
                       {open && <span className="truncate">{item.titulo}</span>}
+                      {"badge" in item && Number(item.badge) > 0 && (
+                        <span
+                          className={`rounded-full bg-danger px-1.5 text-[10px] font-bold leading-4 text-white ${
+                            open ? "ml-auto" : "absolute right-1.5 top-1.5"
+                          }`}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
                     </NavLink>
                   </Tooltip>
                 </li>

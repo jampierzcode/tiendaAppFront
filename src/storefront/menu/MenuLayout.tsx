@@ -1,40 +1,16 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
-import { Outlet, useLocation, useSearchParams } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { esClaro } from "../color";
 import { useStore } from "../StoreContext";
 import CartSheet from "./CartSheet";
 import { MenuCartProvider, useMenuCart } from "./MenuCart";
 
-/** Mesa tomada del QR (?mesa=5). Se recuerda por pestaña: sobrevive a navegar. */
-export function useMesa(slug: string) {
-  const [params] = useSearchParams();
-  const clave = `mesa:${slug}`;
-  const desdeUrl = params.get("mesa");
-
-  useEffect(() => {
-    if (!desdeUrl) return;
-    try {
-      sessionStorage.setItem(clave, desdeUrl);
-    } catch {
-      // sin almacenamiento: vale solo mientras la URL la traiga
-    }
-  }, [desdeUrl, clave]);
-
-  if (desdeUrl) return desdeUrl;
-  try {
-    return sessionStorage.getItem(clave);
-  } catch {
-    return null;
-  }
-}
-
 function Contenido() {
-  const { tienda, cargando, error, slug, precio } = useStore();
+  const { tienda, cargando, error, precio } = useStore();
   const { totalItems, subtotal } = useMenuCart();
   const [abierto, setAbierto] = useState(false);
   const { pathname } = useLocation();
-  const mesa = useMesa(slug);
 
   useEffect(() => setAbierto(false), [pathname]);
 
@@ -95,11 +71,6 @@ function Contenido() {
             <p className="mt-0.5 line-clamp-2 text-sm opacity-85">
               {tienda.schedule || tienda.description || "Haz tu pedido desde aquí"}
             </p>
-            {mesa && (
-              <span className="mt-2 inline-block rounded-full bg-white/90 px-3 py-0.5 text-xs font-bold text-neutral-900">
-                Mesa {mesa}
-              </span>
-            )}
           </div>
         </div>
       </header>
@@ -139,7 +110,7 @@ function Contenido() {
         )}
       </AnimatePresence>
 
-      <CartSheet abierto={abierto} onClose={() => setAbierto(false)} mesa={mesa} />
+      <CartSheet abierto={abierto} onClose={() => setAbierto(false)} />
     </div>
   );
 }

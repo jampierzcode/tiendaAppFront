@@ -24,8 +24,10 @@ import {
   TbArrowBackUp,
 } from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
+import { useEsRestaurante } from "../../context/BusinessContext";
 import BadgeEstado, { type EstadoPedido } from "../ui/EstadoPedido";
 import GalleryModal from "./GalleryModal";
+import PagoPedidoModal from "./PagoPedidoModal";
 
 interface ItemPedido {
   id: number;
@@ -78,7 +80,7 @@ const transiciones: Record<EstadoPedido, EstadoPedido[]> = {
   pagado: ["preparando", "enviado", "cancelado"],
   preparando: ["listo", "cancelado"],
   listo: ["enviado", "entregado", "cancelado"],
-  enviado: ["entregado", "devuelto"],
+  enviado: ["entregado", "devuelto", "cancelado"],
   entregado: ["devuelto"],
   cancelado: [],
   devuelto: [],
@@ -131,10 +133,13 @@ interface Props {
 }
 
 export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Props) {
+  const esRestaurante = useEsRestaurante();
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [modalPago, setModalPago] = useState(false);
+  // Política de cobro: estado al que se quería pasar y falta cobrar primero.
+  const [cobroPara, setCobroPara] = useState<EstadoPedido | null>(null);
   const [galeria, setGaleria] = useState(false);
   const [comprobante, setComprobante] = useState<{ id: number; url: string } | null>(null);
   const [modalDevolucion, setModalDevolucion] = useState(false);
@@ -172,7 +177,7 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
 
     const avisos: Partial<Record<EstadoPedido, string>> = {
       confirmado: `Confirmar ${pedido.code} descontará el stock de ${pedido.items.length} productos.`,
-      cancelado: `Cancelar ${pedido.code} repondrá el stock si ya se había descontado.`,
+      cancelado: `¿Cancelar ${pedido.code}? Se repondrá el stock si ya se había descontado y se avisará al cliente por WhatsApp.`,
       devuelto: `Devolver ${pedido.code} repondrá el stock al inventario.`,
     };
 
@@ -189,13 +194,23 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
       if (!ok) return;
     }
 
+    await aplicarEstado(nuevo, false);
+  };
+
+  const aplicarEstado = async (nuevo: EstadoPedido, sinCobrar: boolean) => {
+    if (!pedido) return;
     setGuardando(true);
     try {
-      await apiTienda.put(`/orders/${pedido.id}/status`, { status: nuevo });
+      await apiTienda.put(`/orders/${pedido.id}/status`, { status: nuevo, allowUnpaid: sinCobrar || undefined });
       message.success(`Pedido marcado como ${nuevo}`);
+      setCobroPara(null);
       await cargar();
       onCambio();
     } catch (e: any) {
+      if (e?.response?.data?.code === "PAYMENT_REQUIRED") {
+        setCobroPara(nuevo);
+        return;
+      }
       message.error(e?.response?.data?.message ?? "No se pudo cambiar el estado");
     } finally {
       setGuardando(false);
@@ -291,8 +306,10 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
     }
   };
 
+  // Un restaurante entrega con su propio personal: sin courier ni guía.
   const mostrarEnvio =
     pedido &&
+    !esRestaurante &&
     pedido.deliveryMethod !== "recojo" &&
     !["pendiente", "cancelado"].includes(pedido.status);
 
@@ -546,6 +563,21 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
           </motion.div>
         )}
       </Drawer>
+
+      <PagoPedidoModal
+        open={cobroPara !== null}
+        pedido={pedido ? { id: pedido.id, code: pedido.code } : null}
+        saldo={saldo}
+        motivo="La política de cobro de tu negocio pide registrar el pago antes de continuar."
+        onClose={() => setCobroPara(null)}
+        onPagado={async () => {
+          const destino = cobroPara;
+          await cargar();
+          onCambio();
+          if (destino) await aplicarEstado(destino, false);
+        }}
+        onSinCobrar={() => cobroPara && aplicarEstado(cobroPara, true)}
+      />
 
       {/* Registrar pago */}
       <Modal

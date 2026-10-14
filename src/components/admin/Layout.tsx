@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import TopNavigation from "./TopNavigation";
+import { useMensajesSinLeer } from "../../hooks/useMensajesSinLeer";
 
 const CLAVE_SIDEBAR = "panel:sidebar-abierto";
 
@@ -17,6 +18,7 @@ export default function AdminLayout() {
   });
   const [movilAbierto, setMovilAbierto] = useState(false);
   const location = useLocation();
+  const sinLeer = useMensajesSinLeer(true);
 
   useEffect(() => {
     try {
@@ -36,6 +38,7 @@ export default function AdminLayout() {
         setOpen={setOpen}
         movilAbierto={movilAbierto}
         cerrarMovil={() => setMovilAbierto(false)}
+        sinLeer={sinLeer}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
