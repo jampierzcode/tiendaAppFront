@@ -2,6 +2,8 @@ export type EstadoPedido =
   | "pendiente"
   | "confirmado"
   | "pagado"
+  | "preparando"
+  | "listo"
   | "enviado"
   | "entregado"
   | "cancelado"
@@ -17,6 +19,8 @@ export const estilosEstado: Record<EstadoPedido, { texto: string; clase: string 
   pendiente: { texto: "Pendiente", clase: "bg-warn-bg text-warn" },
   confirmado: { texto: "Confirmado", clase: "bg-info-bg text-info" },
   pagado: { texto: "Pagado", clase: "bg-brand-50 text-brand-600" },
+  preparando: { texto: "Preparando", clase: "bg-warn-bg text-warn" },
+  listo: { texto: "Listo", clase: "bg-ok-bg text-ok" },
   enviado: { texto: "Enviado", clase: "bg-info-bg text-info" },
   entregado: { texto: "Entregado", clase: "bg-ok-bg text-ok" },
   cancelado: { texto: "Cancelado", clase: "bg-danger-bg text-danger" },

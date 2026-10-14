@@ -163,7 +163,7 @@ export default function OrdersPage() {
 
   const opcionesFiltro = [
     { label: `Todos${resumen ? ` (${resumen.totalPedidos})` : ""}`, value: "todos" },
-    ...(["pendiente", "confirmado", "pagado", "enviado", "entregado", "cancelado"] as const).map(
+    ...(["pendiente", "confirmado", "pagado", "preparando", "listo", "enviado", "entregado", "cancelado"] as const).map(
       (e) => ({
         label: `${e[0].toUpperCase()}${e.slice(1)}${
           resumen?.porEstado?.[e] ? ` (${resumen.porEstado[e]})` : ""

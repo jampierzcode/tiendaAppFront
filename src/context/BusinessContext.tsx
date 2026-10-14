@@ -13,6 +13,9 @@ interface Business {
   uuid: string;
   name: string;
   logo_url?: string;
+  business_type?: "retail" | "restaurant";
+  businessType?: "retail" | "restaurant";
+  slug?: string;
 }
 
 interface BusinessContextType {
@@ -61,3 +64,9 @@ export const BusinessProvider = ({ children }: { children: ReactNode }) => {
 };
 
 export const useBusiness = () => useContext(BusinessContext);
+
+/** ¿El negocio abierto es un restaurante? Cambia productos, menú y pantallas. */
+export const useEsRestaurante = () => {
+  const { business } = useBusiness();
+  return (business?.businessType ?? business?.business_type) === "restaurant";
+};

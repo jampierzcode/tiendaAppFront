@@ -4,6 +4,7 @@ import {
   Form,
   Input,
   InputNumber,
+  Select,
   Space,
   Spin,
   Switch,
@@ -20,6 +21,7 @@ import GalleryModal from "../../components/admin/GalleryModal";
 
 interface Config {
   slug: string;
+  businessType?: "retail" | "restaurant";
   name: string;
   description: string | null;
   logoUrl: string | null;
@@ -68,7 +70,10 @@ export default function StoreSettingsPage() {
   const [banner, setBanner] = useState<{ id: number; url: string } | null>(null);
   const logoUrl = Form.useWatch("logo_url", form);
 
+  const [mesaQr, setMesaQr] = useState("");
   const urlTienda = config ? `${window.location.origin}/t/${config.slug}` : "";
+  // En restaurante, cada mesa tiene su propio QR: el ?mesa= viaja hasta el pedido.
+  const urlQr = mesaQr.trim() ? `${urlTienda}?mesa=${encodeURIComponent(mesaQr.trim())}` : urlTienda;
 
   useEffect(() => {
     apiTienda
@@ -87,6 +92,7 @@ export default function StoreSettingsPage() {
           free_shipping_from: d.freeShippingFrom,
           is_public: d.isPublic,
           logo_url: d.logoUrl,
+          business_type: d.businessType ?? "retail",
         });
       })
       .catch(() => message.error("No se pudo cargar la configuración"))
@@ -96,7 +102,7 @@ export default function StoreSettingsPage() {
   // El QR se genera en el navegador: no hace falta pedirlo a ningún servicio.
   useEffect(() => {
     if (!urlTienda) return;
-    QRCode.toDataURL(urlTienda, {
+    QRCode.toDataURL(urlQr, {
       width: 720,
       margin: 2,
       errorCorrectionLevel: "M",
@@ -104,7 +110,7 @@ export default function StoreSettingsPage() {
     })
       .then(setQr)
       .catch(() => undefined);
-  }, [urlTienda]);
+  }, [urlQr]);
 
   const guardar = async (valores: any) => {
     setGuardando(true);
@@ -113,8 +119,11 @@ export default function StoreSettingsPage() {
         ...valores,
         banner_image_id: banner?.id ?? config?.bannerImageId ?? null,
       });
+      const cambioTipo = r.data.data.businessType !== config?.businessType;
       setConfig(r.data.data);
       message.success("Configuración guardada");
+      // El menú lateral depende del tipo de negocio: se recarga para reflejarlo.
+      if (cambioTipo) setTimeout(() => window.location.reload(), 600);
     } catch (e: any) {
       message.error(e?.response?.data?.message ?? "No se pudo guardar");
     } finally {
@@ -126,7 +135,7 @@ export default function StoreSettingsPage() {
     if (!qr || !config) return;
     const a = document.createElement("a");
     a.href = qr;
-    a.download = `qr-${config.slug}.png`;
+    a.download = `qr-${config.slug}${mesaQr.trim() ? `-mesa-${mesaQr.trim()}` : ""}.png`;
     a.click();
   };
 
@@ -181,6 +190,19 @@ export default function StoreSettingsPage() {
                       extra={`Tu tienda vivirá en ${window.location.origin}/t/…`}
                     >
                       <Input addonBefore="/t/" placeholder="visull-boutique" />
+                    </Form.Item>
+
+                    <Form.Item
+                      name="business_type"
+                      label="Tipo de negocio"
+                      extra="Define cómo se ve tu tienda: catálogo con variaciones, o carta digital con modificadores y cocina."
+                    >
+                      <Select
+                        options={[
+                          { value: "retail", label: "Tienda (ropa, repuestos, calzado…)" },
+                          { value: "restaurant", label: "Restaurante / cafetería (carta digital)" },
+                        ]}
+                      />
                     </Form.Item>
 
                     <Form.Item name="description" label="Descripción">
@@ -421,7 +443,17 @@ export default function StoreSettingsPage() {
             )}
           </div>
 
-          <p className="mt-3 break-all font-mono text-[11px] text-muted">{urlTienda}</p>
+          {config?.businessType === "restaurant" && (
+            <Input
+              className="mt-3"
+              value={mesaQr}
+              onChange={(e) => setMesaQr(e.target.value)}
+              placeholder="Mesa (opcional): 5, Terraza 2…"
+              maxLength={30}
+            />
+          )}
+
+          <p className="mt-3 break-all font-mono text-[11px] text-muted">{urlQr}</p>
 
           <Button
             icon={<TbDownload />}

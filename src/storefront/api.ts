@@ -14,6 +14,7 @@ export const storeApi = axios.create({
 
 export interface Tienda {
   slug: string;
+  businessType: "retail" | "restaurant";
   name: string;
   description: string | null;
   logoUrl: string | null;
@@ -162,7 +163,7 @@ export const crearPedido = (
   datos: {
     customerName: string;
     customerPhone: string;
-    deliveryMethod: "envio" | "recojo";
+    deliveryMethod: "envio" | "recojo" | "mesa";
     deliveryAddress?: string;
     deliveryCity?: string;
     note?: string;
@@ -175,3 +176,79 @@ export const crearPedido = (
 
 export const marcarPedidoEnviado = (slug: string, code: string) =>
   storeApi.post(`${base(slug)}/orders/${code}/sent`).catch(() => undefined);
+
+// --- Menú digital (restaurante) ---
+
+export interface OpcionMenu {
+  id: number;
+  name: string;
+  priceDelta: number;
+}
+
+export interface GrupoMenu {
+  groupId: number;
+  name: string;
+  description: string | null;
+  minSelect: number;
+  maxSelect: number;
+  required: boolean;
+  options: OpcionMenu[];
+}
+
+export interface PlatoMenu {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  imageUrl: string | null;
+  price: number;
+  originalPrice: number | null;
+  categoryIds: number[];
+  tags: { name: string; color: string | null }[];
+  modifierGroups: GrupoMenu[];
+}
+
+export interface CartaMenu {
+  categories: { id: number; name: string; slug: string; imageUrl: string | null }[];
+  products: PlatoMenu[];
+}
+
+export const obtenerMenu = (slug: string) =>
+  storeApi.get<{ data: CartaMenu }>(`${base(slug)}/menu`).then((r) => r.data.data);
+
+export const crearPedidoMenu = (
+  slug: string,
+  datos: {
+    customerName: string;
+    customerPhone: string;
+    deliveryMethod: "envio" | "recojo" | "mesa";
+    deliveryAddress?: string;
+    tableLabel?: string;
+    note?: string;
+    items: {
+      productId: number;
+      quantity: number;
+      note?: string;
+      options: { optionId: number; quantity: number }[];
+    }[];
+  }
+) =>
+  storeApi
+    .post<{ data: RespuestaPedido }>(`${base(slug)}/orders`, datos)
+    .then((r) => r.data.data);
+
+export interface SeguimientoPedido {
+  code: string;
+  status: string;
+  deliveryMethod: string;
+  tableLabel: string | null;
+  total: number;
+  currencySymbol: string;
+  createdAt: string;
+  items: { name: string; quantity: number; lineTotal: number; modifiers: string[]; note: string | null }[];
+}
+
+export const obtenerSeguimiento = (slug: string, code: string) =>
+  storeApi
+    .get<{ data: SeguimientoPedido }>(`${base(slug)}/orders/${code}`)
+    .then((r) => r.data.data);

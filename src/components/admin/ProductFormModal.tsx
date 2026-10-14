@@ -17,6 +17,7 @@ import {
 import GalleryModal from "./GalleryModal";
 import { PlusOutlined } from "@ant-design/icons";
 import { apiTienda } from "../../api/apiTienda";
+import { useEsRestaurante } from "../../context/BusinessContext";
 
 const { Text } = Typography;
 
@@ -28,7 +29,7 @@ interface ProductFormModalProps {
    * "Tiene variaciones" encendido y todavía no tiene ninguna: el panel abre
    * el editor de variaciones sin que tenga que buscar el botón.
    */
-  onSuccess: (abrirVariaciones?: any) => void;
+  onSuccess: (abrirVariaciones?: any, creado?: any) => void;
   editData?: any; // producto si se está editando
 }
 
@@ -75,6 +76,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
   editData,
 }) => {
   const [form] = Form.useForm();
+  const esRestaurante = useEsRestaurante();
   const [loading, setLoading] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState<{
@@ -190,7 +192,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
     try {
       setLoading(true);
 
-      const tag_ids = await resolverEtiquetas(values.tagIds);
+      const tag_ids = esRestaurante ? [] : await resolverEtiquetas(values.tagIds);
       const category_links = (values.categoryKeys ?? []).map(parseKey);
 
       const payload: Record<string, unknown> = {
@@ -209,7 +211,13 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
       // El stock inicial solo existe al crear. Después se ajusta con el botón
       // "Ajustar stock", que deja constancia en el kardex.
-      if (!editData && !hasVariations) payload.stock = values.stock ?? 0;
+      // Un plato no tiene stock propio: lo que se agota son los insumos.
+      if (!editData && !hasVariations && !esRestaurante) payload.stock = values.stock ?? 0;
+      if (esRestaurante) {
+        delete payload.tag_ids;
+        delete payload.sku;
+        delete payload.low_stock_threshold;
+      }
 
       let saved: any = editData;
       if (editData) {
@@ -223,8 +231,8 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
       // Encendió "Tiene variaciones" y aún no tiene ninguna: lo llevamos
       // directo al editor para que las cree.
-      const abrir = hasVariations && !yaTieneVariaciones ? saved : undefined;
-      onSuccess(abrir);
+      const abrir = !esRestaurante && hasVariations && !yaTieneVariaciones ? saved : undefined;
+      onSuccess(abrir, !editData && esRestaurante ? saved : undefined);
       onClose();
     } catch (error: any) {
       console.error(error);
@@ -262,7 +270,15 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
   return (
     <>
       <Modal
-        title={editData ? "Editar producto" : "Nuevo producto"}
+        title={
+          esRestaurante
+            ? editData
+              ? "Editar plato"
+              : "Nuevo plato"
+            : editData
+              ? "Editar producto"
+              : "Nuevo producto"
+        }
         open={open}
         onCancel={onClose}
         okText={editData ? "Guardar cambios" : "Crear"}
@@ -303,13 +319,23 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   { required: true, message: "Ingrese el nombre del producto" },
                 ]}
               >
-                <Input placeholder="Ej: Bobina de encendido Hyundai Accent" />
+                <Input
+                  placeholder={
+                    esRestaurante
+                      ? "Ej: Hamburguesa clásica"
+                      : "Ej: Bobina de encendido Hyundai Accent"
+                  }
+                />
               </Form.Item>
 
               <Form.Item label="Descripción" name="description">
                 <Input.TextArea
                   rows={3}
-                  placeholder="Aplicación, referencia OEM, notas…"
+                  placeholder={
+                    esRestaurante
+                      ? "Qué lleva, tamaño, acompañamientos…"
+                      : "Aplicación, referencia OEM, notas…"
+                  }
                 />
               </Form.Item>
             </div>
@@ -318,7 +344,11 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
           <Form.Item
             label="Categorías"
             name="categoryKeys"
-            extra="Puede estar en varias: por ejemplo Motor › Lubricación y Repuestos Chevrolet Sail."
+            extra={
+              esRestaurante
+                ? "Así se agrupa en tu carta: Hamburguesas, Bebidas, Postres…"
+                : "Puede estar en varias: por ejemplo Motor › Lubricación y Repuestos Chevrolet Sail."
+            }
           >
             <Select
               mode="multiple"
@@ -330,6 +360,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
             />
           </Form.Item>
 
+          {!esRestaurante && (
           <Form.Item
             label="Etiquetas"
             name="tagIds"
@@ -344,17 +375,19 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
               options={tags.map((t) => ({ value: t.id, label: t.name }))}
             />
           </Form.Item>
+          )}
 
           <div className="flex items-center gap-6 mb-3 flex-wrap">
             <Form.Item
               name="active"
               valuePropName="checked"
               className="mb-0"
-              label="Visible en la tienda"
+              label={esRestaurante ? "Visible en la carta" : "Visible en la tienda"}
             >
               <Switch checkedChildren="Activo" unCheckedChildren="Inactivo" />
             </Form.Item>
 
+            {!esRestaurante && (
             <Form.Item
               className="mb-0"
               label="¿Tiene variaciones? (marca, color, medida…)"
@@ -373,6 +406,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 />
               </Tooltip>
             </Form.Item>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
@@ -389,6 +423,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
               <InputNumber min={0} style={{ width: "100%" }} addonBefore="S/" />
             </Form.Item>
 
+            {!esRestaurante && (
             <Form.Item
               label={hasVariations ? "SKU base" : "SKU"}
               name="sku"
@@ -400,14 +435,15 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
             >
               <Input placeholder="Código interno" />
             </Form.Item>
+            )}
 
-            {!hasVariations && !editData && (
+            {!esRestaurante && !hasVariations && !editData && (
               <Form.Item label="Stock inicial" name="stock">
                 <InputNumber min={0} style={{ width: "100%" }} />
               </Form.Item>
             )}
 
-            {!hasVariations && editData && (
+            {!esRestaurante && !hasVariations && editData && (
               <Form.Item label="Stock">
                 <div className="flex items-center gap-3">
                   <Tag
@@ -430,7 +466,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
             )}
           </div>
 
-          {hasVariations && (
+          {!esRestaurante && hasVariations && (
             <div className="rounded border p-3 mb-4 bg-gray-50">
               {yaTieneVariaciones ? (
                 <>
@@ -470,6 +506,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
             </div>
           )}
 
+          {!esRestaurante && (
           <Collapse
             ghost
             items={[
@@ -499,6 +536,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
               },
             ]}
           />
+          )}
         </Form>
       </Modal>
 

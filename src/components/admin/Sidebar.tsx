@@ -11,7 +11,9 @@ import { BiCategoryAlt, BiPackage, BiSliderAlt } from "react-icons/bi";
 import {
   TbBox,
   TbCashRegister,
+  TbBrandWhatsapp,
   TbChartHistogram,
+  TbChefHat,
   TbLogout,
   TbPhoto,
   TbSelector,
@@ -59,6 +61,8 @@ export default function Sidebar({
   }, [auth.user?.id]);
 
   const negocioActual = negocios.find((n) => n.uuid === uuid_business);
+  const esRestaurante =
+    ((negocioActual as any)?.businessType ?? (negocioActual as any)?.business_type) === "restaurant";
 
   const secciones = [
     {
@@ -78,6 +82,15 @@ export default function Sidebar({
           url: `/b/${uuid_business}/orders`,
           icono: <IoReceiptOutline />,
         },
+        ...(esRestaurante
+          ? [
+              {
+                titulo: "Cocina",
+                url: `/b/${uuid_business}/kitchen`,
+                icono: <TbChefHat />,
+              },
+            ]
+          : []),
         {
           titulo: "Clientes",
           url: `/b/${uuid_business}/customers`,
@@ -93,24 +106,47 @@ export default function Sidebar({
     {
       titulo: "Catálogo",
       items: [
-        { titulo: "Productos", url: `/b/${uuid_business}/products`, icono: <BiPackage /> },
+        {
+          titulo: esRestaurante ? "Platos" : "Productos",
+          url: `/b/${uuid_business}/products`,
+          icono: <BiPackage />,
+        },
         { titulo: "Categorías", url: `/b/${uuid_business}/categories`, icono: <BiCategoryAlt /> },
-        { titulo: "Atributos", url: `/b/${uuid_business}/attributes`, icono: <BiSliderAlt /> },
-        { titulo: "Inventario", url: `/b/${uuid_business}/inventory`, icono: <TbBox /> },
+        ...(esRestaurante
+          ? [
+              {
+                titulo: "Modificadores",
+                url: `/b/${uuid_business}/modifiers`,
+                icono: <BiSliderAlt />,
+              },
+              {
+                titulo: "Insumos",
+                url: `/b/${uuid_business}/ingredients`,
+                icono: <TbBox />,
+              },
+            ]
+          : [
+              { titulo: "Atributos", url: `/b/${uuid_business}/attributes`, icono: <BiSliderAlt /> },
+              { titulo: "Inventario", url: `/b/${uuid_business}/inventory`, icono: <TbBox /> },
+            ]),
         { titulo: "Galería", url: `/b/${uuid_business}/gallery`, icono: <TbPhoto /> },
         { titulo: "Descuentos", url: `/b/${uuid_business}/discounts`, icono: <MdOutlineDiscount /> },
       ],
     },
-    {
-      titulo: "Abastecimiento",
-      items: [
-        {
-          titulo: "Compras",
-          url: `/b/${uuid_business}/purchases`,
-          icono: <TbTruckLoading />,
-        },
-      ],
-    },
+    ...(esRestaurante
+      ? []
+      : [
+          {
+            titulo: "Abastecimiento",
+            items: [
+              {
+                titulo: "Compras",
+                url: `/b/${uuid_business}/purchases`,
+                icono: <TbTruckLoading />,
+              },
+            ],
+          },
+        ]),
     {
       titulo: "Tienda online",
       items: [
@@ -118,6 +154,11 @@ export default function Sidebar({
           titulo: "Mi tienda",
           url: `/b/${uuid_business}/store`,
           icono: <IoStorefrontOutline />,
+        },
+        {
+          titulo: "WhatsApp",
+          url: `/b/${uuid_business}/whatsapp`,
+          icono: <TbBrandWhatsapp />,
         },
       ],
     },

@@ -20,7 +20,9 @@ import {
   TbPencil,
   TbTrash,
 } from "react-icons/tb";
-import { useBusiness } from "../../context/BusinessContext";
+import { useBusiness, useEsRestaurante } from "../../context/BusinessContext";
+import RecipeModal from "../../components/admin/RecipeModal";
+import { TbChefHat } from "react-icons/tb";
 import ProductFormModal from "../../components/admin/ProductFormModal";
 import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
@@ -78,6 +80,27 @@ export default function ProductsPage(): React.ReactElement {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [editData, setEditData] = useState<Product | null>(null);
   const { business } = useBusiness();
+  const esRestaurante = useEsRestaurante();
+
+  // Recetas (solo restaurante): costo por plato para mostrar margen en la lista.
+  const [recetas, setRecetas] = useState<Record<number, { cost: number; linesCount: number }>>({});
+  const [recetaDe, setRecetaDe] = useState<Product | null>(null);
+
+  const cargarRecetas = async () => {
+    if (!esRestaurante) return;
+    try {
+      const r = await apiTienda.get("/recipes");
+      const mapa: Record<number, { cost: number; linesCount: number }> = {};
+      for (const x of r.data.data ?? []) mapa[x.productId] = { cost: x.cost, linesCount: x.linesCount };
+      setRecetas(mapa);
+    } catch {
+      // sin recetas la lista igual funciona
+    }
+  };
+
+  useEffect(() => {
+    cargarRecetas();
+  }, [esRestaurante]);
 
   const fetchProducts = async () => {
     if (!business) return;
@@ -201,13 +224,17 @@ export default function ProductsPage(): React.ReactElement {
         key: "name",
         render: (text: string) => <strong>{text}</strong>,
       },
-      {
-        title: "SKU",
-        dataIndex: "sku",
-        key: "sku",
-        width: 130,
-        render: (v: string | null) => v ?? "—",
-      },
+      ...(esRestaurante
+        ? []
+        : [
+            {
+              title: "SKU",
+              dataIndex: "sku",
+              key: "sku",
+              width: 130,
+              render: (v: string | null) => v ?? "—",
+            },
+          ]),
       {
         title: "Categorías",
         key: "categories",
@@ -237,25 +264,57 @@ export default function ProductsPage(): React.ReactElement {
             <Tag color="orange">Sin precio</Tag>
           ),
       },
-      {
-        title: "Stock",
-        dataIndex: "stock",
-        key: "stock",
-        render: (v: number) => <Tag color={v > 0 ? "green" : "red"}>{v}</Tag>,
-      },
-      {
-        title: "Variaciones",
-        key: "variations",
-        render: (_, row) => (
-          <Tag
-            color={
-              row.variations && row.variations.length > 0 ? "blue" : "default"
-            }
-          >
-            {row.variations?.length ?? 0}
-          </Tag>
-        ),
-      },
+      ...(esRestaurante
+        ? [
+            {
+              title: "Costo",
+              key: "cost",
+              render: (_: unknown, row: Product) => {
+                const r = recetas[row.id];
+                return r && r.linesCount > 0 ? (
+                  `S/ ${Number(r.cost).toFixed(2)}`
+                ) : (
+                  <Tag color="orange">Sin receta</Tag>
+                );
+              },
+            },
+            {
+              title: "Margen",
+              key: "margin",
+              render: (_: unknown, row: Product) => {
+                const r = recetas[row.id];
+                if (!r || r.linesCount === 0 || Number(row.price) <= 0) return "—";
+                const m = Number(row.price) - r.cost;
+                const pct = (m / Number(row.price)) * 100;
+                return (
+                  <span style={{ color: m < 0 ? "#c0263a" : "#12805c", fontWeight: 600 }}>
+                    S/ {m.toFixed(2)} ({pct.toFixed(0)}%)
+                  </span>
+                );
+              },
+            },
+          ]
+        : [
+            {
+              title: "Stock",
+              dataIndex: "stock",
+              key: "stock",
+              render: (v: number) => <Tag color={v > 0 ? "green" : "red"}>{v}</Tag>,
+            },
+            {
+              title: "Variaciones",
+              key: "variations",
+              render: (_: unknown, row: Product) => (
+                <Tag
+                  color={
+                    row.variations && row.variations.length > 0 ? "blue" : "default"
+                  }
+                >
+                  {row.variations?.length ?? 0}
+                </Tag>
+              ),
+            },
+          ]),
       {
         title: "Estado",
         dataIndex: "status",
@@ -282,12 +341,19 @@ export default function ProductsPage(): React.ReactElement {
               label: "Editar",
               onClick: () => handleEdit(row),
             },
-            {
-              key: "variations",
-              icon: <TbColorSwatch size={16} />,
-              label: "Variaciones",
-              onClick: () => handleVariations(row),
-            },
+            esRestaurante
+              ? {
+                  key: "recipe",
+                  icon: <TbChefHat size={16} />,
+                  label: "Receta e insumos",
+                  onClick: () => setRecetaDe(row),
+                }
+              : {
+                  key: "variations",
+                  icon: <TbColorSwatch size={16} />,
+                  label: "Variaciones",
+                  onClick: () => handleVariations(row),
+                },
             {
               key: "status",
               icon:
@@ -321,14 +387,18 @@ export default function ProductsPage(): React.ReactElement {
         },
       },
     ],
-    [data]
+    [data, esRestaurante, recetas]
   );
 
   return (
     <>
       <PageHeader
-        titulo="Productos"
-        descripcion="Tu catálogo. Cada producto puede tener varias tallas y colores, cada una con su propio stock."
+        titulo={esRestaurante ? "Platos" : "Productos"}
+        descripcion={
+          esRestaurante
+            ? "Tu carta. Cada plato lleva una receta de insumos: al confirmar un pedido se descuenta el inventario."
+            : "Tu catálogo. Cada producto puede tener varias tallas y colores, cada una con su propio stock."
+        }
         acciones={
           <Space wrap>
             <Input.Search
@@ -355,7 +425,7 @@ export default function ProductsPage(): React.ReactElement {
               onClick={handleCreate}
               disabled={!business}
             >
-              Nuevo producto
+              {esRestaurante ? "Nuevo plato" : "Nuevo producto"}
             </Button>
           </Space>
         }
@@ -385,8 +455,13 @@ export default function ProductsPage(): React.ReactElement {
         <ProductFormModal
           open={openModal}
           onClose={() => setOpenModal(false)}
-          onSuccess={(abrirVariaciones) => {
+          onSuccess={(abrirVariaciones, creado) => {
             fetchProducts();
+            // Plato recién creado: lo siguiente es su receta.
+            if (esRestaurante && creado) {
+              setRecetaDe(creado);
+              return;
+            }
             if (abrirVariaciones) {
               setSelectedProduct(abrirVariaciones);
               setOpenVariationsModal(true);
@@ -404,6 +479,12 @@ export default function ProductsPage(): React.ReactElement {
           refresh={fetchProducts}
         />
       )}
+      <RecipeModal
+        open={recetaDe !== null}
+        producto={recetaDe ? { id: recetaDe.id, name: recetaDe.name, price: Number(recetaDe.price) } : null}
+        onClose={() => setRecetaDe(null)}
+        onSaved={cargarRecetas}
+      />
     </>
   );
 }

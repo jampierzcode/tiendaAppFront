@@ -27,9 +27,13 @@ import GalleryPage from "./pages/admin/GalleryPage";
 import InventoryPage from "./pages/admin/InventoryPage";
 import DiscountsPage from "./pages/admin/DiscountsPage";
 import { StoreProvider } from "./storefront/StoreContext";
-import StoreLayout from "./storefront/StoreLayout";
-import StoreHome from "./storefront/StoreHome";
 import ProductDetail from "./storefront/ProductDetail";
+import StoreGate, { StoreIndex } from "./storefront/StoreGate";
+import OrderTracking from "./storefront/menu/OrderTracking";
+import ModifiersPage from "./pages/admin/ModifiersPage";
+import KitchenPage from "./pages/admin/KitchenPage";
+import WhatsappPage from "./pages/admin/WhatsappPage";
+import IngredientsPage from "./pages/admin/IngredientsPage";
 
 export default function App() {
   return (
@@ -44,12 +48,13 @@ export default function App() {
             path="/t/:slug"
             element={
               <StoreProvider>
-                <StoreLayout />
+                <StoreGate />
               </StoreProvider>
             }
           >
-            <Route index element={<StoreHome />} />
+            <Route index element={<StoreIndex />} />
             <Route path="p/:productSlug" element={<ProductDetail />} />
+            <Route path="pedido/:code" element={<OrderTracking />} />
           </Route>
 
           {/* Superadmin */}
@@ -91,6 +96,10 @@ export default function App() {
             <Route path="pos" element={<PosPage />} />
             <Route path="purchases" element={<PurchasesPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="modifiers" element={<ModifiersPage />} />
+            <Route path="kitchen" element={<KitchenPage />} />
+            <Route path="whatsapp" element={<WhatsappPage />} />
+            <Route path="ingredients" element={<IngredientsPage />} />
             {/* Subruta desconocida dentro del panel: al inicio, que para un
                 usuario con sesión es su propio tablero. Pintar aquí la pantalla
                 completa de 404 la metería dentro del layout. */}

@@ -74,8 +74,10 @@ export interface Pedido {
 
 const transiciones: Record<EstadoPedido, EstadoPedido[]> = {
   pendiente: ["confirmado", "cancelado"],
-  confirmado: ["pagado", "enviado", "cancelado"],
-  pagado: ["enviado", "cancelado"],
+  confirmado: ["pagado", "preparando", "enviado", "cancelado"],
+  pagado: ["preparando", "enviado", "cancelado"],
+  preparando: ["listo", "cancelado"],
+  listo: ["enviado", "entregado", "cancelado"],
   enviado: ["entregado", "devuelto"],
   entregado: ["devuelto"],
   cancelado: [],
@@ -85,6 +87,8 @@ const transiciones: Record<EstadoPedido, EstadoPedido[]> = {
 const iconoAccion: Partial<Record<EstadoPedido, React.ReactNode>> = {
   confirmado: <TbCheck />,
   pagado: <TbCash />,
+  preparando: <TbCheck />,
+  listo: <TbCheck />,
   enviado: <TbTruckDelivery />,
   entregado: <TbPackage />,
   cancelado: <TbX />,
