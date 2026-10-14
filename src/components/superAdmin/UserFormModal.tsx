@@ -58,7 +58,7 @@ export function UserFormModal({
         <Form.Item name="roleCode" label="Rol" rules={[{ required: true }]}>
           <Select options={roleOptions} />
         </Form.Item>
-        <Form.Item name="businessId" label="Business (opcional)">
+        <Form.Item name="businessId" label="Negocio (opcional: si lo dejas vacío se crea uno solo)">
           <Select options={businessOptions} allowClear />
         </Form.Item>
         <Form.Item name="password" label="Password (solo nueva)">

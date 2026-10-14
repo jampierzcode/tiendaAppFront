@@ -99,11 +99,11 @@ export function UsersPage(): React.ReactElement {
     try {
       setSaving(true);
       const payload = {
-        full_name: values.fullName ?? values.name,
+        name: values.fullName ?? values.name,
         email: values.email,
         rol_id: values.roleCode,
         status: values.status,
-        restaurant_id: values.businessId ?? undefined,
+        business_id: values.businessId ?? undefined,
         password: values.password ?? undefined,
       };
       if (editing) {
