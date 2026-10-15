@@ -19,7 +19,7 @@ export default function PrivateRoute({ children, roles }: PrivateRouteProps) {
 
   // Si no está autenticado, redirige al login
   if (!auth.user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/" replace />;
   }
 
   const userRole = auth.user.role?.name ?? "";
