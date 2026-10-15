@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { Tooltip, message } from "antd";
 import { TbMenu2, TbExternalLink, TbCopy, TbCheck } from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
@@ -19,6 +19,7 @@ export default function TopNavigation({ abrirMovil }: Props) {
   const [slug, setSlug] = useState<string | null>(null);
   const [publica, setPublica] = useState(false);
   const [copiado, setCopiado] = useState(false);
+  const [diasPrueba, setDiasPrueba] = useState<number | null>(null);
 
   useEffect(() => {
     if (!uuid_business) return;
@@ -27,6 +28,7 @@ export default function TopNavigation({ abrirMovil }: Props) {
       .then((r) => {
         setSlug(r.data.data?.slug ?? null);
         setPublica(Boolean(r.data.data?.isPublic));
+        setDiasPrueba(r.data.data?.trialDaysLeft ?? null);
       })
       .catch(() => undefined);
   }, [uuid_business]);
@@ -56,6 +58,17 @@ export default function TopNavigation({ abrirMovil }: Props) {
         </button>
 
         <div className="ml-auto flex items-center gap-2">
+          {diasPrueba !== null && (
+            <span className="pill bg-brand-50 text-brand-700">
+              Prueba gratis: {diasPrueba} {diasPrueba === 1 ? "día" : "días"}
+            </span>
+          )}
+          <Link
+            to="/suscripcion"
+            className="hidden rounded-lg border border-line px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft transition hover:border-brand-300 hover:text-brand-600 sm:block"
+          >
+            + Nuevo negocio
+          </Link>
           {urlTienda && (
             <>
               <span

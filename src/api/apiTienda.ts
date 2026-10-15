@@ -17,6 +17,8 @@ export const apiTienda = axios.create({
 const RUTAS_DE_CUENTA = [
   "/login",
   "/register",
+  "/subscribe",
+  "/account",
   "/logout",
   "/me",
   "/updatePassword",

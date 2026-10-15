@@ -3,7 +3,7 @@ import { Form, Input, Button, message } from "antd";
 import { motion } from "motion/react";
 import { TbAlertCircle, TbBrandWhatsapp, TbQrcode, TbBox } from "react-icons/tb";
 import { useAuth } from "../hooks/useAuth";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export default function Login() {
   const [loading, setLoading] = useState(false);
@@ -176,7 +176,14 @@ export default function Login() {
             </Button>
           </Form>
 
-          <p className="mt-8 text-center text-[12px] text-muted">
+          <p className="mt-6 text-center text-[13px] text-muted">
+            ¿Tienes un restaurante o tienda?{" "}
+            <Link to="/suscripcion" className="font-semibold text-brand-600">
+              Prueba gratis 7 días
+            </Link>
+          </p>
+
+          <p className="mt-4 text-center text-[12px] text-muted">
             ¿Problemas para entrar? Contacta al administrador de tu tienda.
           </p>
         </motion.div>

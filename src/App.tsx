@@ -6,6 +6,7 @@ import { ConfigProvider } from "antd";
 import esES from "antd/locale/es_ES";
 import { antdTheme } from "./theme/antdTheme";
 import Login from "./pages/Login";
+import Subscribe from "./pages/Subscribe";
 import { UsersPage } from "./pages/superadmin/Users";
 import { BusinessesPage } from "./pages/superadmin/Business";
 import Notfound from "./pages/Notfound";
@@ -43,6 +44,7 @@ export default function App() {
         <BrowserRouter>
         <Routes>
           <Route path="/" element={<Login />} />
+          <Route path="/suscripcion" element={<Subscribe />} />
 
           {/* Tienda pública: sin sesión, es lo que abre el cliente del QR */}
           <Route
