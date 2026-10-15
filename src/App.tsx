@@ -44,6 +44,7 @@ export default function App() {
         <BrowserRouter>
         <Routes>
           <Route path="/" element={<Login />} />
+          <Route path="/login" element={<Login />} />
           <Route path="/suscripcion" element={<Subscribe />} />
 
           {/* Tienda pública: sin sesión, es lo que abre el cliente del QR */}

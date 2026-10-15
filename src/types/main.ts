@@ -22,6 +22,19 @@ export type Business = {
   logo_url?: string;
   user_id?: number | null;
   status?: "activo" | "inactivo" | string;
+  slug?: string;
+  businessType?: "retail" | "restaurant";
+  businessSubtype?: string | null;
+  whatsappPhone?: string | null;
+  createdAt?: string;
+  // Suscripción
+  subscriptionStatus?: "trial" | "active" | "expired";
+  effectiveSubscriptionStatus?: "trial" | "active" | "expired";
+  trialEndsAt?: string | null;
+  paidUntil?: string | null;
+  plan?: string | null;
+  subscriptionDaysLeft?: number | null;
+  user?: { id: number; name: string; email?: string } | null;
 };
 
 export type Product = {

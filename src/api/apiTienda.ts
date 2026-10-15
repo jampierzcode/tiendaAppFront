@@ -78,7 +78,7 @@ apiTienda.interceptors.response.use(
     // El token venció o fue revocado: se limpia la sesión y se vuelve al login.
     if (error.response?.status === 401 && localStorage.getItem("token")) {
       localStorage.removeItem("token");
-      if (window.location.pathname !== "/") window.location.href = "/";
+      if (window.location.pathname !== "/login") window.location.href = "/login";
     }
     return Promise.reject(error);
   }
