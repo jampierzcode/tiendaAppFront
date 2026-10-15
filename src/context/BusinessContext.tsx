@@ -16,6 +16,7 @@ interface Business {
   business_type?: "retail" | "restaurant";
   businessType?: "retail" | "restaurant";
   slug?: string;
+  whatsappPhone?: string | null;
 }
 
 interface BusinessContextType {

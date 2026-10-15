@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Empty, Spin } from "antd";
+import { Empty, Spin, message } from "antd";
+import { useNavigate } from "react-router-dom";
+import { useBusiness } from "../../context/BusinessContext";
 import dayjs from "dayjs";
 import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
@@ -20,6 +22,22 @@ export default function ChatPage() {
   const [lista, setLista] = useState<Conversacion[]>([]);
   const [cargando, setCargando] = useState(true);
   const [activa, setActiva] = useState<Conversacion | null>(null);
+  const navigate = useNavigate();
+  const { business } = useBusiness();
+
+  // Sin WhatsApp conectado esta bandeja no sirve: se manda a conectarlo.
+  useEffect(() => {
+    if (!business?.uuid) return;
+    apiTienda
+      .get("/whatsapp")
+      .then((r) => {
+        if (r.data?.data?.status !== "connected") {
+          message.info("Conecta tu WhatsApp para recibir y responder mensajes");
+          navigate(`/b/${business.uuid}/whatsapp`, { replace: true });
+        }
+      })
+      .catch(() => undefined);
+  }, [business?.uuid, navigate]);
 
   const cargar = useCallback(async () => {
     try {

@@ -8,10 +8,10 @@ import {
   TbShirt,
   TbSettings,
   TbToolsKitchen2,
-  TbBrandWhatsapp,
 } from "react-icons/tb";
 import { apiTienda } from "../api/apiTienda";
 import { useAuth } from "../hooks/useAuth";
+import PhoneInput from "../components/ui/PhoneInput";
 
 type Plantilla = {
   key: string;
@@ -300,18 +300,18 @@ export default function Subscribe() {
               <Form.Item
                 label="WhatsApp donde recibes pedidos"
                 name="whatsapp_phone"
-                extra="Con código de país, solo números. Ej: 51987654321"
+                extra="Elige tu país y escribe solo tu número."
                 rules={[
                   { required: true, message: "Escribe tu WhatsApp" },
                   {
                     validator: (_, v) =>
                       !v || /^\d{8,15}$/.test(String(v).replace(/\D/g, ""))
                         ? Promise.resolve()
-                        : Promise.reject(new Error("Entre 8 y 15 dígitos")),
+                        : Promise.reject(new Error("Revisa el número: faltan dígitos")),
                   },
                 ]}
               >
-                <Input prefix={<TbBrandWhatsapp />} placeholder="51987654321" inputMode="numeric" />
+                <PhoneInput />
               </Form.Item>
               <div className="grid gap-x-3 sm:grid-cols-2">
                 <Form.Item label="Ciudad" name="city">

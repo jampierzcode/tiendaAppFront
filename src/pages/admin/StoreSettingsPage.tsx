@@ -18,6 +18,8 @@ import { TbBrandWhatsapp, TbDownload, TbExternalLink, TbPalette } from "react-ic
 import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
 import GalleryModal from "../../components/admin/GalleryModal";
+import PhoneInput from "../../components/ui/PhoneInput";
+import { useSearchParams } from "react-router-dom";
 
 interface Config {
   slug: string;
@@ -62,6 +64,8 @@ const PLACEHOLDERS: [string, string][] = [
 
 export default function StoreSettingsPage() {
   const [form] = Form.useForm();
+  const [searchParams] = useSearchParams();
+  const tabInicial = searchParams.get("tab") ?? "general";
   const [config, setConfig] = useState<Config | null>(null);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
@@ -169,6 +173,11 @@ export default function StoreSettingsPage() {
           className="card overflow-hidden"
         >
           <Tabs
+            defaultActiveKey={
+              ["general", "whatsapp", "apariencia", "envios"].includes(tabInicial)
+                ? tabInicial
+                : "general"
+            }
             // El padding va en la barra, no en la tarjeta: así el borde
             // inferior de las pestañas cruza la tarjeta entera.
             tabBarStyle={{ paddingInline: 20, marginBottom: 0 }}
@@ -275,7 +284,7 @@ export default function StoreSettingsPage() {
                     <Form.Item
                       name="whatsapp_phone"
                       label="Número que recibe los pedidos"
-                      extra="Con código de país y sin signos. Perú: 51 + tu número, por ejemplo 51987654321."
+                      extra="Elige tu país y escribe solo tu número. Aquí llegan los pedidos de tu tienda."
                       rules={[
                         {
                           pattern: /^\d{9,15}$/,
@@ -283,7 +292,7 @@ export default function StoreSettingsPage() {
                         },
                       ]}
                     >
-                      <Input placeholder="51987654321" />
+                      <PhoneInput />
                     </Form.Item>
 
                     <Form.Item

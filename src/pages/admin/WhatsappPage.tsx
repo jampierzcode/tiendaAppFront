@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Input, Spin, Tag, message } from "antd";
+import { Alert, Button, Input, Modal, Spin, Tag, message } from "antd";
+import { useNavigate } from "react-router-dom";
+import { useBusiness } from "../../context/BusinessContext";
 import QRCode from "qrcode";
 import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
@@ -38,6 +40,9 @@ const ETIQUETA: Record<Estado["status"], { texto: string; color: string }> = {
  * El panel solo pide el estado y muestra el QR; quien conecta es el bot.
  */
 export default function WhatsappPage() {
+  const navigate = useNavigate();
+  const { business } = useBusiness();
+  const [guia, setGuia] = useState(false);
   const [estado, setEstado] = useState<Estado | null>(null);
   const [qrImg, setQrImg] = useState<string | null>(null);
   const [plantillas, setPlantillas] = useState<Record<string, string>>({});
@@ -116,6 +121,10 @@ export default function WhatsappPage() {
 
   const et = ETIQUETA[estado.status];
   const activo = estado.desired === "connected";
+  // Se pidió conectar pero el servicio la dejó desconectada: no se pudo.
+  const fallo = activo && estado.status === "disconnected";
+  const sinNumero = Boolean(business) && !business?.whatsappPhone;
+  const irANumero = () => navigate(`/b/${business?.uuid}/store?tab=whatsapp`);
 
   return (
     <>
@@ -123,6 +132,27 @@ export default function WhatsappPage() {
         titulo="WhatsApp"
         descripcion="Conecta el número del negocio para avisar a tus clientes en cada paso del pedido y responder «menú» o «mi pedido» automáticamente."
       />
+
+      {sinNumero && (
+        <Alert
+          type="warning"
+          showIcon
+          className="mb-5"
+          message="Falta registrar el número de WhatsApp de tu negocio"
+          description={
+            <div>
+              <p className="mb-2">
+                Es el número al que llegan los pedidos de tu tienda. Se registra en{" "}
+                <b>Mi tienda → pestaña WhatsApp → «Número que recibe los pedidos»</b>: elige tu
+                país, escribe tu número y pulsa <b>Guardar cambios</b>.
+              </p>
+              <Button type="primary" size="small" onClick={irANumero}>
+                Ir a registrar mi número
+              </Button>
+            </div>
+          }
+        />
+      )}
 
       <div className="grid gap-5 lg:grid-cols-[360px_1fr]">
         <section className="card h-fit p-5">
@@ -185,8 +215,24 @@ export default function WhatsappPage() {
             </div>
           )}
 
+          {fallo && (
+            <div className="mt-4 rounded-xl bg-danger-bg p-3.5 text-[13px] text-danger">
+              <b>No se pudo conectar.</b> El servicio de WhatsApp no logró abrir la sesión. Pulsa{" "}
+              <b>Reintentar</b>; si se repite, avisa a soporte.
+            </div>
+          )}
+
           <div className="mt-5">
-            {activo ? (
+            {fallo ? (
+              <div className="space-y-2">
+                <Button type="primary" block onClick={() => accion("connect")}>
+                  Reintentar conexión
+                </Button>
+                <Button block onClick={() => accion("disconnect")}>
+                  Cancelar
+                </Button>
+              </div>
+            ) : activo ? (
               <Button danger block onClick={() => accion("disconnect")}>
                 Desconectar
               </Button>
@@ -196,6 +242,16 @@ export default function WhatsappPage() {
               </Button>
             )}
           </div>
+
+          {estado.status !== "connected" && (
+            <button
+              type="button"
+              onClick={() => setGuia(true)}
+              className="mt-3 w-full rounded-lg border border-line px-3 py-2 text-[13px] font-semibold text-brand-600 transition hover:border-brand-300"
+            >
+              ¿Entras desde el celular? Mira cómo conectarlo
+            </button>
+          )}
 
           <p className="mt-4 rounded-lg bg-warn-bg px-3 py-2 text-[12px] leading-relaxed text-warn">
             Usa un número dedicado al negocio y escribe solo a clientes que hicieron un pedido.
@@ -251,6 +307,44 @@ export default function WhatsappPage() {
           </div>
         </section>
       </div>
+      <Modal
+        open={guia}
+        title="Cómo conectar tu WhatsApp"
+        footer={<Button type="primary" onClick={() => setGuia(false)}>Entendido</Button>}
+        onCancel={() => setGuia(false)}
+      >
+        <p className="mb-3 text-[13.5px] text-ink-soft">
+          Conectar es <b>vincular tu WhatsApp como dispositivo</b>, igual que WhatsApp Web. Para eso
+          necesitas <b>dos pantallas</b>: una que muestre el código QR y el celular que lo escanea.
+        </p>
+
+        <p className="mb-1 text-[13px] font-bold text-ink">Si usas esta plataforma en una laptop o PC</p>
+        <ol className="mb-4 list-decimal space-y-1 pl-5 text-[13px] text-ink-soft">
+          <li>Pulsa <b>Conectar WhatsApp</b> y espera el código QR.</li>
+          <li>En tu celular: WhatsApp → <b>Dispositivos vinculados</b> → <b>Vincular un dispositivo</b>.</li>
+          <li>Escanea el código de la pantalla.</li>
+        </ol>
+
+        <p className="mb-1 text-[13px] font-bold text-ink">Si usas esta plataforma en el celular</p>
+        <p className="mb-2 text-[13px] text-ink-soft">
+          Un mismo celular no puede escanear su propia pantalla. Necesitas <b>otro equipo</b>:
+        </p>
+        <ul className="mb-4 list-disc space-y-1 pl-5 text-[13px] text-ink-soft">
+          <li>
+            <b>Opción A:</b> abre esta misma página en una <b>laptop o PC</b> (entra con tu mismo
+            correo y contraseña) y escanea el QR con tu celular.
+          </li>
+          <li>
+            <b>Opción B:</b> abre la plataforma en <b>otro celular o tablet</b> para mostrar el QR, y
+            escanéalo con el celular del negocio.
+          </li>
+        </ul>
+
+        <p className="rounded-lg bg-warn-bg px-3 py-2 text-[12px] leading-relaxed text-warn">
+          Solo hace falta una vez. Después queda vinculado y los avisos salen solos; si cierras
+          sesión en WhatsApp o desvinculas el dispositivo, repite estos pasos.
+        </p>
+      </Modal>
     </>
   );
 }
