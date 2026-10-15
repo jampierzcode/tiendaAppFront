@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { usePolling } from "../../hooks/usePolling";
 import { Alert, Button, Input, Modal, Spin, Tag, message } from "antd";
 import { useNavigate } from "react-router-dom";
 import { useBusiness } from "../../context/BusinessContext";
@@ -58,16 +59,15 @@ export default function WhatsappPage() {
       setEstado(d);
       setPlantillas((actual) => (Object.keys(actual).length ? actual : d.templates));
     } catch {
-      message.error("No se pudo consultar WhatsApp");
+      message.error({ content: "No se pudo consultar WhatsApp", key: "wa-estado" });
     }
   }, []);
 
-  useEffect(() => {
-    cargar();
-    // Mientras se conecta, el QR rota cada ~20 s: se consulta seguido.
-    const t = setInterval(cargar, 2000);
-    return () => clearInterval(t);
-  }, [cargar]);
+  // Rápido solo mientras algo cambia (arranque y QR, que rota cada ~20 s);
+  // conectado o desconectado, el estado casi no se mueve.
+  const refrescar = usePolling(cargar, () =>
+    estado?.status === "connecting" || estado?.status === "qr" ? 2000 : 15000
+  );
 
   const conectando = estado?.status === "connecting";
   useEffect(() => {
@@ -92,7 +92,7 @@ export default function WhatsappPage() {
   const accion = async (ruta: "connect" | "disconnect") => {
     try {
       await apiTienda.post(`/whatsapp/${ruta}`);
-      cargar();
+      refrescar();
     } catch {
       message.error("No se pudo completar la acción");
     }

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useBusiness } from "../../context/BusinessContext";
 import dayjs from "dayjs";
 import { apiTienda } from "../../api/apiTienda";
+import { usePolling } from "../../hooks/usePolling";
 import PageHeader from "../../components/ui/PageHeader";
 import ChatThread from "../../components/admin/ChatThread";
 
@@ -50,11 +51,7 @@ export default function ChatPage() {
     }
   }, []);
 
-  useEffect(() => {
-    cargar();
-    const t = setInterval(cargar, 5000);
-    return () => clearInterval(t);
-  }, [cargar]);
+  usePolling(cargar, 8000);
 
   return (
     <>

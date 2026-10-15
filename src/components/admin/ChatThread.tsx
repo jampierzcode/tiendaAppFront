@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Input, message } from "antd";
 import dayjs from "dayjs";
 import { apiTienda } from "../../api/apiTienda";
+import { usePolling } from "../../hooks/usePolling";
 
 export interface Mensaje {
   id: number;
@@ -37,13 +38,14 @@ export default function ChatThread({ contact, phone, onLeido }: Props) {
     }
   }, [contact, onLeido]);
 
+  const refrescar = usePolling(cargar, 5000);
+
+  // Al abrir otra conversación se vacía y se consulta ya, sin esperar al ciclo.
   useEffect(() => {
     setMensajes([]);
     cantidad.current = 0;
-    cargar();
-    const t = setInterval(cargar, 4000);
-    return () => clearInterval(t);
-  }, [cargar]);
+    refrescar();
+  }, [contact, refrescar]);
 
   // Baja al final solo cuando llegan mensajes nuevos.
   useEffect(() => {
