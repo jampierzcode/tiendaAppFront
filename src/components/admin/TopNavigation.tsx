@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { Tooltip, message } from "antd";
 import { TbMenu2, TbExternalLink, TbCopy, TbCheck } from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
+import { useAuth } from "../../hooks/useAuth";
 
 interface Props {
   abrirMovil: () => void;
@@ -16,6 +17,8 @@ interface Props {
  */
 export default function TopNavigation({ abrirMovil }: Props) {
   const { uuid_business } = useParams();
+  const { auth } = useAuth();
+  const esSuperadmin = auth.user?.role?.name === "superadmin";
   const [slug, setSlug] = useState<string | null>(null);
   const [publica, setPublica] = useState(false);
   const [copiado, setCopiado] = useState(false);
@@ -63,12 +66,14 @@ export default function TopNavigation({ abrirMovil }: Props) {
               Prueba gratis: {diasPrueba} {diasPrueba === 1 ? "día" : "días"}
             </span>
           )}
+          {!esSuperadmin && (
           <Link
             to="/suscripcion"
             className="hidden rounded-lg border border-line px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft transition hover:border-brand-300 hover:text-brand-600 sm:block"
           >
             + Nuevo negocio
           </Link>
+          )}
           {urlTienda && (
             <>
               <span

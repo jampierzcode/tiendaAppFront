@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
+import { useAuth } from "../../hooks/useAuth";
+import { useBusiness } from "../../context/BusinessContext";
 import Sidebar from "./Sidebar";
 import TopNavigation from "./TopNavigation";
 import { useMensajesSinLeer } from "../../hooks/useMensajesSinLeer";
@@ -19,6 +21,9 @@ export default function AdminLayout() {
   const [movilAbierto, setMovilAbierto] = useState(false);
   const location = useLocation();
   const sinLeer = useMensajesSinLeer(true);
+  const { auth } = useAuth();
+  const { business } = useBusiness();
+  const modoSoporte = auth.user?.role?.name === "superadmin";
 
   useEffect(() => {
     try {
@@ -32,7 +37,19 @@ export default function AdminLayout() {
   useEffect(() => setMovilAbierto(false), [location.pathname]);
 
   return (
-    <div className="flex min-h-screen bg-canvas">
+    <div className="flex min-h-screen flex-col bg-canvas">
+      {modoSoporte && (
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-amber-400 px-4 py-1.5 text-center text-[12.5px] font-semibold text-amber-950">
+          <span>
+            Modo soporte: estás dentro de «{business?.name ?? "este negocio"}» como superadmin.
+            Lo que cambies aquí lo ve el dueño.
+          </span>
+          <Link to="/businesses" className="underline">
+            Volver a Negocios
+          </Link>
+        </div>
+      )}
+      <div className="flex min-h-0 flex-1">
       <Sidebar
         open={open}
         setOpen={setOpen}
@@ -46,6 +63,7 @@ export default function AdminLayout() {
         <main className="flex-1 px-4 py-6 sm:px-8 sm:py-8">
           <Outlet />
         </main>
+      </div>
       </div>
     </div>
   );

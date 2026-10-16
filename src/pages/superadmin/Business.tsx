@@ -17,11 +17,13 @@ import {
   Tag,
 } from "antd";
 import dayjs from "dayjs";
+import { useNavigate } from "react-router-dom";
 import type { AxiosError } from "axios";
 import type { ColumnsType } from "antd/es/table";
 import { BusinessFormModal } from "../../components/superAdmin/BusinessFormModal";
 
 export function BusinessesPage(): React.ReactElement {
+  const navigate = useNavigate();
   const [data, setData] = useState<Business[]>([]);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -258,6 +260,13 @@ export function BusinessesPage(): React.ReactElement {
         width: 300,
         render: (_: any, row) => (
           <Space>
+            <Button
+              size="small"
+              onClick={() => navigate(`/b/${row.uuid}`)}
+              disabled={!row.uuid}
+            >
+              Entrar
+            </Button>
             <Button
               size="small"
               type="primary"

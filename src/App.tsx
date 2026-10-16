@@ -86,7 +86,7 @@ export default function App() {
           <Route
             path="/b/:uuid_business/*"
             element={
-              <PrivateRoute roles={["admin"]}>
+              <PrivateRoute roles={["admin", "superadmin"]}>
                 <BusinessProvider>
                   <AdminLayout />
                 </BusinessProvider>
