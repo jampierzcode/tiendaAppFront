@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { Modal, Upload, Button, Spin, Input, Popconfirm, message, Empty } from "antd";
-import { PlusOutlined, CheckCircleTwoTone, SearchOutlined } from "@ant-design/icons";
+import { Modal, Spin, Input, Popconfirm, message, Empty } from "antd";
+import { CheckCircleTwoTone, SearchOutlined } from "@ant-design/icons";
 import { TbTrash } from "react-icons/tb";
 import { useGallery } from "../../hooks/useGallery";
+import SelectorFoto from "../ui/SelectorFoto";
 import { useRecorteImagen } from "../../hooks/useRecorteImagen";
 
 interface GalleryModalProps {
@@ -41,6 +42,11 @@ const GalleryModal: React.FC<GalleryModalProps> = ({ open, onClose, onSelect }) 
       );
     }
     return false;
+  };
+
+  /** Cada foto (subida o tomada) pasa por el editor de recorte y se sube sola. */
+  const subirArchivos = async (files: File[]) => {
+    for (const f of files) await handleUpload(f);
   };
 
   const handleSelect = () => {
@@ -90,16 +96,9 @@ const GalleryModal: React.FC<GalleryModalProps> = ({ open, onClose, onSelect }) 
           allowClear
         />
         {modalRecorte}
-        <Upload
-          beforeUpload={handleUpload}
-          showUploadList={false}
-          accept="image/jpeg,image/png,image/webp,image/avif"
-          multiple
-        >
-          <Button icon={<PlusOutlined />} type="primary" loading={uploading}>
-            Subir imágenes
-          </Button>
-        </Upload>
+        <div className="flex gap-2">
+          <SelectorFoto multiple onFiles={subirArchivos} loading={uploading} textoSubir="Subir imágenes" />
+        </div>
       </div>
 
       <p className="mb-3 text-xs text-gray-500">

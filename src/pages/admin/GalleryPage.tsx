@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Button, Empty, Popconfirm, Spin, Upload, message } from "antd";
+import { Empty, Popconfirm, Spin, message } from "antd";
 import { motion } from "motion/react";
-import { TbLoader2, TbTrash, TbUpload } from "react-icons/tb";
+import { TbLoader2, TbTrash } from "react-icons/tb";
 import { useGallery } from "../../hooks/useGallery";
+import SelectorFoto from "../../components/ui/SelectorFoto";
 import { useRecorteImagen } from "../../hooks/useRecorteImagen";
 import PageHeader from "../../components/ui/PageHeader";
 
@@ -45,16 +46,16 @@ export default function GalleryPage() {
         titulo="Galería"
         descripcion="Las fotos de tus productos. Se guardan en tu bucket y se ven en la tienda pública."
         acciones={
-          <Upload
-            beforeUpload={subir}
-            showUploadList={false}
-            accept="image/jpeg,image/png,image/webp,image/avif"
-            multiple
-          >
-            <Button type="primary" icon={<TbUpload />} loading={uploading}>
-              Subir imágenes
-            </Button>
-          </Upload>
+          <div className="flex flex-wrap gap-2">
+            <SelectorFoto
+              multiple
+              onFiles={async (files) => {
+                for (const f of files) await subir(f);
+              }}
+              loading={uploading}
+              textoSubir="Subir imágenes"
+            />
+          </div>
         }
       />
 

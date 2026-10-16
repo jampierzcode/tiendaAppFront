@@ -282,6 +282,30 @@
     width: 100% !important;
   }
 
+  /* Pestañas: se deslizan con el dedo y se llega hasta la última */
+  .ant-tabs > .ant-tabs-nav .ant-tabs-nav-wrap {
+    overflow-x: auto !important;
+    scrollbar-width: none;
+  }
+
+  .ant-tabs > .ant-tabs-nav .ant-tabs-nav-wrap::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ant-tabs > .ant-tabs-nav .ant-tabs-nav-wrap::before,
+  .ant-tabs > .ant-tabs-nav .ant-tabs-nav-wrap::after,
+  .ant-tabs > .ant-tabs-nav .ant-tabs-nav-operations {
+    display: none !important;
+  }
+
+  .ant-tabs > .ant-tabs-nav .ant-tabs-nav-list {
+    transform: none !important;
+  }
+
+  .ant-tabs .ant-tabs-tab {
+    white-space: nowrap;
+  }
+
   /* Buscadores y selects sueltos con ancho fijo */
   .ant-input-search,
   .ant-input-affix-wrapper,

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button, Form, Input, InputNumber, Modal, Select, message } from "antd";
 import { apiTienda } from "../../api/apiTienda";
+import ComprobanteInput, { type Comprobante } from "../ui/ComprobanteInput";
 
 const METODOS = [
   { value: "efectivo", label: "Efectivo" },
@@ -23,14 +24,18 @@ interface Props {
   onSinCobrar?: () => void;
 }
 
-/** Cobro rápido: método, monto y código de operación. Sin foto de comprobante. */
+/** Cobro rápido: método, monto, código de operación y foto del comprobante (opcional). */
 export default function PagoPedidoModal({ open, pedido, saldo, motivo, onClose, onPagado, onSinCobrar }: Props) {
   const [form] = Form.useForm();
   const [guardando, setGuardando] = useState(false);
   const metodo = Form.useWatch("method", form);
+  const [comprobante, setComprobante] = useState<Comprobante | null>(null);
 
   useEffect(() => {
-    if (open) form.setFieldsValue({ method: "efectivo", amount: saldo, reference: "" });
+    if (open) {
+      form.setFieldsValue({ method: "efectivo", amount: saldo, reference: "" });
+      setComprobante(null);
+    }
   }, [open, saldo, form]);
 
   const guardar = async (v: any) => {
@@ -41,6 +46,7 @@ export default function PagoPedidoModal({ open, pedido, saldo, motivo, onClose, 
         method: v.method,
         amount: v.amount,
         reference: v.reference || null,
+        receiptKey: comprobante?.key ?? null,
       });
       message.success("Pago registrado");
       onPagado();
@@ -100,6 +106,9 @@ export default function PagoPedidoModal({ open, pedido, saldo, motivo, onClose, 
             <Input placeholder="0012345" />
           </Form.Item>
         )}
+        <Form.Item label="Foto del comprobante" extra="Opcional. Toma la foto o sube la captura; queda guardada con el pago.">
+          <ComprobanteInput value={comprobante} onChange={setComprobante} />
+        </Form.Item>
       </Form>
     </Modal>
   );

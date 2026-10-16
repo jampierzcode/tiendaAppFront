@@ -15,6 +15,9 @@ import {
 } from "antd";
 
 import GalleryModal from "./GalleryModal";
+import SelectorFoto from "../ui/SelectorFoto";
+import { useGallery } from "../../hooks/useGallery";
+import { useRecorteImagen } from "../../hooks/useRecorteImagen";
 import { PlusOutlined } from "@ant-design/icons";
 import { apiTienda } from "../../api/apiTienda";
 import { useEsRestaurante } from "../../context/BusinessContext";
@@ -79,6 +82,22 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const esRestaurante = useEsRestaurante();
   const [loading, setLoading] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const { uploading, uploadImages } = useGallery();
+  const { pedirRecorte, modal: modalRecorte } = useRecorteImagen();
+
+  /** Foto subida o tomada desde aquí: se recorta, se sube a la galería y queda elegida. */
+  const subirDirecto = async ([original]: File[]) => {
+    const file = await pedirRecorte(original);
+    if (!file) return;
+    try {
+      const r = await uploadImages([file]);
+      const img = r.data?.[0];
+      if (img) setSelectedImage({ id: img.id, url: img.url } as any);
+      if (r.rechazadas?.length) message.warning(r.rechazadas.join(" · "));
+    } catch (e: any) {
+      message.error(e?.response?.data?.message ?? "No se pudo subir la imagen");
+    }
+  };
   const [selectedImage, setSelectedImage] = useState<{
     id: number;
     url: string;
@@ -290,25 +309,20 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
           <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-4">
             <Form.Item label="Imagen principal">
-              {selectedImage ? (
-                <div className="flex flex-col items-start w-full">
-                  <img
-                    src={selectedImage.url}
-                    alt="imagen seleccionada"
-                    className="w-full h-40 object-contain rounded border mb-2"
-                  />
-                  <Button type="link" onClick={() => setGalleryOpen(true)}>
-                    Cambiar imagen
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  icon={<PlusOutlined />}
-                  onClick={() => setGalleryOpen(true)}
-                >
-                  Seleccionar imagen
-                </Button>
+              {selectedImage && (
+                <img
+                  src={selectedImage.url}
+                  alt="imagen seleccionada"
+                  className="mb-2 h-40 w-full rounded border object-contain"
+                  style={{ background: "#f0f1f3" }}
+                />
               )}
+              <div className="flex flex-wrap gap-2">
+                <Button icon={<PlusOutlined />} onClick={() => setGalleryOpen(true)}>
+                  {selectedImage ? "Cambiar" : "Galería"}
+                </Button>
+                <SelectorFoto onFiles={subirDirecto} loading={uploading} />
+              </div>
             </Form.Item>
 
             <div>
@@ -572,6 +586,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         </Form>
       </Modal>
 
+      {modalRecorte}
       {/* Modal de Galería */}
       <GalleryModal
         open={galleryOpen}

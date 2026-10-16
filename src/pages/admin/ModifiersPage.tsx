@@ -69,6 +69,7 @@ export default function ModifiersPage() {
 
   const [editando, setEditando] = useState<Grupo | "nuevo" | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [busqueda, setBusqueda] = useState("");
   const [form] = Form.useForm();
 
   const [insumos, setInsumos] = useState<InsumoOpt[]>([]);
@@ -192,6 +193,12 @@ export default function ModifiersPage() {
     );
   }
 
+  const gruposFiltrados = grupos.filter((g) => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return true;
+    return g.name.toLowerCase().includes(q) || g.options.some((o) => o.name.toLowerCase().includes(q));
+  });
+
   return (
     <>
       <PageHeader
@@ -215,8 +222,21 @@ export default function ModifiersPage() {
                   <Empty description="Aún no hay grupos. Crea uno, por ejemplo «Tipo de carne»." />
                 </div>
               ) : (
+                <>
+                <Input.Search
+                  allowClear
+                  placeholder="Buscar grupo u opción…"
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  className="mb-4 w-full sm:max-w-sm"
+                />
+                {gruposFiltrados.length === 0 && (
+                  <div className="card p-10">
+                    <Empty description="Ningún grupo coincide con tu búsqueda" />
+                  </div>
+                )}
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {grupos.map((g) => (
+                  {gruposFiltrados.map((g) => (
                     <div key={g.id} className="card p-5">
                       <div className="flex items-start justify-between gap-2">
                         <div>
@@ -248,6 +268,7 @@ export default function ModifiersPage() {
                     </div>
                   ))}
                 </div>
+                </>
               ),
           },
           {
@@ -347,11 +368,11 @@ export default function ModifiersPage() {
             {(fields, { add, remove }) => (
               <div className="space-y-2">
                 {fields.map((f) => (
-                  <div key={f.key} className="flex items-center gap-2">
+                  <div key={f.key} className="flex flex-wrap items-center gap-2 rounded-lg border border-line p-2 sm:flex-nowrap sm:border-0 sm:p-0">
                     <Form.Item name={[f.name, "id"]} hidden>
                       <Input />
                     </Form.Item>
-                    <Form.Item name={[f.name, "name"]} className="!mb-0 flex-1">
+                    <Form.Item name={[f.name, "name"]} className="!mb-0 min-w-0 flex-[1_1_100%] sm:flex-[1_1_0%]">
                       <Input placeholder="Nombre (Bien cocida)" />
                     </Form.Item>
                     <Form.Item name={[f.name, "priceDelta"]} className="!mb-0">

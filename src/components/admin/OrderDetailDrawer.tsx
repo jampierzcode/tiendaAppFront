@@ -26,7 +26,7 @@ import {
 import { apiTienda } from "../../api/apiTienda";
 import { useEsRestaurante } from "../../context/BusinessContext";
 import BadgeEstado, { type EstadoPedido } from "../ui/EstadoPedido";
-import GalleryModal from "./GalleryModal";
+import ComprobanteInput, { type Comprobante } from "../ui/ComprobanteInput";
 import PagoPedidoModal from "./PagoPedidoModal";
 
 interface ItemPedido {
@@ -46,6 +46,7 @@ interface Pago {
   note: string | null;
   paidAt: string;
   receipt?: { url: string } | null;
+  receiptUrl?: string | null;
   user?: { name: string } | null;
 }
 
@@ -140,8 +141,7 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
   const [modalPago, setModalPago] = useState(false);
   // Política de cobro: estado al que se quería pasar y falta cobrar primero.
   const [cobroPara, setCobroPara] = useState<EstadoPedido | null>(null);
-  const [galeria, setGaleria] = useState(false);
-  const [comprobante, setComprobante] = useState<{ id: number; url: string } | null>(null);
+  const [comprobante, setComprobante] = useState<Comprobante | null>(null);
   const [modalDevolucion, setModalDevolucion] = useState(false);
   const [formDevolucion] = Form.useForm();
   const [formPago] = Form.useForm();
@@ -226,7 +226,7 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
         amount: valores.amount,
         reference: valores.reference || null,
         note: valores.note || null,
-        receiptImageId: comprobante?.id ?? null,
+        receiptKey: comprobante?.key ?? null,
       });
       message.success("Pago registrado");
       setModalPago(false);
@@ -472,9 +472,9 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
                       </div>
 
                       <div className="flex shrink-0 items-center gap-1">
-                        {pago.receipt?.url && (
+                        {(pago.receiptUrl ?? pago.receipt?.url) && (
                           <Tooltip title="Ver comprobante">
-                            <a href={pago.receipt.url} target="_blank" rel="noopener noreferrer">
+                            <a href={(pago.receiptUrl ?? pago.receipt?.url) as string} target="_blank" rel="noopener noreferrer">
                               <Button size="small" icon={<TbPhoto />} />
                             </a>
                           </Tooltip>
@@ -627,20 +627,7 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
           </Form.Item>
 
           <Form.Item label="Comprobante">
-            <div className="flex items-center gap-3">
-              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-line bg-canvas">
-                {comprobante ? (
-                  <img src={comprobante.url} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="grid h-full place-items-center text-[10px] text-muted">
-                    Sin foto
-                  </div>
-                )}
-              </div>
-              <Button icon={<TbPhoto />} onClick={() => setGaleria(true)}>
-                {comprobante ? "Cambiar" : "Subir captura"}
-              </Button>
-            </div>
+            <ComprobanteInput value={comprobante} onChange={setComprobante} />
           </Form.Item>
 
           <Form.Item name="note" label="Nota">
@@ -698,11 +685,6 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
         </Form>
       </Modal>
 
-      <GalleryModal
-        open={galeria}
-        onClose={() => setGaleria(false)}
-        onSelect={(img) => setComprobante(img)}
-      />
     </>
   );
 }
