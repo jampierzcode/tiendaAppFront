@@ -1,3 +1,4 @@
+import { useRecorteImagen } from "../../hooks/useRecorteImagen";
 import { Form, Input, Modal, Select, Upload, message } from "antd";
 import { useEffect, useState } from "react";
 import { PlusOutlined, LoadingOutlined } from "@ant-design/icons";
@@ -20,6 +21,7 @@ export function BusinessFormModal({
   const [form] = Form.useForm();
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const { pedirRecorte, modal: modalRecorte } = useRecorteImagen();
   const [admins, setAdmins] = useState<{ label: string; value: number }[]>([]);
 
   useEffect(() => {
@@ -53,11 +55,13 @@ export function BusinessFormModal({
   // Sube el logo al bucket a través del backend, igual que la galería del panel admin.
   // El negocio ya debe existir (tener uuid): al crear uno nuevo hay que
   // guardarlo primero y luego editarlo para ponerle logo.
-  const handleUpload = async (file: File) => {
+  const handleUpload = async (original: File) => {
     if (!initialValues?.uuid) {
       message.error("Guarda el negocio primero para poder subirle un logo");
       return;
     }
+    const file = await pedirRecorte(original);
+    if (!file) return;
 
     setUploading(true);
     const formData = new FormData();
@@ -118,6 +122,7 @@ export function BusinessFormModal({
           <Input.TextArea rows={3} />
         </Form.Item>
 
+        {modalRecorte}
         {/* Logo circular */}
         <Form.Item label="Logo" name="logo_url" valuePropName="fileList">
           <div className="flex flex-col items-center">

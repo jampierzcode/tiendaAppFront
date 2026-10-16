@@ -3,15 +3,19 @@ import { Button, Empty, Popconfirm, Spin, Upload, message } from "antd";
 import { motion } from "motion/react";
 import { TbLoader2, TbTrash, TbUpload } from "react-icons/tb";
 import { useGallery } from "../../hooks/useGallery";
+import { useRecorteImagen } from "../../hooks/useRecorteImagen";
 import PageHeader from "../../components/ui/PageHeader";
 
 const pesoLegible = (b?: number | null) => (b ? `${(b / 1024).toFixed(0)} KB` : "");
 
 export default function GalleryPage() {
   const { images, loading, uploading, uploadImages, deleteImage } = useGallery();
+  const { pedirRecorte, modal: modalRecorte } = useRecorteImagen();
   const [borrando, setBorrando] = useState<number | null>(null);
 
-  const subir = async (file: File) => {
+  const subir = async (original: File) => {
+    const file = await pedirRecorte(original);
+    if (!file) return false;
     try {
       const r = await uploadImages([file]);
       if (r.rechazadas?.length) message.warning(r.rechazadas.join(" · "));
@@ -36,6 +40,7 @@ export default function GalleryPage() {
 
   return (
     <>
+      {modalRecorte}
       <PageHeader
         titulo="Galería"
         descripcion="Las fotos de tus productos. Se guardan en tu bucket y se ven en la tienda pública."

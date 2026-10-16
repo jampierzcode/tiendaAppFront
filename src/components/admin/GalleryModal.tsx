@@ -3,6 +3,7 @@ import { Modal, Upload, Button, Spin, Input, Popconfirm, message, Empty } from "
 import { PlusOutlined, CheckCircleTwoTone, SearchOutlined } from "@ant-design/icons";
 import { TbTrash } from "react-icons/tb";
 import { useGallery } from "../../hooks/useGallery";
+import { useRecorteImagen } from "../../hooks/useRecorteImagen";
 
 interface GalleryModalProps {
   open: boolean;
@@ -15,6 +16,7 @@ const pesoLegible = (bytes?: number | null) =>
 
 const GalleryModal: React.FC<GalleryModalProps> = ({ open, onClose, onSelect }) => {
   const { images, loading, uploading, uploadImages, deleteImage } = useGallery();
+  const { pedirRecorte, modal: modalRecorte } = useRecorteImagen();
 
   const [selected, setSelected] = useState<number | null>(null);
   const [search, setSearch] = useState("");
@@ -23,7 +25,9 @@ const GalleryModal: React.FC<GalleryModalProps> = ({ open, onClose, onSelect }) 
    * Antd llama a `beforeUpload` una vez por archivo. Se sube cada uno y se
    * devuelve `false` para que Antd no intente subirlo por su cuenta.
    */
-  const handleUpload = async (file: File) => {
+  const handleUpload = async (original: File) => {
+    const file = await pedirRecorte(original);
+    if (!file) return false;
     try {
       const res = await uploadImages([file]);
       if (res.rechazadas?.length) {
@@ -85,6 +89,7 @@ const GalleryModal: React.FC<GalleryModalProps> = ({ open, onClose, onSelect }) 
           style={{ width: 260 }}
           allowClear
         />
+        {modalRecorte}
         <Upload
           beforeUpload={handleUpload}
           showUploadList={false}
