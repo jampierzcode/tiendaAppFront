@@ -25,7 +25,7 @@ export default function PageHeader({ titulo, descripcion, acciones }: Props) {
           </p>
         )}
       </div>
-      {acciones && <div className="flex shrink-0 flex-wrap gap-2">{acciones}</div>}
+      {acciones && <div className="acciones-pagina flex max-w-full min-w-0 flex-wrap gap-2 max-sm:w-full">{acciones}</div>}
     </div>
   );
 }

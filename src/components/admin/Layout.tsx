@@ -60,7 +60,7 @@ export default function AdminLayout() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <TopNavigation abrirMovil={() => setMovilAbierto(true)} />
-        <main className="flex-1 px-4 py-6 sm:px-8 sm:py-8">
+        <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 sm:py-8">
           <Outlet />
         </main>
       </div>

@@ -60,9 +60,9 @@ export default function TopNavigation({ abrirMovil }: Props) {
           <TbMenu2 className="text-xl" />
         </button>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex min-w-0 items-center gap-2">
           {diasPrueba !== null && (
-            <span className="pill bg-brand-50 text-brand-700">
+            <span className="pill shrink-0 whitespace-nowrap bg-brand-50 text-brand-700">
               Prueba gratis: {diasPrueba} {diasPrueba === 1 ? "día" : "días"}
             </span>
           )}
@@ -77,7 +77,7 @@ export default function TopNavigation({ abrirMovil }: Props) {
           {urlTienda && (
             <>
               <span
-                className={`pill ${publica ? "bg-ok-bg text-ok" : "bg-warn-bg text-warn"}`}
+                className={`pill hidden whitespace-nowrap sm:inline-flex ${publica ? "bg-ok-bg text-ok" : "bg-warn-bg text-warn"}`}
               >
                 <span
                   className={`h-1.5 w-1.5 rounded-full ${
@@ -91,7 +91,7 @@ export default function TopNavigation({ abrirMovil }: Props) {
                 <button
                   onClick={copiar}
                   aria-label="Copiar enlace de la tienda"
-                  className="rounded-lg border border-line p-2 text-ink-soft transition hover:border-brand-300 hover:text-brand-600"
+                  className="hidden rounded-lg border border-line p-2 text-ink-soft transition hover:border-brand-300 hover:text-brand-600 sm:block"
                 >
                   {copiado ? (
                     <TbCheck className="text-base text-ok" />
@@ -105,7 +105,7 @@ export default function TopNavigation({ abrirMovil }: Props) {
                 href={urlTienda}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-[13px] font-semibold text-white transition hover:bg-brand-600"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-2 text-[13px] font-semibold text-white transition hover:bg-brand-600"
               >
                 <TbExternalLink className="text-base" />
                 <span className="hidden sm:inline">Ver mi tienda</span>

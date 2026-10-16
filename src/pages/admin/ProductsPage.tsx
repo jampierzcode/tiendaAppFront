@@ -595,7 +595,7 @@ export default function ProductsPage(): React.ReactElement {
 
       <div className="card overflow-hidden">
       <Table
-        className="w-full"
+        className="w-full fija-ultima"
         rowKey={(r: any) => r.__key ?? r.id}
         rowClassName={(r: any) => (r.__grupo ? "bg-brand-50" : "")}
         onRow={

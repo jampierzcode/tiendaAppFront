@@ -26,6 +26,7 @@ import { HiOutlineChevronLeft } from "react-icons/hi2";
 
 import { useAuth } from "../../context/AuthContext";
 import { apiTienda } from "../../api/apiTienda";
+import { useBusiness } from "../../context/BusinessContext";
 
 interface SidebarProps {
   open: boolean;
@@ -64,7 +65,11 @@ export default function Sidebar({
       .catch(() => undefined);
   }, [auth.user?.id]);
 
-  const negocioActual = negocios.find((n) => n.uuid === uuid_business);
+  // El negocio abierto viene del contexto (consulta por uuid, que también
+  // permite el superadmin); `byUser` solo trae los negocios propios.
+  const { business } = useBusiness();
+  const negocioActual =
+    (business as Negocio | null) ?? negocios.find((n) => n.uuid === uuid_business);
   const esRestaurante =
     ((negocioActual as any)?.businessType ?? (negocioActual as any)?.business_type) === "restaurant";
 
