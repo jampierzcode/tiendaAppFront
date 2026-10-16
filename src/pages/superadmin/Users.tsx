@@ -1,4 +1,4 @@
-import { Button, Card, Input, message, Space, Table, Tag } from "antd";
+import { Button, Card, Input, message, Modal, Space, Table, Tag, Typography } from "antd";
 import { UserFormModal } from "../../components/superAdmin/UserFormModal";
 import { useEffect, useMemo, useState } from "react";
 import type { Business, PageMeta, Role, User } from "../../types/main";
@@ -22,6 +22,11 @@ export function UsersPage(): React.ReactElement {
   const [openModal, setOpenModal] = useState(false);
   const [editing, setEditing] = useState<User | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const [resetUser, setResetUser] = useState<User | null>(null);
+  const [resetPwd, setResetPwd] = useState("");
+  const [resetting, setResetting] = useState(false);
+  const [resetDone, setResetDone] = useState<string | null>(null);
 
   const [roleOptions, setRoleOptions] = useState<
     { value: number; label: string }[]
@@ -124,6 +129,53 @@ export function UsersPage(): React.ReactElement {
     }
   };
 
+  const openReset = (row: User) => {
+    setResetUser(row);
+    setResetPwd("");
+    setResetDone(null);
+  };
+
+  const closeReset = () => {
+    setResetUser(null);
+    setResetPwd("");
+    setResetDone(null);
+  };
+
+  const handleReset = async () => {
+    if (!resetUser) return;
+    if (resetPwd && resetPwd.length < 8) {
+      message.error("La contraseña debe tener al menos 8 caracteres");
+      return;
+    }
+    try {
+      setResetting(true);
+      const res = await apiTienda.post(
+        `/users/${resetUser.id}/reset-password`,
+        resetPwd ? { password: resetPwd } : {}
+      );
+      setResetDone(res.data.data.password);
+    } catch (err) {
+      console.error(err);
+      const ax: any = err as AxiosError;
+      message.error(
+        ax.response?.data?.errors?.[0]?.message ??
+          ax.response?.data?.message ??
+          "No se pudo restablecer"
+      );
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const copyPassword = async () => {
+    try {
+      await navigator.clipboard.writeText(resetDone ?? "");
+      message.success("Contraseña copiada");
+    } catch {
+      message.error("No se pudo copiar, cópiala a mano");
+    }
+  };
+
   const handleDelete = async (row: User) => {
     try {
       await apiTienda.delete(`/users/${row.id}`);
@@ -181,6 +233,9 @@ export function UsersPage(): React.ReactElement {
           <Space>
             <Button size="small" onClick={() => openEdit(row)}>
               Editar
+            </Button>
+            <Button size="small" onClick={() => openReset(row)}>
+              Contraseña
             </Button>
             <Button size="small" danger onClick={() => handleDelete(row)}>
               Eliminar
@@ -240,6 +295,56 @@ export function UsersPage(): React.ReactElement {
         onCancel={() => setOpenModal(false)}
         onSubmit={handleSubmit}
       />
+
+      <Modal
+        open={!!resetUser}
+        title={`Restablecer contraseña${resetUser ? ` · ${resetUser.name}` : ""}`}
+        onCancel={closeReset}
+        destroyOnClose
+        footer={
+          resetDone ? (
+            <Button type="primary" onClick={closeReset}>
+              Listo
+            </Button>
+          ) : (
+            <Space>
+              <Button onClick={closeReset}>Cancelar</Button>
+              <Button type="primary" loading={resetting} onClick={handleReset}>
+                Restablecer
+              </Button>
+            </Space>
+          )
+        }
+      >
+        {resetDone ? (
+          <Space direction="vertical" style={{ width: "100%" }}>
+            <Typography.Text>
+              Entrégale esta contraseña a {resetUser?.email}. Solo se muestra
+              ahora y sus sesiones abiertas se cerraron.
+            </Typography.Text>
+            <Input.Search
+              readOnly
+              value={resetDone}
+              enterButton="Copiar"
+              onSearch={copyPassword}
+            />
+          </Space>
+        ) : (
+          <Space direction="vertical" style={{ width: "100%" }}>
+            <Typography.Text>
+              Escribe la nueva contraseña (mínimo 8 caracteres) o déjala vacía
+              para generar una temporal.
+            </Typography.Text>
+            <Input.Password
+              autoComplete="new-password"
+              placeholder="Nueva contraseña (opcional)"
+              value={resetPwd}
+              onChange={(e) => setResetPwd(e.target.value)}
+              onPressEnter={handleReset}
+            />
+          </Space>
+        )}
+      </Modal>
     </Card>
   );
 }
