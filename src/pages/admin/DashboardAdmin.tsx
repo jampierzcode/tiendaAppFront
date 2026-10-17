@@ -1,3 +1,4 @@
+import { useEsRestaurante } from "../../context/BusinessContext";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Empty, Spin } from "antd";
@@ -35,6 +36,7 @@ interface BajoStock {
 export default function DashboardAdmin() {
   const { uuid_business } = useParams();
   const { auth } = useAuth();
+  const esRestaurante = useEsRestaurante();
 
   const [resumen, setResumen] = useState<any>(null);
   const [ultimos, setUltimos] = useState<PedidoResumen[]>([]);
@@ -148,6 +150,7 @@ export default function DashboardAdmin() {
           )}
         </motion.section>
 
+        {!esRestaurante && (
         <motion.section
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -192,6 +195,7 @@ export default function DashboardAdmin() {
             </ul>
           )}
         </motion.section>
+        )}
       </div>
     </>
   );

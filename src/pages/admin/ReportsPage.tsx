@@ -11,6 +11,7 @@ import {
   TbTrendingUp,
 } from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
+import { useEsRestaurante } from "../../context/BusinessContext";
 import PageHeader from "../../components/ui/PageHeader";
 import StatCard from "../../components/ui/StatCard";
 import SalesChart, { type PuntoSerie } from "../../components/admin/SalesChart";
@@ -70,6 +71,7 @@ const atajos: { label: string; rango: [Dayjs, Dayjs] }[] = [
 ];
 
 export default function ReportsPage() {
+  const esRestaurante = useEsRestaurante();
   const [rango, setRango] = useState<[Dayjs, Dayjs]>([dayjs().startOf("month"), dayjs()]);
   const [granularidad, setGranularidad] = useState<"day" | "week" | "month">("day");
   const [datos, setDatos] = useState<Overview | null>(null);
@@ -378,7 +380,8 @@ export default function ReportsPage() {
               )}
             </motion.section>
 
-            {/* Alertas de stock */}
+            {/* Alertas de stock: solo retail; en restaurantes el stock son insumos */}
+            {!esRestaurante && (
             <motion.section
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -418,6 +421,7 @@ export default function ReportsPage() {
                 </ul>
               )}
             </motion.section>
+            )}
           </div>
         </div>
       )}

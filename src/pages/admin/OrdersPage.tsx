@@ -53,6 +53,7 @@ export default function OrdersPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [resumen, setResumen] = useState<{
     porEstado: Record<string, number>;
+    pagados: number;
     totalPedidos: number;
     ventasAcumuladas: number;
   } | null>(null);
@@ -68,7 +69,8 @@ export default function OrdersPage() {
       const [p, r] = await Promise.all([
         apiTienda.get("/orders", {
           params: {
-            status: filtro === "todos" ? undefined : filtro,
+            status: filtro === "todos" || filtro === "pagado" ? undefined : filtro,
+            payment: filtro === "pagado" ? "paid" : undefined,
             search: busqueda || undefined,
             perPage: 50,
           },
@@ -164,12 +166,11 @@ export default function OrdersPage() {
   const opcionesFiltro = [
     { label: `Todos${resumen ? ` (${resumen.totalPedidos})` : ""}`, value: "todos" },
     ...(["pendiente", "confirmado", "pagado", "preparando", "listo", "enviado", "entregado", "cancelado"] as const).map(
-      (e) => ({
-        label: `${e[0].toUpperCase()}${e.slice(1)}${
-          resumen?.porEstado?.[e] ? ` (${resumen.porEstado[e]})` : ""
-        }`,
-        value: e,
-      })
+      (e) => {
+        // "Pagado" cuenta pedidos cobrados completos, en cualquier estado.
+        const n = e === "pagado" ? resumen?.pagados : resumen?.porEstado?.[e];
+        return { label: `${e[0].toUpperCase()}${e.slice(1)}${n ? ` (${n})` : ""}`, value: e };
+      }
     ),
   ];
 
