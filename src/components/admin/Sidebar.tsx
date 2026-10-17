@@ -37,6 +37,8 @@ interface SidebarProps {
   cerrarMovil: () => void;
   /** Mensajes de WhatsApp sin leer: globito en «Mensajes». */
   sinLeer?: number;
+  /** Mensajes de clientes en la plataforma sin leer: globito en Pedidos (y Cocina). */
+  pedidosSinLeer?: number;
 }
 
 interface Negocio {
@@ -50,6 +52,7 @@ export default function Sidebar({
   movilAbierto,
   cerrarMovil,
   sinLeer = 0,
+  pedidosSinLeer = 0,
 }: SidebarProps) {
   const { auth, logout } = useAuth();
   const { uuid_business } = useParams();
@@ -95,6 +98,7 @@ export default function Sidebar({
           titulo: "Pedidos",
           url: `/b/${uuid_business}/orders`,
           icono: <IoReceiptOutline />,
+          badge: pedidosSinLeer,
         },
         ...(esRestaurante
           ? [
@@ -102,6 +106,7 @@ export default function Sidebar({
                 titulo: "Cocina",
                 url: `/b/${uuid_business}/kitchen`,
                 icono: <TbChefHat />,
+                badge: pedidosSinLeer,
               },
             ]
           : []),

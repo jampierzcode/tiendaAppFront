@@ -1,7 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useStore } from "../StoreContext";
+import { storeApi } from "../api";
+import { avisar, usePermisoAvisos } from "../../hooks/useAvisos";
+import { activarPush, escucharServiceWorker, pushSoportado } from "../../utilities/push";
 import {
+  cabeceraCliente,
   ligarPedidosDeEsteNavegador,
   misPedidos,
   useCliente,
@@ -29,14 +33,41 @@ export default function ClienteLayout() {
   const { cliente, cargando, salir } = useCliente();
   const [pedidos, setPedidos] = useState<PedidoCuenta[] | null>(null);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { permiso, pedir } = usePermisoAvisos();
+  // Marca del último mensaje de tienda ya avisado: solo suena lo que llega después de abrir la app.
+  const avisado = useRef<string | null>(null);
 
   const cargar = useCallback(async () => {
     try {
-      setPedidos(await misPedidos());
+      const lista = await misPedidos();
+      setPedidos(lista);
+
+      const ultimo = lista
+        .filter((p) => p.unreadMessages > 0 && p.lastDirection === "out")
+        .map((p) => ({ clave: `${p.storeSlug}:${p.code}:${p.unreadMessages}:${p.lastMessage}`, p }))[0];
+      if (avisado.current !== null && ultimo && ultimo.clave !== avisado.current) {
+        avisar(ultimo.p.storeName, ultimo.p.lastMessage ?? "Tienes un mensaje nuevo", `msg-${ultimo.p.code}`);
+      }
+      avisado.current = ultimo?.clave ?? "";
     } catch {
       setPedidos((p) => p ?? []);
     }
   }, []);
+
+  // Con el permiso ya dado, la suscripción push se renueva sola; el service worker refresca o navega.
+  useEffect(() => {
+    if (!cliente) return;
+    if (pushSoportado() && Notification.permission === "granted") {
+      activarPush(storeApi, "", cabeceraCliente());
+    }
+    return escucharServiceWorker(cargar, (ruta) => navigate(ruta));
+  }, [cliente, cargar, navigate]);
+
+  const activarAvisos = async () => {
+    await pedir();
+    await activarPush(storeApi, "", cabeceraCliente(), true);
+  };
 
   // Al entrar se ligan los pedidos hechos en este navegador sin cuenta; luego se actualiza cada 20 s.
   useEffect(() => {
@@ -164,6 +195,14 @@ export default function ClienteLayout() {
         </header>
 
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-5 pb-28 md:px-8 md:py-8 md:pb-10" key={detalle ? "d" : "l"}>
+          {pushSoportado() && permiso === "default" && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <span>Activa los avisos para enterarte cuando la tienda te escriba o cambie tu pedido.</span>
+              <button onClick={activarAvisos} className="rounded-full bg-white px-4 py-1.5 text-sm font-bold shadow-sm">
+                Activar avisos
+              </button>
+            </div>
+          )}
           <Outlet context={{ cliente, pedidos, recargar: cargar, salir } satisfies ContextoCuenta} />
         </main>
       </div>

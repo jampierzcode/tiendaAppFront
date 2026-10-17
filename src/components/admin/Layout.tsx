@@ -5,6 +5,9 @@ import { useBusiness } from "../../context/BusinessContext";
 import Sidebar from "./Sidebar";
 import TopNavigation from "./TopNavigation";
 import { useMensajesSinLeer } from "../../hooks/useMensajesSinLeer";
+import { usePolling } from "../../hooks/usePolling";
+import { apiTienda } from "../../api/apiTienda";
+import { escucharServiceWorker } from "../../utilities/push";
 
 const CLAVE_SIDEBAR = "panel:sidebar-abierto";
 
@@ -22,6 +25,17 @@ export default function AdminLayout() {
   const location = useLocation();
   const sinLeer = useMensajesSinLeer(true);
   const { auth } = useAuth();
+  const [pedidosSinLeer, setPedidosSinLeer] = useState(0);
+  const refrescarPedidos = usePolling(async () => {
+    try {
+      const r = await apiTienda.get("/orders/unread-messages");
+      setPedidosSinLeer(Number(r.data.data.unread ?? 0));
+    } catch {
+      // se reintenta en el siguiente ciclo
+    }
+  }, 15000);
+  // Un aviso push que llega con la pestaña a la vista refresca el globito al instante.
+  useEffect(() => escucharServiceWorker(refrescarPedidos), [refrescarPedidos]);
   const { business } = useBusiness();
   const modoSoporte = auth.user?.role?.name === "superadmin";
 
@@ -56,6 +70,7 @@ export default function AdminLayout() {
         movilAbierto={movilAbierto}
         cerrarMovil={() => setMovilAbierto(false)}
         sinLeer={sinLeer}
+        pedidosSinLeer={pedidosSinLeer}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">

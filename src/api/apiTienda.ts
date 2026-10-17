@@ -21,6 +21,7 @@ const RUTAS_DE_CUENTA = [
   "/account",
   "/logout",
   "/me",
+  "/push",
   "/updatePassword",
   "/businesses",
   "/users",

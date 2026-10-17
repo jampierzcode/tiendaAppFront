@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Popover } from "antd";
+import { Button, Popover } from "antd";
 import { TbBell, TbShoppingBag, TbChecks, TbMessageCircle } from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
 import { usePolling } from "../../hooks/usePolling";
-import { avisar } from "../../hooks/useAvisos";
+import { avisar, usePermisoAvisos } from "../../hooks/useAvisos";
+import { activarPush, escucharServiceWorker, pushSoportado } from "../../utilities/push";
 
 interface Aviso {
   id: number;
@@ -37,6 +38,8 @@ export default function NotificationBell() {
   const [sinLeer, setSinLeer] = useState(0);
   const [abierto, setAbierto] = useState(false);
   const ultimoId = useRef<number | null>(null);
+  const { permiso, pedir } = usePermisoAvisos();
+  const [pushOk, setPushOk] = useState<"activo" | "denegado" | "no-soportado" | "sin-servidor" | null>(null);
 
   const cargar = async () => {
     if (!uuid_business) return;
@@ -54,6 +57,21 @@ export default function NotificationBell() {
 
   const refrescar = usePolling(cargar, 20000, Boolean(uuid_business));
 
+  // Si el permiso ya estaba dado, la suscripción push se renueva sola al abrir el panel.
+  useEffect(() => {
+    if (pushSoportado() && Notification.permission === "granted") {
+      activarPush(apiTienda, "").then(setPushOk);
+    }
+  }, []);
+
+  // El service worker avisa cuando llega un push con la pestaña a la vista, o cuando se toca un aviso.
+  useEffect(() => escucharServiceWorker(refrescar, (ruta) => navigate(ruta)), [refrescar, navigate]);
+
+  const activarAvisos = async () => {
+    await pedir();
+    setPushOk(await activarPush(apiTienda, "", {}, true));
+  };
+
   const abrir = async (n: Aviso) => {
     setAbierto(false);
     if (!n.readAt) {
@@ -62,7 +80,8 @@ export default function NotificationBell() {
       apiTienda.put(`/b/${uuid_business}/notifications/${n.id}/read`).catch(() => undefined);
     }
     if (n.orderId) {
-      navigate(`/b/${uuid_business}/orders?pedido=${n.orderId}`);
+      // Un aviso de mensaje abre el pedido y, encima, la conversación con el cliente.
+      navigate(`/b/${uuid_business}/orders?pedido=${n.orderId}${n.type === "mensaje" ? "&chat=1" : ""}`);
     }
   };
 
@@ -83,6 +102,24 @@ export default function NotificationBell() {
           <TbChecks /> Marcar todas como leídas
         </button>
       </div>
+      {pushSoportado() && permiso !== "granted" && permiso !== "denied" && (
+        <div className="flex items-center justify-between gap-2 border-b border-line bg-warn-bg px-3 py-2 text-[12px] text-warn">
+          <span>Recibe avisos aunque no tengas esta pestaña abierta.</span>
+          <Button size="small" onClick={activarAvisos}>
+            Activar
+          </Button>
+        </div>
+      )}
+      {permiso === "denied" && (
+        <p className="border-b border-line bg-warn-bg px-3 py-2 text-[12px] text-warn">
+          Los avisos están bloqueados en este navegador. Actívalos desde el candado de la barra de direcciones.
+        </p>
+      )}
+      {permiso === "granted" && pushOk === "sin-servidor" && (
+        <p className="border-b border-line px-3 py-2 text-[12px] text-muted">
+          Avisos con la pestaña cerrada no disponibles todavía en este servidor.
+        </p>
+      )}
       <div className="max-h-[360px] overflow-y-auto">
         {items.length === 0 ? (
           <p className="px-3 py-8 text-center text-[13px] text-muted">Aún no tienes avisos.</p>

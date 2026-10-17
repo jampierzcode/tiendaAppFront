@@ -27,7 +27,7 @@ export const guardarTokenCliente = (token: string | null) => {
   window.dispatchEvent(new Event(EVENTO));
 };
 
-export const cabeceraCliente = () => {
+export const cabeceraCliente = (): Record<string, string> => {
   const t = leerTokenCliente();
   return t ? { Authorization: `Bearer ${t}` } : {};
 };

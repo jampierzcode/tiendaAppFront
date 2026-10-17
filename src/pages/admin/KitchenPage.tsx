@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Badge, Button, Drawer, Empty, Popconfirm, Spin, message } from "antd";
+import { Badge, Button, Empty, Popconfirm, Spin, message } from "antd";
 import { TbMessageCircle } from "react-icons/tb";
 import dayjs from "dayjs";
 import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
-import ChatThread from "../../components/admin/ChatThread";
+import PedidoChat from "../../components/admin/PedidoChat";
 import PagoPedidoModal from "../../components/admin/PagoPedidoModal";
 import { avisar, usePermisoAvisos } from "../../hooks/useAvisos";
 
@@ -22,6 +22,9 @@ interface Pedido {
   status: string;
   customerName: string;
   customerPhone: string | null;
+  customerEmail?: string | null;
+  /** Mensajes del cliente en la plataforma sin leer. */
+  platformUnread?: number;
   deliveryMethod: string;
   note: string | null;
   createdAt: string;
@@ -203,9 +206,12 @@ export default function KitchenPage() {
                           {c.siguiente.texto}
                         </Button>
                       )}
-                      {p.customerPhone && (
+                      {(p.customerPhone || p.customerEmail) && (
                         <Badge
-                          count={noLeidos[p.customerPhone.replace(/\D/g, "").slice(-9)] ?? 0}
+                          count={
+                            (noLeidos[(p.customerPhone ?? "").replace(/\D/g, "").slice(-9)] ?? 0) +
+                            (p.platformUnread ?? 0)
+                          }
                           size="small"
                           offset={[-4, 4]}
                         >
@@ -249,23 +255,13 @@ export default function KitchenPage() {
         onSinCobrar={() => cobro && mover(cobro.p, cobro.a, true)}
       />
 
-      <Drawer
-        open={!!chat}
-        onClose={() => {
+      <PedidoChat
+        pedido={chat}
+        onCerrar={() => {
           setChat(null);
           cargar();
         }}
-        width={420}
-        title={chat ? `${chat.customerName} · ${chat.code}` : ""}
-        styles={{ body: { padding: 0 } }}
-      >
-        {chat?.customerPhone && (
-          <ChatThread
-            contact={chat.customerPhone.replace(/\D/g, "").slice(-9)}
-            phone={chat.customerPhone.replace(/\D/g, "")}
-          />
-        )}
-      </Drawer>
+      />
     </>
   );
 }

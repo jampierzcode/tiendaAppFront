@@ -82,15 +82,25 @@ export default function OrdersPage() {
     }
   }, 10000);
 
-  // Una notificación llega aquí con ?pedido=ID: se abre ese pedido y se limpia la URL.
+  // Una notificación llega aquí con ?pedido=ID (y &chat=1 si es un mensaje): se abre ese
+  // pedido y, si es un mensaje, también la conversación; luego se limpia la URL.
   const [params, setParams] = useSearchParams();
   const pedidoDeAviso = params.get("pedido");
+  const conChat = params.get("chat") === "1";
   useEffect(() => {
     if (!pedidoDeAviso) return;
     const id = Number(pedidoDeAviso);
-    if (Number.isFinite(id) && id > 0) setDetalleId(id);
+    if (Number.isFinite(id) && id > 0) {
+      setDetalleId(id);
+      if (conChat) {
+        apiTienda
+          .get(`/orders/${id}`)
+          .then((r) => setChat(r.data.data))
+          .catch(() => undefined);
+      }
+    }
     setParams({}, { replace: true });
-  }, [pedidoDeAviso, setParams]);
+  }, [pedidoDeAviso, conChat, setParams]);
 
   const cargar = useCallback(async () => {
     setCargando(true);
