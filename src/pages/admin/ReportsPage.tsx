@@ -44,7 +44,7 @@ interface Overview {
   productos: ProductoTop[];
   clientes: { nombre: string; telefono: string | null; pedidos: number; gastado: number }[];
   pagos: { metodo: string; total: number; cobros: number }[];
-  alertasStock: { id: number; producto: string; variacion: string; stock: number }[];
+  alertasStock: { id: number; producto: string; variacion: string; stock: number; pendiente?: number }[];
   totalAlertas: number;
 }
 
@@ -415,6 +415,7 @@ export default function ReportsPage() {
                         className={`pill ${a.stock === 0 ? "bg-danger-bg text-danger" : "bg-warn-bg text-warn"}`}
                       >
                         {a.stock === 0 ? "Agotado" : `Quedan ${a.stock}`}
+                        {(a.pendiente ?? 0) > 0 && ` · +${a.pendiente} por llegar`}
                       </span>
                     </li>
                   ))}

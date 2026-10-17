@@ -14,9 +14,11 @@ import type { ColumnsType } from "antd/es/table";
 import { MenuOutlined, PlusOutlined } from "@ant-design/icons";
 import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
-import { useBusiness } from "../../context/BusinessContext";
+import { useBusiness, useEsRestaurante } from "../../context/BusinessContext";
 import SelectorOrden, { type Orden } from "../../components/ui/SelectorOrden";
 import { moverElemento, useFilasArrastrables } from "../../hooks/useFilasArrastrables";
+import { compartirEnlace, copiarEnlace, puedeCompartir, urlCategoria } from "../../utilities/compartir";
+import { TbCopy, TbShare3 } from "react-icons/tb";
 
 interface Subcategory {
   id: number;
@@ -51,6 +53,7 @@ export function CategoriesPage() {
   const [orden, setOrden] = useState<Orden>("manual");
   const [ordenSub, setOrdenSub] = useState<Orden>("manual");
   const { business } = useBusiness();
+  const esRestaurante = useEsRestaurante();
 
   // 🔹 Traer categorías con preload de subcategorías
   const fetchList = async () => {
@@ -305,6 +308,27 @@ export function CategoriesPage() {
           >
             Subcategorías
           </Button>
+          {!esRestaurante && business?.slug && row.slug && (
+            <>
+              <Button
+                size="small"
+                icon={<TbCopy />}
+                title="Copiar el enlace de esta categoría en tu tienda"
+                onClick={() => copiarEnlace(urlCategoria(business!.slug!, row.slug))}
+              >
+                Copiar enlace
+              </Button>
+              {puedeCompartir() && (
+                <Button
+                  size="small"
+                  icon={<TbShare3 />}
+                  onClick={() => compartirEnlace(urlCategoria(business!.slug!, row.slug), row.name)}
+                >
+                  Compartir
+                </Button>
+              )}
+            </>
+          )}
         </Space>
       ),
     },

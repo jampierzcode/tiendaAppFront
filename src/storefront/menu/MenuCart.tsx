@@ -7,6 +7,8 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { Cotizacion } from "../api";
+import { useCotizacion } from "../useCotizacion";
 
 export interface OpcionElegida {
   optionId: number;
@@ -35,7 +37,13 @@ export const precioUnitario = (l: LineaMenu) =>
 interface Ctx {
   lineas: LineaMenu[];
   totalItems: number;
+  /** A precio de lista con extras; las promociones van aparte en `descuento`. */
   subtotal: number;
+  descuento: number;
+  cupon: string;
+  cuponEstado: Cotizacion["cupon"];
+  aplicarCupon: (codigo: string) => void;
+  quitarCupon: () => void;
   agregar: (linea: Omit<LineaMenu, "key">) => void;
   cambiarCantidad: (key: string, cantidad: number) => void;
   quitar: (key: string) => void;
@@ -65,6 +73,7 @@ const firma = (l: Omit<LineaMenu, "key" | "quantity">) =>
 
 export function MenuCartProvider({ slug, children }: { slug: string; children: ReactNode }) {
   const [lineas, setLineas] = useState<LineaMenu[]>(() => leer(slug));
+  const [cupon, setCupon] = useState("");
 
   useEffect(() => setLineas(leer(slug)), [slug]);
 
@@ -103,18 +112,35 @@ export function MenuCartProvider({ slug, children }: { slug: string; children: R
   );
   const vaciar = useCallback(() => setLineas([]), []);
 
-  const valor = useMemo<Ctx>(
-    () => ({
+  // El servidor dice cuánto ahorra el carrito. Los extras (modificadores) se
+  // cobran completos: la promoción actúa sobre el plato.
+  const cotizacion = useCotizacion(
+    slug,
+    lineas.map((l) => ({
+      productId: l.productId,
+      quantity: l.quantity,
+      extras: l.options.reduce((t, o) => t + o.priceDelta * o.quantity, 0),
+    })),
+    cupon
+  );
+
+  const valor = useMemo<Ctx>(() => {
+    const local = lineas.reduce((t, l) => t + precioUnitario(l) * l.quantity, 0);
+    return {
       lineas,
       totalItems: lineas.reduce((t, l) => t + l.quantity, 0),
-      subtotal: lineas.reduce((t, l) => t + precioUnitario(l) * l.quantity, 0),
+      subtotal: cotizacion ? cotizacion.subtotal : local,
+      descuento: cotizacion ? cotizacion.descuento : 0,
+      cupon,
+      cuponEstado: cotizacion?.cupon ?? null,
+      aplicarCupon: setCupon,
+      quitarCupon: () => setCupon(""),
       agregar,
       cambiarCantidad,
       quitar,
       vaciar,
-    }),
-    [lineas, agregar, cambiarCantidad, quitar, vaciar]
-  );
+    };
+  }, [lineas, cotizacion, cupon, agregar, cambiarCantidad, quitar, vaciar]);
 
   return <MenuCartContext.Provider value={valor}>{children}</MenuCartContext.Provider>;
 }

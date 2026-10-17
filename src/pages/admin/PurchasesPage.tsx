@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Button,
+  DatePicker,
   Empty,
   Form,
   Input,
   InputNumber,
   Modal,
+  Segmented,
   Select,
   Spin,
   Table,
@@ -13,9 +15,12 @@ import {
   message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { TbCheck, TbPlus, TbTrash, TbTruckLoading, TbX } from "react-icons/tb";
+import { TbPlus, TbTrash, TbTruckLoading } from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
+import QuickProductModal from "../../components/admin/QuickProductModal";
+import PurchaseDetailDrawer, { estadoCompra } from "../../components/admin/PurchaseDetailDrawer";
+import PriceReviews from "../../components/admin/PriceReviews";
 
 interface Proveedor {
   id: number;
@@ -29,6 +34,7 @@ interface Proveedor {
 interface ItemCompra {
   id: number;
   quantity: number;
+  receivedQuantity?: number;
   unitCost: number;
   lineTotal: number;
 }
@@ -37,7 +43,7 @@ interface Compra {
   id: number;
   code: string;
   documentNumber: string | null;
-  status: "borrador" | "recibida" | "cancelada";
+  status: "cotizacion" | "borrador" | "parcial" | "recibida" | "cancelada";
   total: number;
   receivedAt: string | null;
   createdAt: string;
@@ -49,6 +55,11 @@ interface VariacionCatalogo {
   id: number;
   label: string;
   producto: string;
+  productoId: number;
+  /** Precio de venta (referencia; no se edita aquí). */
+  precio: number;
+  /** Último costo de compra de esta variación (o del producto). */
+  costo: number | null;
   stock: number;
 }
 
@@ -56,11 +67,6 @@ const soles = (v: number) => `S/ ${Number(v ?? 0).toFixed(2)}`;
 const fecha = (iso: string) =>
   new Date(iso).toLocaleDateString("es-PE", { day: "2-digit", month: "short", year: "numeric" });
 
-const estilosEstado: Record<string, string> = {
-  borrador: "bg-warn-bg text-warn",
-  recibida: "bg-ok-bg text-ok",
-  cancelada: "bg-line-soft text-muted",
-};
 
 export default function PurchasesPage() {
   const [pestana, setPestana] = useState("compras");
@@ -72,47 +78,89 @@ export default function PurchasesPage() {
 
   const [modalCompra, setModalCompra] = useState(false);
   const [modalProveedor, setModalProveedor] = useState(false);
+  const [rapido, setRapido] = useState<{ producto: { id: number; name: string; price: number } | null } | null>(null);
+  const [detalleId, setDetalleId] = useState<number | null>(null);
+  const [tipoOrden, setTipoOrden] = useState<"orden" | "cotizacion">("orden");
+  const [historial, setHistorial] = useState<Record<number, any>>({});
   const [formCompra] = Form.useForm();
   const [formProveedor] = Form.useForm();
+
+  // Cada variación como opción de compra: se compra la talla, no el producto.
+  const cargarCatalogo = useCallback(async () => {
+    const prod = await apiTienda.get("/products");
+    const vars: VariacionCatalogo[] = [];
+    for (const producto of prod.data.data ?? []) {
+      const todas = producto.variations ?? [];
+      // Con tallas, la variación oculta del producto simple ya no se compra.
+      const conTallas = todas.some((v: any) => !v.isDefault && (v.attributes ?? []).length > 0);
+      for (const v of conTallas ? todas.filter((x: any) => !x.isDefault) : todas) {
+        const etiqueta = (v.attributes ?? [])
+          .map((a: any) => a.value?.value)
+          .filter(Boolean)
+          .join(" · ");
+        const costo = v.cost ?? producto.cost;
+        vars.push({
+          id: v.id,
+          producto: producto.name,
+          productoId: producto.id,
+          label: etiqueta || "Único",
+          precio: Number(producto.price ?? v.price ?? 0),
+          costo: costo == null ? null : Number(costo),
+          stock: v.stock,
+        });
+      }
+    }
+    setVariaciones(vars);
+  }, []);
 
   const cargar = useCallback(async () => {
     setCargando(true);
     try {
-      const [c, p, prod] = await Promise.all([
+      const [c, p] = await Promise.all([
         apiTienda.get("/purchases"),
         apiTienda.get("/suppliers"),
-        apiTienda.get("/products"),
+        cargarCatalogo(),
       ]);
       setCompras(c.data.data ?? []);
       setProveedores(p.data.data ?? []);
-
-      // Cada variación como opción de compra: se compra la talla, no el producto.
-      const vars: VariacionCatalogo[] = [];
-      for (const producto of prod.data.data ?? []) {
-        for (const v of producto.variations ?? []) {
-          const etiqueta = (v.attributes ?? [])
-            .map((a: any) => a.value?.value)
-            .filter(Boolean)
-            .join(" · ");
-          vars.push({
-            id: v.id,
-            producto: producto.name,
-            label: etiqueta || "Único",
-            stock: v.stock,
-          });
-        }
-      }
-      setVariaciones(vars);
     } catch {
       message.error("No se pudieron cargar las compras");
     } finally {
       setCargando(false);
     }
-  }, []);
+  }, [cargarCatalogo]);
 
   useEffect(() => {
     cargar();
   }, [cargar]);
+
+  /** Pone el último costo de la variación elegida, sin pisar lo que ya escribió. */
+  const cargarHistorial = async (variationId: number) => {
+    if (historial[variationId]) return;
+    try {
+      const r = await apiTienda.get("/purchases/cost-history", { params: { variationId } });
+      setHistorial((h) => ({ ...h, [variationId]: r.data.data }));
+    } catch {
+      /* el historial es ayuda: si falla no frena la compra */
+    }
+  };
+
+  const alElegir = (campo: number, variationId: number) => {
+    cargarHistorial(variationId);
+    const v = variaciones.find((x) => x.id === variationId);
+    const items = formCompra.getFieldValue("items") ?? [];
+    if (v?.costo != null && items[campo] && items[campo].unitCost == null) {
+      items[campo] = { ...items[campo], unitCost: v.costo };
+      formCompra.setFieldsValue({ items });
+    }
+  };
+
+  /** Líneas que vienen del alta rápida: reemplazan las líneas vacías. */
+  const agregarLineas = async (lineas: { variationId: number; quantity: number; unitCost: number }[]) => {
+    await cargarCatalogo();
+    const actuales = (formCompra.getFieldValue("items") ?? []).filter((i: any) => i?.variationId);
+    formCompra.setFieldsValue({ items: [...actuales, ...lineas] });
+  };
 
   const crearCompra = async (v: any) => {
     setGuardando(true);
@@ -121,13 +169,15 @@ export default function PurchasesPage() {
         supplierId: v.supplierId,
         documentNumber: v.documentNumber || null,
         note: v.note || null,
+        tipo: tipoOrden,
+        expectedAt: v.expectedAt ? v.expectedAt.format("YYYY-MM-DD") : null,
         items: (v.items ?? []).map((i: any) => ({
           variationId: i.variationId,
           quantity: i.quantity,
           unitCost: i.unitCost,
         })),
       });
-      message.success("Orden de compra creada");
+      message.success(tipoOrden === "cotizacion" ? "Cotización guardada" : "Orden de compra creada");
       setModalCompra(false);
       formCompra.resetFields();
       await cargar();
@@ -137,41 +187,6 @@ export default function PurchasesPage() {
       setGuardando(false);
     }
   };
-
-  const recibir = (compra: Compra) =>
-    Modal.confirm({
-      title: `¿Recibir la mercadería de ${compra.code}?`,
-      content:
-        "Las cantidades entrarán al inventario y el costo de esos productos se actualizará al de esta compra. No se puede deshacer.",
-      okText: "Sí, recibir",
-      cancelText: "Cancelar",
-      onOk: async () => {
-        try {
-          await apiTienda.post(`/purchases/${compra.id}/receive`);
-          message.success("Mercadería ingresada al inventario");
-          await cargar();
-        } catch (e: any) {
-          message.error(e?.response?.data?.message ?? "No se pudo recibir");
-        }
-      },
-    });
-
-  const cancelar = (compra: Compra) =>
-    Modal.confirm({
-      title: `¿Cancelar ${compra.code}?`,
-      okText: "Cancelar orden",
-      okButtonProps: { danger: true },
-      cancelText: "Volver",
-      onOk: async () => {
-        try {
-          await apiTienda.post(`/purchases/${compra.id}/cancel`);
-          message.success("Orden cancelada");
-          await cargar();
-        } catch (e: any) {
-          message.error(e?.response?.data?.message ?? "No se pudo cancelar");
-        }
-      },
-    });
 
   const crearProveedor = async (v: any) => {
     setGuardando(true);
@@ -214,12 +229,14 @@ export default function PurchasesPage() {
       ),
     },
     {
-      title: "Artículos",
+      title: "Recibido / pedido",
       dataIndex: "items",
       align: "center",
       responsive: ["md"],
       render: (items: ItemCompra[]) => (
-        <span className="text-ink-soft">{items.reduce((t, i) => t + i.quantity, 0)}</span>
+        <span className="text-ink-soft">
+          {items.reduce((t, i) => t + (i.receivedQuantity ?? 0), 0)}/{items.reduce((t, i) => t + i.quantity, 0)}
+        </span>
       ),
     },
     {
@@ -233,7 +250,7 @@ export default function PurchasesPage() {
       dataIndex: "status",
       render: (s: string, row) => (
         <div>
-          <span className={`pill ${estilosEstado[s]}`}>{s}</span>
+          <span className={`pill ${estadoCompra[s]?.clase}`}>{estadoCompra[s]?.texto ?? s}</span>
           {row.receivedAt && (
             <p className="mt-0.5 text-[11px] text-muted">{fecha(row.receivedAt)}</p>
           )}
@@ -244,15 +261,11 @@ export default function PurchasesPage() {
       title: "",
       key: "acciones",
       align: "right",
-      render: (_, row) =>
-        row.status === "borrador" ? (
-          <div className="flex justify-end gap-1.5">
-            <Button size="small" type="primary" icon={<TbCheck />} onClick={() => recibir(row)}>
-              Recibir
-            </Button>
-            <Button size="small" danger icon={<TbX />} onClick={() => cancelar(row)} />
-          </div>
-        ) : null,
+      render: (_, row) => (
+        <Button size="small" type={["borrador", "parcial"].includes(row.status) ? "primary" : "default"} onClick={() => setDetalleId(row.id)}>
+          {["borrador", "parcial"].includes(row.status) ? "Recibir" : "Ver"}
+        </Button>
+      ),
     },
   ];
 
@@ -285,7 +298,7 @@ export default function PurchasesPage() {
     <>
       <PageHeader
         titulo="Compras"
-        descripcion="Lo que le pides a tus proveedores. La mercadería entra al inventario solo cuando marcas la orden como recibida."
+        descripcion="Cotiza, pide y recibe por partes. El stock sube solo con lo que llega físicamente; una cotización no toca inventario ni costos."
         acciones={
           pestana === "compras" ? (
             <Button
@@ -294,7 +307,7 @@ export default function PurchasesPage() {
               disabled={proveedores.length === 0}
               onClick={() => setModalCompra(true)}
             >
-              Nueva orden
+              Nueva cotización u orden
             </Button>
           ) : (
             <Button type="primary" icon={<TbPlus />} onClick={() => setModalProveedor(true)}>
@@ -303,6 +316,8 @@ export default function PurchasesPage() {
           )
         }
       />
+
+      <PriceReviews onApplied={cargar} />
 
       <div className="card overflow-hidden">
         <div className="border-b border-line-soft px-4 pt-2">
@@ -356,8 +371,8 @@ export default function PurchasesPage() {
         onCancel={() => setModalCompra(false)}
         onOk={() => formCompra.submit()}
         confirmLoading={guardando}
-        title="Nueva orden de compra"
-        okText="Crear orden"
+        title={tipoOrden === "cotizacion" ? "Nueva cotización" : "Nueva orden de compra"}
+        okText={tipoOrden === "cotizacion" ? "Guardar cotización" : "Crear orden"}
         cancelText="Cancelar"
         width={720}
       >
@@ -368,6 +383,15 @@ export default function PurchasesPage() {
           className="pt-2"
           initialValues={{ items: [{}] }}
         >
+          <Segmented
+            className="mb-4"
+            value={tipoOrden}
+            onChange={(v) => setTipoOrden(v as "orden" | "cotizacion")}
+            options={[
+              { label: "Pedido", value: "orden" },
+              { label: "Cotización (sin stock ni costos)", value: "cotizacion" },
+            ]}
+          />
           <div className="grid gap-x-4 sm:grid-cols-2">
             <Form.Item
               name="supplierId"
@@ -386,6 +410,9 @@ export default function PurchasesPage() {
             <Form.Item name="documentNumber" label="Factura o guía del proveedor">
               <Input placeholder="F001-3344" />
             </Form.Item>
+            <Form.Item name="expectedAt" label="Llegada estimada">
+              <DatePicker style={{ width: "100%" }} />
+            </Form.Item>
           </div>
 
           <p className="eyebrow mb-2">Productos</p>
@@ -393,7 +420,8 @@ export default function PurchasesPage() {
             {(campos, { add, remove }) => (
               <>
                 {campos.map((campo) => (
-                  <div key={campo.key} className="mb-2 flex items-end gap-2">
+                  <div key={campo.key} className="mb-3">
+                  <div className="flex items-end gap-2">
                     <Form.Item
                       name={[campo.name, "variationId"]}
                       label="Producto y talla"
@@ -404,6 +432,7 @@ export default function PurchasesPage() {
                         showSearch
                         optionFilterProp="label"
                         placeholder="Buscar…"
+                        onChange={(id: number) => alElegir(campo.name, id)}
                         options={variaciones.map((v) => ({
                           value: v.id,
                           label: `${v.producto} — ${v.label} (stock ${v.stock})`,
@@ -420,7 +449,7 @@ export default function PurchasesPage() {
                     </Form.Item>
                     <Form.Item
                       name={[campo.name, "unitCost"]}
-                      label="Costo unit."
+                      label="Costo unit. (pagas)"
                       className="!mb-0"
                       rules={[{ required: true, message: "?" }]}
                     >
@@ -434,16 +463,61 @@ export default function PurchasesPage() {
                       aria-label="Quitar línea"
                     />
                   </div>
+                  <Form.Item noStyle shouldUpdate>
+                    {() => {
+                      const linea = formCompra.getFieldValue(["items", campo.name]);
+                      const v = variaciones.find((x) => x.id === linea?.variationId);
+                      if (!v) return null;
+                      const costo = Number(linea?.unitCost);
+                      const margen =
+                        v.precio > 0 && Number.isFinite(costo) && linea?.unitCost != null
+                          ? Math.round(((v.precio - costo) / v.precio) * 100)
+                          : null;
+                      return (
+                        <p className="mt-1 flex flex-wrap items-center gap-x-3 text-[11px] text-muted">
+                          <span>Se vende a {soles(v.precio)} (no cambia)</span>
+                          {v.costo != null && <span>Último costo {soles(v.costo)}</span>}
+                          {(() => {
+                            const h = historial[v.id]?.proveedores ?? [];
+                            const compras = h.filter((p: any) => p.ultimoCosto != null);
+                            if (!compras.length) return null;
+                            const mejor = compras.reduce((a: any, b: any) => (b.ultimoCosto < a.ultimoCosto ? b : a));
+                            const elegido = compras.find((p: any) => p.supplierId === formCompra.getFieldValue("supplierId"));
+                            return (
+                              <span>
+                                Mejor costo: {mejor.supplier} {soles(mejor.ultimoCosto)}
+                                {elegido && elegido.supplierId !== mejor.supplierId && ` · con este proveedor ${soles(elegido.ultimoCosto)}`}
+                              </span>
+                            );
+                          })()}
+                          {margen != null && (
+                            <span className={margen < 0 ? "text-danger" : ""}>Margen {margen}%</span>
+                          )}
+                          <button
+                            type="button"
+                            className="font-medium text-brand-600 hover:underline"
+                            onClick={() =>
+                              setRapido({
+                                producto: { id: v.productoId, name: v.producto, price: v.precio },
+                              })
+                            }
+                          >
+                            + Talla o color nuevo
+                          </button>
+                        </p>
+                      );
+                    }}
+                  </Form.Item>
+                  </div>
                 ))}
-                <Button
-                  type="dashed"
-                  block
-                  icon={<TbPlus />}
-                  onClick={() => add()}
-                  className="mt-1"
-                >
-                  Agregar producto
-                </Button>
+                <div className="mt-1 flex gap-2">
+                  <Button type="dashed" block icon={<TbPlus />} onClick={() => add()}>
+                    Agregar producto
+                  </Button>
+                  <Button type="dashed" block icon={<TbPlus />} onClick={() => setRapido({ producto: null })}>
+                    Producto nuevo
+                  </Button>
+                </div>
               </>
             )}
           </Form.List>
@@ -458,6 +532,20 @@ export default function PurchasesPage() {
           </p>
         </Form>
       </Modal>
+
+      <PurchaseDetailDrawer
+        ordenId={detalleId}
+        proveedores={proveedores}
+        onClose={() => setDetalleId(null)}
+        onChanged={cargar}
+      />
+
+      <QuickProductModal
+        open={rapido !== null}
+        producto={rapido?.producto ?? null}
+        onClose={() => setRapido(null)}
+        onCreated={agregarLineas}
+      />
 
       {/* Nuevo proveedor */}
       <Modal

@@ -1,3 +1,4 @@
+import PromoStrip from "../components/PromoStrip";
 import { motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { obtenerMenu, type CartaMenu, type PlatoMenu } from "../api";
@@ -93,6 +94,7 @@ export default function MenuPage() {
 
   return (
     <>
+      <PromoStrip enlaces={false} />
       <div className="sticky top-0 z-30 border-b border-neutral-200 bg-neutral-50/95 backdrop-blur">
         <div className="px-4 pt-3">
           <input
@@ -199,12 +201,12 @@ export default function MenuPage() {
                     ) : (
                       <div className="grid h-full place-items-center text-3xl">🍽️</div>
                     )}
-                    {p.originalPrice && (
+                    {(p.originalPrice || (p.promos?.length ?? 0) > 0) && (
                       <span
                         className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
                         style={{ backgroundColor: "var(--tienda-secundario)" }}
                       >
-                        Oferta
+                        {p.promos?.[0]?.label ?? "Oferta"}
                       </span>
                     )}
                   </div>

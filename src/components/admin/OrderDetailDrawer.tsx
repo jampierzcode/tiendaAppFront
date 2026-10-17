@@ -14,6 +14,7 @@ import {
 import { motion } from "motion/react";
 import {
   TbBrandWhatsapp,
+  TbMessageCircle,
   TbCash,
   TbCheck,
   TbPackage,
@@ -25,6 +26,7 @@ import {
 } from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
 import { useEsRestaurante } from "../../context/BusinessContext";
+import PedidoChat from "./PedidoChat";
 import BadgeEstado, { type EstadoPedido } from "../ui/EstadoPedido";
 import ComprobanteInput, { type Comprobante } from "../ui/ComprobanteInput";
 import PagoPedidoModal from "./PagoPedidoModal";
@@ -33,6 +35,7 @@ interface ItemPedido {
   id: number;
   productName: string;
   variationLabel: string | null;
+  imageUrl?: string | null;
   quantity: number;
   unitPrice: number;
   lineTotal: number;
@@ -56,6 +59,7 @@ export interface Pedido {
   status: EstadoPedido;
   customerName: string;
   customerPhone: string | null;
+  customerEmail?: string | null;
   deliveryMethod: string;
   deliveryAddress: string | null;
   deliveryCity: string | null;
@@ -135,6 +139,7 @@ interface Props {
 
 export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Props) {
   const esRestaurante = useEsRestaurante();
+  const [chatAbierto, setChatAbierto] = useState(false);
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [cargando, setCargando] = useState(false);
   const [guardando, setGuardando] = useState(false);
@@ -359,6 +364,19 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
               ) : (
                 <p className="mt-1 text-[13px] text-muted">Sin teléfono registrado</p>
               )}
+              {pedido.customerEmail && (
+                <a
+                  href={`mailto:${pedido.customerEmail}`}
+                  className="mt-1 block text-[13px] text-brand-600 hover:underline"
+                >
+                  ✉️ {pedido.customerEmail}
+                </a>
+              )}
+              {(pedido.customerPhone || pedido.customerEmail) && (
+                <Button size="small" icon={<TbMessageCircle />} className="mt-2" onClick={() => setChatAbierto(true)}>
+                  Conversar con el cliente
+                </Button>
+              )}
               <p className="mt-1.5 text-[13px] text-ink-soft">
                 {pedido.deliveryMethod === "recojo"
                   ? "Recojo en tienda"
@@ -376,8 +394,15 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
               <p className="eyebrow mb-2">Productos</p>
               <ul className="divide-y divide-line-soft">
                 {pedido.items.map((item) => (
-                  <li key={item.id} className="flex items-start justify-between gap-3 py-2.5">
-                    <div className="min-w-0">
+                  <li key={item.id} className="flex items-start gap-3 py-2.5">
+                    {item.imageUrl && (
+                      <img
+                        src={item.imageUrl}
+                        alt=""
+                        className="h-14 w-14 shrink-0 rounded-lg bg-canvas object-cover ring-1 ring-line"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-medium text-ink">{item.productName}</p>
                       {item.variationLabel && (
                         <p className="text-[12px] text-muted">{item.variationLabel}</p>
@@ -685,6 +710,7 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
         </Form>
       </Modal>
 
+      <PedidoChat pedido={chatAbierto ? pedido : null} onCerrar={() => setChatAbierto(false)} />
     </>
   );
 }

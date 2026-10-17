@@ -3,7 +3,6 @@ import {
   Modal,
   Button,
   Form,
-  Input,
   InputNumber,
   Select,
   Tag,
@@ -18,6 +17,11 @@ import {
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { apiTienda } from "../../api/apiTienda";
 import GalleryModal from "./GalleryModal";
+import SkuField from "./SkuField";
+import MovementModal from "./MovementModal";
+import CostoReferencia from "./CostoReferencia";
+import { useBusiness } from "../../context/BusinessContext";
+import { impuestoDe } from "../../utilities/paises";
 
 const { Text } = Typography;
 
@@ -52,6 +56,9 @@ interface VariationAttribute {
 
 interface Variation {
   id: number;
+  isDefault?: boolean;
+  lowStockThreshold?: number | null;
+  cost?: number | null;
   sku: string;
   price: number;
   stock: number;
@@ -75,30 +82,6 @@ interface VariationFormModalProps {
  * Modal secundario: crear / editar UNA variación
  * con "carrito" de atributos (filas dinámicas atributo + value)
  */
-/**
- * SKU sugerido: el del producto más las iniciales de cada valor elegido, que
- * es la convención que ya se usa a mano (VB-1003-S-NEG). Se recalcula mientras
- * el vendedor elige atributos, y deja de tocarse en cuanto lo escribe él.
- */
-function sugerirSku(product: any, partes: string[]) {
-  const base = (product?.sku || product?.slug || "VAR")
-    .toString()
-    .toUpperCase()
-    .replace(/[^A-Z0-9-]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  const sufijos = partes.map((v) =>
-    v
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toUpperCase()
-      .replace(/[^A-Z0-9]+/g, "")
-      .slice(0, 3)
-  );
-
-  return [base, ...sufijos].filter(Boolean).join("-");
-}
-
 function VariationFormModal({
   open,
   onClose,
@@ -112,7 +95,11 @@ function VariationFormModal({
   const [submitting, setSubmitting] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [imagen, setImagen] = useState<{ id: number; url: string } | null>(null);
-  const [skuManual, setSkuManual] = useState(false);
+  const { business } = useBusiness();
+  const impuesto = impuestoDe((business as any)?.country);
+  const [precioEditable, setPrecioEditable] = useState(false);
+  const [movOpen, setMovOpen] = useState(false);
+  const precioWatch = Form.useWatch("price", form) as number | undefined;
 
   type AttributeRow = {
     key: string;
@@ -135,9 +122,10 @@ function VariationFormModal({
       form.setFieldsValue({
         sku: variationToEdit.sku,
         price: variationToEdit.price,
-        stock: variationToEdit.stock,
         weight: variationToEdit.weight,
+        lowStockThreshold: variationToEdit.lowStockThreshold ?? product?.lowStockThreshold ?? 5,
       });
+      setPrecioEditable(false);
 
       setImagen(
         variationToEdit.businessImage
@@ -155,34 +143,25 @@ function VariationFormModal({
       }));
 
       setAttributeRows(rows.length ? rows : [{ key: "0" }]);
-      setSkuManual(true);
     } else {
       form.resetFields();
       setAttributeRows([{ key: "0" }]);
       setImagen(null);
-      setSkuManual(false);
+      setPrecioEditable(false);
       // El precio de la variación casi siempre es el del producto: se
       // prellena y el vendedor solo lo toca si esta talla o color cuesta
       // distinto. El stock no se adivina, ese sí lo pone él.
       form.setFieldsValue({
         price: product?.price != null ? Number(product.price) : undefined,
+        stock: 0,
+        lowStockThreshold: product?.lowStockThreshold ?? 5,
       });
     }
   }, [open, variationToEdit, form]);
 
-  // SKU sugerido en vivo mientras se eligen atributos.
-  useEffect(() => {
-    if (!open || variationToEdit || skuManual) return;
-
-    const partes = attributeRows
-      .map((r) => {
-        const attr = attributes.find((a) => a.id === r.attributeId);
-        return attr?.values.find((v) => v.id === r.valueId)?.value;
-      })
-      .filter((v): v is string => Boolean(v));
-
-    form.setFieldsValue({ sku: sugerirSku(product, partes) });
-  }, [open, attributeRows, attributes, product, variationToEdit, skuManual, form]);
+  const valueIdsElegidos = attributeRows
+    .filter((r) => r.attributeId && r.valueId)
+    .map((r) => r.valueId as number);
 
   const usedAttributeIds = useMemo(
     () =>
@@ -257,18 +236,23 @@ function VariationFormModal({
       if (!variationToEdit) {
         const res = await apiTienda.post("/product-variations", {
           product_id: productId,
-          sku: values.sku,
-          price: values.price,
-          stock: values.stock,
+          sku: values.sku?.trim() || undefined,
+          // Sin tocar el precio se usa el del producto (lo resuelve el servidor).
+          price: precioEditable ? values.price : undefined,
+          stock: values.stock ?? 0,
+          low_stock_threshold: values.lowStockThreshold,
           weight: values.weight || 0,
           business_image_id: imagen?.id ?? null,
+          // Atributos en la misma llamada: es atómico y, si el producto era
+          // simple, el servidor traslada su stock a esta primera variación.
+          attributeValueIds,
         });
         variationId = res.data.data.id;
       } else {
         await apiTienda.put(`/product-variations/${variationToEdit.id}`, {
           sku: values.sku,
           price: values.price,
-          stock: values.stock,
+          low_stock_threshold: values.lowStockThreshold,
           weight: values.weight || 0,
           business_image_id: imagen?.id ?? null,
         });
@@ -279,11 +263,13 @@ function VariationFormModal({
         throw new Error("No se pudo obtener el ID de la variación");
       }
 
-      // 👉 Sync de atributos en UN solo request (Adonis hace createMany / delete)
-      await apiTienda.post("/product-variation-attributes", {
-        variationId,
-        attributeValueIds,
-      });
+      // Al editar sí se sincronizan los atributos; al crear ya fueron en el alta.
+      if (variationToEdit) {
+        await apiTienda.post("/product-variation-attributes", {
+          variationId,
+          attributeValueIds,
+        });
+      }
 
       message.success(
         variationToEdit
@@ -292,9 +278,9 @@ function VariationFormModal({
       );
       onSaved();
       onClose();
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      message.error("Error al guardar la variación.");
+      message.error(error?.response?.data?.message ?? "Error al guardar la variación.");
     } finally {
       setSubmitting(false);
     }
@@ -419,7 +405,7 @@ function VariationFormModal({
             </div>
             <Space>
               <Button onClick={() => setGalleryOpen(true)}>
-                {imagen ? "Cambiar" : "Elegir de la galería"}
+                {imagen ? "Cambiar imagen" : "Subir imagen"}
               </Button>
               {imagen && (
                 <Button type="text" danger onClick={() => setImagen(null)}>
@@ -435,43 +421,94 @@ function VariationFormModal({
           <Form.Item
             name="sku"
             label="SKU"
-            rules={[{ required: true, message: "Ingresa un SKU" }]}
+            extra="Único; se arma solo con el producto y los atributos. Edítalo si prefieres el tuyo."
+          >
+            <SkuField
+              auto={!variationToEdit}
+              params={{ productId, valueIds: valueIdsElegidos }}
+              ready={valueIdsElegidos.length > 0}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Precio"
             extra={
-              variationToEdit || skuManual
-                ? undefined
-                : "Se arma solo con el producto y los atributos. Puedes cambiarlo."
+              precioEditable
+                ? "Esta variación se venderá a un precio distinto al del producto."
+                : "Es el precio del producto. Edítalo solo si esta variación se vende distinto."
             }
           >
-            <Input
-              placeholder="SKU de la variación"
-              onChange={() => setSkuManual(true)}
-            />
+            <div className="flex gap-2">
+              <Form.Item
+                name="price"
+                noStyle
+                rules={[{ required: true, message: "Ingresa un precio" }]}
+              >
+                <InputNumber min={0} className="w-full" disabled={!precioEditable} />
+              </Form.Item>
+              <Button
+                onClick={() => {
+                  if (precioEditable) {
+                    form.setFieldsValue({
+                      price: Number(product?.price ?? 0),
+                    });
+                  }
+                  setPrecioEditable((e) => !e);
+                }}
+              >
+                {precioEditable ? "Usar el del producto" : "Editar"}
+              </Button>
+            </div>
+          </Form.Item>
+
+          <Form.Item label={`${impuesto.nombre} %`} extra="Lo define el país de la tienda; no cambia por variación.">
+            <InputNumber disabled className="w-full" value={Number(product?.taxRate ?? impuesto.tasa)} />
           </Form.Item>
 
           <Form.Item
-            name="price"
-            label="Precio"
-            rules={[{ required: true, message: "Ingresa un precio" }]}
-            extra={variationToEdit ? undefined : "Viene del producto. Cámbialo solo si esta variación cuesta distinto."}
+            name="lowStockThreshold"
+            label="Avisar con stock bajo de"
+            extra="Alerta cuando esta variación llegue a esa cantidad."
           >
-            <InputNumber
-              min={0}
-              className="w-full"
-              placeholder="Precio de la variación"
-            />
+            <InputNumber min={0} className="w-full" />
           </Form.Item>
 
-          <Form.Item
-            name="stock"
-            label="Stock"
-            rules={[{ required: true, message: "Ingresa un stock" }]}
-          >
-            <InputNumber
-              min={0}
-              className="w-full"
-              placeholder="Stock disponible"
+          {variationToEdit ? (
+            <Form.Item
+              label="Stock"
+              extra="No se edita a mano: se cambia con un movimiento (aumento, disminución o ajuste) y queda registrado."
+            >
+              <div className="flex items-center gap-3">
+                <Tag color={variationToEdit.stock > 0 ? "green" : "red"} style={{ fontSize: 14, padding: "2px 10px" }}>
+                  {variationToEdit.stock}
+                </Tag>
+                <Button onClick={() => setMovOpen(true)}>Registrar movimiento</Button>
+              </div>
+            </Form.Item>
+          ) : (
+            <Form.Item
+              name="stock"
+              label="Stock inicial"
+              extra="Las unidades que ya tienes. Para mercadería nueva, registra una compra en Compras. Si el producto ya tenía stock sin variaciones, pasa solo a la primera variación."
+            >
+              <InputNumber min={0} precision={0} className="w-full" />
+            </Form.Item>
+          )}
+
+          <div className="md:col-span-2">
+            <CostoReferencia
+              productId={variationToEdit ? undefined : productId}
+              variationId={variationToEdit?.id}
+              costoActual={
+                variationToEdit?.cost != null
+                  ? Number(variationToEdit.cost)
+                  : product?.cost != null
+                    ? Number(product.cost)
+                    : null
+              }
+              precio={precioWatch ?? null}
             />
-          </Form.Item>
+          </div>
 
           <Form.Item name="weight" label="Peso (opcional)">
             <InputNumber
@@ -483,6 +520,27 @@ function VariationFormModal({
 
         </div>
       </Form>
+
+      <MovementModal
+        open={movOpen}
+        item={
+          variationToEdit
+            ? {
+                id: variationToEdit.id,
+                nombre: `${product?.name ?? "Producto"} · ${(variationToEdit.attributes ?? [])
+                  .map((a) => a.value?.value)
+                  .filter(Boolean)
+                  .join(" · ")}`,
+                stock: variationToEdit.stock,
+              }
+            : null
+        }
+        onClose={() => setMovOpen(false)}
+        onDone={() => {
+          onSaved();
+          onClose();
+        }}
+      />
 
       <GalleryModal
         open={galleryOpen}
@@ -527,7 +585,9 @@ export default function VariationModal({
       const res = await apiTienda.get(
         `/product-variations?productId=${product.id}`
       );
-      setVariations(res.data.data || []);
+      // La variación oculta del producto simple no se muestra ni se edita:
+      // es el producto mismo, y su stock/precio/SKU viven en su formulario.
+      setVariations((res.data.data || []).filter((v: Variation) => !v.isDefault));
     } catch (error) {
       console.error(error);
       message.error("Error cargando variaciones");
@@ -612,13 +672,13 @@ export default function VariationModal({
 
         {loading ? null : variations.length === 0 ? (
           <div className="py-10">
-            <Empty description="Aún no hay variaciones creadas.">
+            <Empty description="Este producto se vende como uno solo. Agrega variaciones para vender por talla, color o medida.">
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
                 onClick={handleNewVariation}
               >
-                Crear primera variación
+                Agregar una variación
               </Button>
             </Empty>
           </div>

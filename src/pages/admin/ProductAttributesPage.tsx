@@ -33,6 +33,15 @@ interface ProductAttribute {
   values?: AttributeValue[];
 }
 
+/** Tipos de atributo. «Talla» era un tipo aparte pero se maneja como texto o lista. */
+const TIPOS: Record<string, { label: string; ayuda: string; ejemplo: string }> = {
+  text: { label: "Texto", ayuda: "Valores escritos: Algodón, Cuero, Premium…", ejemplo: "Ej. Algodón" },
+  color: { label: "Color", ayuda: "Cada valor lleva su color para mostrarlo en la tienda.", ejemplo: "Ej. Azul marino" },
+  number: { label: "Número", ayuda: "Valores numéricos: 38, 40, 42…", ejemplo: "Ej. 38" },
+  select: { label: "Lista desplegable", ayuda: "El cliente elige una opción de una lista: S, M, L…", ejemplo: "Ej. M" },
+};
+const tipoDe = (t?: string) => (t && TIPOS[t] ? t : "text");
+
 export default function ProductAttributesPage() {
   const { business } = useBusiness();
   const [attributes, setAttributes] = useState<ProductAttribute[]>([]);
@@ -103,7 +112,13 @@ export default function ProductAttributesPage() {
   // 💾 Crear / actualizar valor
   const handleSaveValue = async (values: any) => {
     if (!activeAttr) return;
-    const payload = { ...values, attribute_id: activeAttr.id };
+    const esColor = tipoDe(activeAttr.type) === "color";
+    const payload = {
+      ...values,
+      // Un atributo que no es de color no guarda color.
+      hex_color: esColor ? (values.hex_color ?? "#000000") : null,
+      attribute_id: activeAttr.id,
+    };
     try {
       if (editingValue) {
         await apiTienda.put(
@@ -172,7 +187,7 @@ export default function ProductAttributesPage() {
       title: "Tipo",
       dataIndex: "type",
       key: "type",
-      render: (v) => <Tag color="blue">{v}</Tag>,
+      render: (v) => <Tag color="blue">{TIPOS[tipoDe(v)].label}</Tag>,
     },
     {
       title: "Requerido",
@@ -198,7 +213,7 @@ export default function ProductAttributesPage() {
             size="small"
             onClick={() => {
               setEditingAttr(row);
-              formAttr.setFieldsValue(row);
+              formAttr.setFieldsValue({ ...row, type: tipoDe(row.type) });
               setModalAttrOpen(true);
             }}
           >
@@ -235,10 +250,13 @@ export default function ProductAttributesPage() {
       dataIndex: "value",
       key: "value",
     },
+    ...(tipoDe(activeAttr?.type) !== "color"
+      ? []
+      : [
     {
-      title: "Color (si aplica)",
+      title: "Color",
       dataIndex: "hexColor",
-      render: (v) =>
+      render: (v: string | null) =>
         v && v !== "" ? (
           <div
             style={{
@@ -253,6 +271,7 @@ export default function ProductAttributesPage() {
           "-"
         ),
     },
+    ]),
     {
       title: "Acciones",
       key: "actions",
@@ -324,11 +343,7 @@ export default function ProductAttributesPage() {
           <Form.Item name="type" label="Tipo" rules={[{ required: true }]}>
             <Select
               options={[
-                { value: "text", label: "Texto" },
-                { value: "color", label: "Color" },
-                { value: "size", label: "Talla" },
-                { value: "number", label: "Número" },
-                { value: "select", label: "Lista desplegable" },
+                ...Object.entries(TIPOS).map(([value, t]) => ({ value, label: t.label })),
               ]}
             />
           </Form.Item>
@@ -353,7 +368,14 @@ export default function ProductAttributesPage() {
       <Modal
         open={modalValuesOpen}
         width={800}
-        title={`${activeAttr?.name}`}
+        title={
+          <div>
+            <div>{activeAttr?.name}</div>
+            <div className="mt-0.5 text-[12px] font-normal text-muted">
+              Tipo: {TIPOS[tipoDe(activeAttr?.type)].label} · {TIPOS[tipoDe(activeAttr?.type)].ayuda}
+            </div>
+          </div>
+        }
         onCancel={() => setModalValuesOpen(false)}
         footer={null}
       >
@@ -366,22 +388,29 @@ export default function ProductAttributesPage() {
           <Form.Item
             label="Valor"
             name="value"
-            rules={[{ required: true, message: "Ingresa un valor" }]}
+            rules={[
+              { required: true, message: "Ingresa un valor" },
+              ...(tipoDe(activeAttr?.type) === "number"
+                ? [{ pattern: /^\d+([.,]\d+)?$/, message: "Solo números" }]
+                : []),
+            ]}
           >
-            <Input placeholder="Ej. Azul, M, Grande..." />
+            <Input placeholder={TIPOS[tipoDe(activeAttr?.type)].ejemplo} />
           </Form.Item>
 
-          <Form.Item
-            label="Color"
-            name="hex_color"
-            valuePropName="value"
-            className="flex flex-col"
-          >
-            <Input
-              type="color"
-              className="!w-10 !p-2 !border !border-gray-300 rounded cursor-pointer"
-            />
-          </Form.Item>
+          {tipoDe(activeAttr?.type) === "color" && (
+            <Form.Item
+              label="Color"
+              name="hex_color"
+              valuePropName="value"
+              className="flex flex-col"
+            >
+              <Input
+                type="color"
+                className="!w-10 !p-2 !border !border-gray-300 rounded cursor-pointer"
+              />
+            </Form.Item>
+          )}
 
           <Form.Item>
             <Button type="primary" htmlType="submit">

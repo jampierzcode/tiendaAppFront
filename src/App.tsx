@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 
 import "@ant-design/v5-patch-for-react-19";
@@ -16,6 +17,7 @@ import AdminLayout from "./components/admin/Layout";
 import { BusinessProvider } from "./context/BusinessContext";
 import { CategoriesPage } from "./pages/admin/CategoryProduct";
 import ProductAttributesPage from "./pages/admin/ProductAttributesPage";
+import TagsPage from "./pages/admin/TagsPage";
 import ProductsPage from "./pages/admin/ProductsPage";
 import DashboardAdmin from "./pages/admin/DashboardAdmin";
 import OrdersPage from "./pages/admin/OrdersPage";
@@ -31,21 +33,41 @@ import { StoreProvider } from "./storefront/StoreContext";
 import ProductDetail from "./storefront/ProductDetail";
 import StoreGate, { StoreIndex } from "./storefront/StoreGate";
 import OrderTracking from "./storefront/menu/OrderTracking";
+import ClienteLayout from "./storefront/cuenta/ClienteLayout";
+import PedidosCuenta from "./storefront/cuenta/PedidosCuenta";
+import MensajesCuenta from "./storefront/cuenta/MensajesCuenta";
+import PerfilCuenta from "./storefront/cuenta/PerfilCuenta";
+import DetallePedidoCuenta from "./storefront/cuenta/DetallePedidoCuenta";
+import MisPedidosRedirect from "./storefront/MisPedidosRedirect";
 import ModifiersPage from "./pages/admin/ModifiersPage";
 import KitchenPage from "./pages/admin/KitchenPage";
 import ChatPage from "./pages/admin/ChatPage";
 import WhatsappPage from "./pages/admin/WhatsappPage";
 import IngredientsPage from "./pages/admin/IngredientsPage";
 
+/**
+ * Es una SPA: cambiar de página no reinicia el scroll. Al entrar a otra ruta
+ * se vuelve arriba (solo cambia con la ruta, no con filtros o búsquedas).
+ */
+function ScrollAlInicio() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+  }, [pathname]);
+  return null;
+}
+
 export default function App() {
   return (
     <ConfigProvider theme={antdTheme} locale={esES}>
       <AuthProvider>
         <BrowserRouter>
+        <ScrollAlInicio />
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
           <Route path="/suscripcion" element={<Subscribe />} />
+          <Route path="/mis-pedidos" element={<MisPedidosRedirect />} />
 
           {/* Tienda pública: sin sesión, es lo que abre el cliente del QR */}
           <Route
@@ -59,6 +81,21 @@ export default function App() {
             <Route index element={<StoreIndex />} />
             <Route path="p/:productSlug" element={<ProductDetail />} />
             <Route path="pedido/:code" element={<OrderTracking />} />
+          </Route>
+
+          {/* App del cliente: fuera del diseño de la tienda, con su propia navegación */}
+          <Route
+            path="/t/:slug/cuenta"
+            element={
+              <StoreProvider>
+                <ClienteLayout />
+              </StoreProvider>
+            }
+          >
+            <Route index element={<PedidosCuenta />} />
+            <Route path="mensajes" element={<MensajesCuenta />} />
+            <Route path="perfil" element={<PerfilCuenta />} />
+            <Route path="pedido/:storeSlug/:code" element={<DetallePedidoCuenta />} />
           </Route>
 
           {/* Superadmin */}
@@ -116,6 +153,7 @@ export default function App() {
             <Route path="products" element={<ProductsPage />} />
             <Route path="categories" element={<CategoriesPage />} />
             <Route path="attributes" element={<ProductAttributesPage />} />
+            <Route path="tags" element={<TagsPage />} />
           </Route>
 
           {/* Páginas varias */}

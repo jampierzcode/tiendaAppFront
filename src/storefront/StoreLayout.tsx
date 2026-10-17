@@ -131,7 +131,7 @@ export default function StoreLayout() {
             <input
               value={texto}
               onChange={(e) => setTexto(e.target.value)}
-              placeholder="Busca por nombre, código o vehículo…"
+              placeholder="Busca por nombre, código o etiqueta…"
               aria-label="Buscar en la tienda"
               className="w-full rounded-lg border-0 bg-white py-2.5 pl-4 pr-12 text-sm text-neutral-900 outline-none ring-2 ring-transparent focus:ring-[var(--tienda-secundario,#F59E0B)]"
             />
@@ -149,6 +149,12 @@ export default function StoreLayout() {
           </form>
 
           <div className="ml-auto flex items-center gap-1 md:ml-0">
+            <Link to={`/t/${slug}/cuenta`} className="rounded-full p-2 hover:bg-white/10" aria-label="Mi cuenta" title="Mi cuenta">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <circle cx="12" cy="8" r="4" />
+                <path d="M4 21a8 8 0 0 1 16 0" />
+              </svg>
+            </Link>
             <button
               onClick={() => setCarritoAbierto(true)}
               className="relative rounded-full p-2 hover:bg-white/10"
@@ -179,7 +185,7 @@ export default function StoreLayout() {
             <input
               value={texto}
               onChange={(e) => setTexto(e.target.value)}
-              placeholder="Busca por nombre, código o vehículo…"
+              placeholder="Busca por nombre, código o etiqueta…"
               aria-label="Buscar en la tienda"
               className="w-full rounded-lg bg-white py-2.5 pl-4 pr-12 text-sm text-neutral-900 outline-none"
             />

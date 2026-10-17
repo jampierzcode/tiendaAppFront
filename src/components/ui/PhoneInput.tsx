@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Input, Select } from "antd";
 
 /** Países donde se vende hoy. `len` = dígitos del número nacional. */
-const PAISES = [
+export const PAISES = [
   { iso: "PE", nombre: "Perú", dial: "51", len: 9, tz: ["America/Lima"] },
   { iso: "MX", nombre: "México", dial: "52", len: 10, tz: ["America/Mexico_City", "America/Monterrey", "America/Cancun", "America/Tijuana"] },
   { iso: "CL", nombre: "Chile", dial: "56", len: 9, tz: ["America/Santiago"] },
@@ -57,24 +57,36 @@ interface Props {
   value?: string | null;
   onChange?: (v: string) => void;
   disabled?: boolean;
+  /**
+   * País fijo (ISO): el número solo acepta ese país y no se ofrece selector.
+   * Es lo que usa «Mi tienda», donde el país ya está elegido.
+   */
+  pais?: string;
 }
 
 /**
  * Teléfono con selector de país: la persona elige (o ya viene puesto por su
  * región) y escribe solo su número. Entrega el número completo, sin signos.
  */
-export default function PhoneInput({ value, onChange, disabled }: Props) {
+export default function PhoneInput({ value, onChange, disabled, pais: paisFijo }: Props) {
   const inicial = useMemo(() => paisDelNavegador(), []);
-  const [iso, setIso] = useState<string>(separar(value)?.pais.iso ?? inicial.iso);
+  const [isoLibre, setIso] = useState<string>(separar(value)?.pais.iso ?? inicial.iso);
+  const iso = paisFijo ?? isoLibre;
   const pais = PAISES.find((p) => p.iso === iso) ?? inicial;
 
   // Si el valor llega de fuera (se carga la configuración), el país lo sigue.
   useEffect(() => {
     const s = separar(value);
-    if (s) setIso(s.pais.iso);
-  }, [value]);
+    if (s && !paisFijo) setIso(s.pais.iso);
+  }, [value, paisFijo]);
 
-  const nacional = separar(value)?.nacional ?? (value ? String(value).replace(/\D/g, "") : "");
+  // Con país fijo se quita solo el prefijo de ese país (no se adivina otro).
+  const digitos = String(value ?? "").replace(/\D/g, "");
+  const nacional = paisFijo
+    ? digitos.startsWith(pais.dial)
+      ? digitos.slice(pais.dial.length)
+      : digitos
+    : (separar(value)?.nacional ?? digitos);
 
   const emitir = (p: Pais, n: string) => onChange?.(n ? `${p.dial}${n}` : "");
 
@@ -91,6 +103,11 @@ export default function PhoneInput({ value, onChange, disabled }: Props) {
         emitir(pais, n);
       }}
       addonBefore={
+        paisFijo ? (
+          <span style={{ padding: "0 4px" }}>
+            {bandera(pais.iso)} +{pais.dial}
+          </span>
+        ) : (
         <Select
           value={iso}
           disabled={disabled}
@@ -117,6 +134,7 @@ export default function PhoneInput({ value, onChange, disabled }: Props) {
             );
           }}
         />
+        )
       }
     />
   );

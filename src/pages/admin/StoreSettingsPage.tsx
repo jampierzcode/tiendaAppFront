@@ -13,12 +13,14 @@ import {
   message,
 } from "antd";
 import QRCode from "qrcode";
+import QrPosterModal from "../../components/admin/QrPosterModal";
 import { motion } from "motion/react";
-import { TbBrandWhatsapp, TbDownload, TbExternalLink, TbPalette } from "react-icons/tb";
+import { TbBrandWhatsapp, TbDownload, TbExternalLink, TbPalette, TbPrinter } from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
 import GalleryModal from "../../components/admin/GalleryModal";
 import PhoneInput from "../../components/ui/PhoneInput";
+import { errorWhatsapp, impuestoDe, opcionesPais } from "../../utilities/paises";
 import { useSearchParams } from "react-router-dom";
 
 interface Config {
@@ -30,6 +32,7 @@ interface Config {
   description: string | null;
   logoUrl: string | null;
   whatsappPhone: string | null;
+  country?: string;
   whatsappMessageTemplate: string | null;
   phone: string | null;
   email: string | null;
@@ -75,9 +78,12 @@ export default function StoreSettingsPage() {
   const [galeria, setGaleria] = useState<null | "banner" | "logo">(null);
   const [banner, setBanner] = useState<{ id: number; url: string } | null>(null);
   const logoUrl = Form.useWatch("logo_url", form);
+  const pais = (Form.useWatch("country", form) as string | undefined) ?? config?.country ?? "PE";
+  const impuesto = impuestoDe(pais);
 
   const urlTienda = config ? `${window.location.origin}/t/${config.slug}` : "";
   const urlQr = urlTienda;
+  const [cartelAbierto, setCartelAbierto] = useState(false);
 
   useEffect(() => {
     apiTienda
@@ -89,6 +95,7 @@ export default function StoreSettingsPage() {
         form.setFieldsValue({
           ...d,
           whatsapp_phone: d.whatsappPhone,
+          country: d.country ?? "PE",
           whatsapp_message_template: d.whatsappMessageTemplate,
           primary_color: d.primaryColor,
           secondary_color: d.secondaryColor,
@@ -196,6 +203,14 @@ export default function StoreSettingsPage() {
                     </Form.Item>
 
                     <Form.Item
+                      name="country"
+                      label="País"
+                      extra={`${impuesto.nombre} ${impuesto.tasa}%: se aplica solo a todos tus productos. También define el formato de tu WhatsApp.`}
+                    >
+                      <Select options={opcionesPais} />
+                    </Form.Item>
+
+                    <Form.Item
                       name="slug"
                       label="Dirección pública"
                       extra={`Tu tienda vivirá en ${window.location.origin}/t/…`}
@@ -284,15 +299,17 @@ export default function StoreSettingsPage() {
                     <Form.Item
                       name="whatsapp_phone"
                       label="Número que recibe los pedidos"
-                      extra="Elige tu país y escribe solo tu número. Aquí llegan los pedidos de tu tienda."
+                      extra="Solo se aceptan números del país de tu tienda. Aquí llegan los pedidos."
                       rules={[
                         {
-                          pattern: /^\d{9,15}$/,
-                          message: "Solo dígitos, incluyendo el código de país",
+                          validator: (_, v) => {
+                            const error = errorWhatsapp(pais, v);
+                            return error ? Promise.reject(new Error(error)) : Promise.resolve();
+                          },
                         },
                       ]}
                     >
-                      <PhoneInput />
+                      <PhoneInput pais={pais} />
                     </Form.Item>
 
                     <Form.Item
@@ -363,7 +380,7 @@ export default function StoreSettingsPage() {
                           )}
                         </div>
                         <Button onClick={() => setGaleria("banner")}>
-                          {banner ? "Cambiar" : "Elegir de la galería"}
+                          {banner ? "Cambiar imagen" : "Subir imagen"}
                         </Button>
                       </div>
                     </Form.Item>
@@ -394,7 +411,7 @@ export default function StoreSettingsPage() {
                         </div>
                         <Space>
                           <Button onClick={() => setGaleria("logo")}>
-                            {logoUrl ? "Cambiar" : "Elegir de la galería"}
+                            {logoUrl ? "Cambiar imagen" : "Subir imagen"}
                           </Button>
                           {logoUrl && (
                             <Button
@@ -488,6 +505,15 @@ export default function StoreSettingsPage() {
           >
             Descargar QR
           </Button>
+          <Button
+            icon={<TbPrinter />}
+            onClick={() => setCartelAbierto(true)}
+            block
+            className="mt-2"
+            disabled={!config}
+          >
+            Descargar para mostrador
+          </Button>
 
           <p className="mt-3 text-[12px] leading-relaxed text-muted">
             Imprímelo y pégalo en tu tienda, o súbelo a tu estado de WhatsApp e
@@ -503,6 +529,20 @@ export default function StoreSettingsPage() {
           )}
 
         </motion.aside>
+
+        {config && (
+          <QrPosterModal
+            abierto={cartelAbierto}
+            onCerrar={() => setCartelAbierto(false)}
+            url={urlQr}
+            slug={config.slug}
+            nombre={config.name ?? config.slug}
+            logoUrl={config.logoUrl}
+            portadaUrl={banner?.url ?? config.bannerImage?.url ?? null}
+            colorPrincipal={config.primaryColor}
+            colorSecundario={config.secondaryColor}
+          />
+        )}
       </div>
 
       <GalleryModal

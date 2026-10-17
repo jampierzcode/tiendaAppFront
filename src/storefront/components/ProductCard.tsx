@@ -58,13 +58,28 @@ export default function ProductCard({ producto, slugTienda, indice }: Props) {
             </div>
           )}
 
-          {producto.discount > 0 && (
-            <span
-              className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white"
-              style={{ backgroundColor: "var(--tienda-secundario, #F59E0B)" }}
-            >
-              −{producto.discount}%
-            </span>
+          {(producto.promos?.length ?? 0) > 0 ? (
+            <div className="absolute left-2 top-2 flex flex-col items-start gap-1">
+              {producto.promos!.slice(0, 2).map((p) => (
+                <span
+                  key={p.id}
+                  title={p.name}
+                  className="rounded-full px-2 py-0.5 text-[11px] font-semibold text-white"
+                  style={{ backgroundColor: "var(--tienda-secundario, #F59E0B)" }}
+                >
+                  {p.label}
+                </span>
+              ))}
+            </div>
+          ) : (
+            producto.discount > 0 && (
+              <span
+                className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white"
+                style={{ backgroundColor: "var(--tienda-secundario, #F59E0B)" }}
+              >
+                −{producto.discount}%
+              </span>
+            )
           )}
 
           {agotado && (
@@ -128,6 +143,7 @@ export default function ProductCard({ producto, slugTienda, indice }: Props) {
             ) : (
               <>
                 <span className="text-lg font-bold text-neutral-900">
+                  {producto.desde && <span className="mr-1 text-xs font-medium text-neutral-500">Desde</span>}
                   {producto.currencySymbol} {producto.price.toFixed(2)}
                 </span>
                 {producto.originalPrice && (

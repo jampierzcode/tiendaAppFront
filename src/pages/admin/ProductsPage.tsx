@@ -23,7 +23,8 @@ import {
 } from "react-icons/tb";
 import { useBusiness, useEsRestaurante } from "../../context/BusinessContext";
 import RecipeModal from "../../components/admin/RecipeModal";
-import { TbChefHat } from "react-icons/tb";
+import { TbChefHat, TbCopy, TbShare3 } from "react-icons/tb";
+import { compartirEnlace, copiarEnlace, puedeCompartir, urlProducto } from "../../utilities/compartir";
 import ProductFormModal from "../../components/admin/ProductFormModal";
 import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
@@ -48,6 +49,7 @@ interface Variation {
 interface Product {
   id: number;
   name: string;
+  slug?: string;
   sku?: string | null;
   categoryLinks?: {
     categoryId: number;
@@ -95,6 +97,15 @@ export default function ProductsPage(): React.ReactElement {
 
   // Recetas (solo restaurante): costo por plato para mostrar margen en la lista.
   const [recetas, setRecetas] = useState<Record<number, { cost: number; linesCount: number }>>({});
+  const [promos, setPromos] = useState<any[]>([]);
+
+  // Promociones vigentes: se marcan en cada producto para saber de un vistazo cuáles tienen oferta.
+  useEffect(() => {
+    apiTienda
+      .get("/discounts")
+      .then((r) => setPromos((r.data.data ?? []).filter((p: any) => p.isActive && p.vigente)))
+      .catch(() => undefined);
+  }, []);
   const [recetaDe, setRecetaDe] = useState<Product | null>(null);
 
   const cargarRecetas = async () => {
@@ -342,6 +353,35 @@ export default function ProductsPage(): React.ReactElement {
             },
           ]),
       {
+        title: "Promociones",
+        key: "promos",
+        render: (_: unknown, row: Product) => {
+          const cats = (row.categoryLinks ?? []).map((l: any) => l.categoryId ?? l.category?.id);
+          const variacionIds = ((row as any).variations ?? []).map((v: any) => v.id);
+          const aplican = promos.filter(
+            (p) =>
+              p.scope === "all" ||
+              (p.targets ?? []).some(
+                (t: any) =>
+                  (t.kind === "product" && t.id === row.id) ||
+                  (t.kind === "category" && cats.includes(t.id)) ||
+                  (t.kind === "variation" && variacionIds.includes(t.id))
+              )
+          );
+          return aplican.length ? (
+            <Space size={[4, 4]} wrap>
+              {aplican.map((p) => (
+                <Tag key={p.id} color={p.code ? "gold" : "magenta"} title={p.name}>
+                  {p.code ? `🎟 ${p.code}` : p.label}
+                </Tag>
+              ))}
+            </Space>
+          ) : (
+            <span style={{ color: "#aaa" }}>—</span>
+          );
+        },
+      },
+      {
         title: "Estado",
         dataIndex: "status",
         key: "status",
@@ -380,6 +420,27 @@ export default function ProductsPage(): React.ReactElement {
                   label: "Variaciones",
                   onClick: () => handleVariations(row),
                 },
+            // Copiar y compartir solo para tiendas: la carta de un restaurante se comparte completa.
+            ...(!esRestaurante && business?.slug && row.slug
+              ? [
+                  {
+                    key: "copy",
+                    icon: <TbCopy size={16} />,
+                    label: "Copiar enlace",
+                    onClick: () => copiarEnlace(urlProducto(business!.slug!, row.slug!)),
+                  },
+                  ...(puedeCompartir()
+                    ? [
+                        {
+                          key: "share",
+                          icon: <TbShare3 size={16} />,
+                          label: "Compartir",
+                          onClick: () => compartirEnlace(urlProducto(business!.slug!, row.slug!), row.name),
+                        },
+                      ]
+                    : []),
+                ]
+              : []),
             {
               key: "status",
               icon:
@@ -413,7 +474,7 @@ export default function ProductsPage(): React.ReactElement {
         },
       },
     ],
-    [data, esRestaurante, recetas]
+    [data, esRestaurante, recetas, promos, business?.slug]
   );
 
   // Restaurante: la carta se arma por categorías. Cada categoría es una
@@ -639,6 +700,11 @@ export default function ProductsPage(): React.ReactElement {
             }
           }}
           editData={editData ?? undefined}
+          onEditarVariaciones={(p) => {
+            setOpenModal(false);
+            setSelectedProduct(p);
+            setOpenVariationsModal(true);
+          }}
         />
       )}
 

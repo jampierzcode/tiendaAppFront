@@ -10,6 +10,7 @@ import {
 import { BiCategoryAlt, BiPackage, BiSliderAlt } from "react-icons/bi";
 import {
   TbBox,
+  TbTag,
   TbCashRegister,
   TbBrandWhatsapp,
   TbChartHistogram,
@@ -125,6 +126,7 @@ export default function Sidebar({
           icono: <BiPackage />,
         },
         { titulo: "Categorías", url: `/b/${uuid_business}/categories`, icono: <BiCategoryAlt /> },
+        ...(esRestaurante ? [] : [{ titulo: "Etiquetas", url: `/b/${uuid_business}/tags`, icono: <TbTag /> }]),
         ...(esRestaurante
           ? [
               {
@@ -143,7 +145,7 @@ export default function Sidebar({
               { titulo: "Inventario", url: `/b/${uuid_business}/inventory`, icono: <TbBox /> },
             ]),
         { titulo: "Galería", url: `/b/${uuid_business}/gallery`, icono: <TbPhoto /> },
-        { titulo: "Descuentos", url: `/b/${uuid_business}/discounts`, icono: <MdOutlineDiscount /> },
+        { titulo: "Promociones", url: `/b/${uuid_business}/discounts`, icono: <MdOutlineDiscount /> },
       ],
     },
     ...(esRestaurante

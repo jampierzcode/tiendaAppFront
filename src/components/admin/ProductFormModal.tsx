@@ -15,12 +15,14 @@ import {
 } from "antd";
 
 import GalleryModal from "./GalleryModal";
-import SelectorFoto from "../ui/SelectorFoto";
-import { useGallery } from "../../hooks/useGallery";
-import { useRecorteImagen } from "../../hooks/useRecorteImagen";
+import SkuField from "./SkuField";
+import MovementModal from "./MovementModal";
+import CostoReferencia from "./CostoReferencia";
+import VariationGenerator, { claveCombo, type ComboNueva } from "./VariationGenerator";
 import { PlusOutlined } from "@ant-design/icons";
 import { apiTienda } from "../../api/apiTienda";
-import { useEsRestaurante } from "../../context/BusinessContext";
+import { useBusiness, useEsRestaurante } from "../../context/BusinessContext";
+import { impuestoDe } from "../../utilities/paises";
 
 const { Text } = Typography;
 
@@ -34,6 +36,8 @@ interface ProductFormModalProps {
    */
   onSuccess: (abrirVariaciones?: any, creado?: any) => void;
   editData?: any; // producto si se está editando
+  /** Abre el editor de las variaciones que ya existen (precio, SKU, foto…). */
+  onEditarVariaciones?: (producto: any) => void;
 }
 
 type CategoryNode = {
@@ -77,27 +81,14 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
   onClose,
   onSuccess,
   editData,
+  onEditarVariaciones,
 }) => {
   const [form] = Form.useForm();
   const esRestaurante = useEsRestaurante();
+  const { business } = useBusiness();
+  const impuesto = impuestoDe((business as any)?.country);
   const [loading, setLoading] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
-  const { uploading, uploadImages } = useGallery();
-  const { pedirRecorte, modal: modalRecorte } = useRecorteImagen();
-
-  /** Foto subida o tomada desde aquí: se recorta, se sube a la galería y queda elegida. */
-  const subirDirecto = async ([original]: File[]) => {
-    const file = await pedirRecorte(original);
-    if (!file) return;
-    try {
-      const r = await uploadImages([file]);
-      const img = r.data?.[0];
-      if (img) setSelectedImage({ id: img.id, url: img.url } as any);
-      if (r.rechazadas?.length) message.warning(r.rechazadas.join(" · "));
-    } catch (e: any) {
-      message.error(e?.response?.data?.message ?? "No se pudo subir la imagen");
-    }
-  };
   const [selectedImage, setSelectedImage] = useState<{
     id: number;
     url: string;
@@ -107,18 +98,34 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const [tags, setTags] = useState<TagItem[]>([]);
   const [hasVariations, setHasVariations] = useState(false);
 
-  // Ajuste de stock del producto simple (se registra en el kardex).
-  const [stockOpen, setStockOpen] = useState(false);
+  // Movimiento de stock del producto simple (queda en el kardex).
+  const [movOpen, setMovOpen] = useState(false);
   const [stockActual, setStockActual] = useState(0);
-  const [stockNuevo, setStockNuevo] = useState<number | null>(null);
-  const [stockNota, setStockNota] = useState("");
-  const [stockLoading, setStockLoading] = useState(false);
+  const [combos, setCombos] = useState<ComboNueva[]>([]);
+  const [decisionPrecio, setDecisionPrecio] = useState<null | {
+    valores: any;
+    datos: {
+      precioAnterior: number;
+      precioNuevo: number;
+      total: number;
+      variaciones: { id: number; label: string; precio: number }[];
+    };
+  }>(null);
+  const nombreWatch = Form.useWatch("name", form) as string | undefined;
+  const skuWatch = Form.useWatch("sku", form) as string | undefined;
+  const costoWatch = Form.useWatch("cost", form) as number | undefined;
+  const precioWatch = Form.useWatch("price", form) as number | undefined;
 
   const variacionPorDefecto = useMemo(
     () => editData?.variations?.find((v: any) => v.isDefault),
     [editData]
   );
   const yaTieneVariaciones = productoTieneVariaciones(editData);
+  // Las variaciones reales (la oculta del producto simple no cuenta).
+  const variacionesReales = (editData?.variations ?? []).filter((v: any) => !v.isDefault);
+  const clavesExistentes = variacionesReales.map((v: any) =>
+    claveCombo((v.attributes ?? []).map((a: any) => a.attributeValueId ?? a.value?.id).filter(Boolean))
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -207,7 +214,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
     return [...new Set(ids)];
   };
 
-  const handleSubmit = async (values: any) => {
+  const handleSubmit = async (values: any, priceMode?: "base_only" | "all") => {
     try {
       setLoading(true);
 
@@ -218,20 +225,36 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         name: values.name,
         description: values.description ?? null,
         price: values.price ?? 0,
+        // El costo real sale de las compras; esto solo guarda un estimado.
         cost: values.cost ?? null,
-        sku: values.sku?.trim() ? values.sku.trim() : null,
-        tax_rate: values.taxRate ?? 18,
+        // Vacío = que el servidor genere el SKU por defecto.
+        sku: values.sku?.trim() ? values.sku.trim() : undefined,
         low_stock_threshold: values.lowStockThreshold ?? 5,
         status: values.active ? "activo" : "inactivo",
         business_image_id: selectedImage?.id || null,
         category_links,
         tag_ids,
+        price_mode: priceMode,
       };
 
       // El stock inicial solo existe al crear. Después se ajusta con el botón
       // "Ajustar stock", que deja constancia en el kardex.
       // Un plato no tiene stock propio: lo que se agota son los insumos.
       if (!editData && !hasVariations && !esRestaurante) payload.stock = values.stock ?? 0;
+      // Atributos elegidos aquí: el producto nace ya con sus variaciones.
+      const nuevasVariaciones = combos.map((c) => ({
+        attributeValueIds: c.valueIds,
+        sku: c.sku?.trim() || undefined,
+        stock: c.stock,
+      }));
+      if (!editData && !esRestaurante && hasVariations) {
+        if (!nuevasVariaciones.length) {
+          message.warning("Elige al menos una talla, color u otro atributo, o apaga «¿Tiene variaciones?»");
+          setLoading(false);
+          return;
+        }
+        payload.variations = nuevasVariaciones;
+      }
       if (esRestaurante) {
         delete payload.tag_ids;
         delete payload.sku;
@@ -241,6 +264,9 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
       let saved: any = editData;
       if (editData) {
         await apiTienda.put(`/products/${editData.id}`, payload);
+        if (!esRestaurante && hasVariations && nuevasVariaciones.length) {
+          await apiTienda.post(`/products/${editData.id}/variations`, { variations: nuevasVariaciones });
+        }
         message.success("Producto actualizado correctamente");
       } else {
         const res = await apiTienda.post(`/products`, payload);
@@ -248,41 +274,21 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         message.success("Producto creado correctamente");
       }
 
-      // Encendió "Tiene variaciones" y aún no tiene ninguna: lo llevamos
-      // directo al editor para que las cree.
-      const abrir = !esRestaurante && hasVariations && !yaTieneVariaciones ? saved : undefined;
-      onSuccess(abrir, !editData && esRestaurante ? saved : undefined);
+      onSuccess(undefined, !editData && esRestaurante ? saved : undefined);
       onClose();
     } catch (error: any) {
+      // Cambió el precio base y hay variaciones con precio propio: el servidor
+      // no toca nada hasta que el vendedor decida qué hacer con ellas.
+      if (error?.response?.status === 409 && error?.response?.data?.code === "price_decision") {
+        setDecisionPrecio({ valores: values, datos: error.response.data.data });
+        return;
+      }
       console.error(error);
       message.error(
         error?.response?.data?.message ?? "Error al guardar el producto"
       );
     } finally {
       setLoading(false);
-    }
-  };
-
-  const guardarAjusteStock = async () => {
-    if (!variacionPorDefecto || stockNuevo == null) return;
-    try {
-      setStockLoading(true);
-      await apiTienda.post("/inventory/adjust", {
-        variationId: variacionPorDefecto.id,
-        newStock: stockNuevo,
-        note: stockNota.trim() || "Ajuste manual desde el producto",
-      });
-      setStockActual(stockNuevo);
-      setStockOpen(false);
-      setStockNota("");
-      message.success("Stock ajustado y registrado en el kardex");
-      onSuccess();
-    } catch (error: any) {
-      message.error(
-        error?.response?.data?.message ?? "No se pudo ajustar el stock"
-      );
-    } finally {
-      setStockLoading(false);
     }
   };
 
@@ -318,10 +324,10 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
                 />
               )}
               <div className="flex flex-wrap gap-2">
+                {/* Un solo botón: en la galería se sube, se toma una foto o se elige. */}
                 <Button icon={<PlusOutlined />} onClick={() => setGalleryOpen(true)}>
-                  {selectedImage ? "Cambiar" : "Galería"}
+                  {selectedImage ? "Cambiar imagen" : "Subir imagen"}
                 </Button>
-                <SelectorFoto onFiles={subirDirecto} loading={uploading} />
               </div>
             </Form.Item>
 
@@ -378,14 +384,14 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
           <Form.Item
             label="Etiquetas"
             name="tagIds"
-            extra="Marcas y vehículos (Toyota, Aktion…). Escribe una nueva y pulsa Enter para crearla."
+            extra="Para agrupar y filtrar en la tienda: Nuevo, Más vendido, Oferta, Temporada… Escribe una nueva y pulsa Enter para crearla."
           >
             <Select
               mode="tags"
               allowClear
               optionFilterProp="label"
               tokenSeparators={[","]}
-              placeholder="Marca, vehículo…"
+              placeholder="Nuevo, Oferta, Temporada…"
               options={tags.map((t) => ({ value: t.id, label: t.name }))}
             />
           </Form.Item>
@@ -430,7 +436,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
               rules={[{ required: true, message: "Ingrese el precio" }]}
               extra={
                 hasVariations
-                  ? "Se copia a las variaciones nuevas; cada una puede tener el suyo."
+                  ? "Es el precio de todas las variaciones; cada una puede cambiarlo si lo necesita."
                   : "Con precio 0 la tienda muestra «Consultar precio»."
               }
             >
@@ -443,16 +449,20 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
               name="sku"
               extra={
                 hasVariations
-                  ? "Prefijo con el que se sugieren los SKU de las variaciones."
-                  : undefined
+                  ? "Código único del producto; el de cada variación se arma a partir de él."
+                  : "Código único. Se propone solo; edítalo si ya usas tus propios códigos."
               }
             >
-              <Input placeholder="Código interno" />
+              <SkuField auto={!editData} params={{ name: nombreWatch }} ready={!!nombreWatch?.trim()} />
             </Form.Item>
             )}
 
             {!esRestaurante && !hasVariations && !editData && (
-              <Form.Item label="Stock inicial" name="stock">
+              <Form.Item
+                label="Stock inicial"
+                name="stock"
+                extra="Las unidades que ya tienes hoy. Para mercadería nueva que le compras a un proveedor, usa Compras: así queda también el costo."
+              >
                 <InputNumber min={0} style={{ width: "100%" }} />
               </Form.Item>
             )}
@@ -466,14 +476,8 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   >
                     {stockActual}
                   </Tag>
-                  <Button
-                    onClick={() => {
-                      setStockNuevo(stockActual);
-                      setStockOpen(true);
-                    }}
-                    disabled={!variacionPorDefecto}
-                  >
-                    Ajustar stock
+                  <Button onClick={() => setMovOpen(true)} disabled={!variacionPorDefecto}>
+                    Registrar movimiento
                   </Button>
                 </div>
               </Form.Item>
@@ -482,41 +486,35 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
 
           {!esRestaurante && hasVariations && (
             <div className="rounded border p-3 mb-4 bg-gray-50">
-              {yaTieneVariaciones ? (
+              {variacionesReales.length > 0 && (
                 <>
-                  <div className="font-medium mb-2">
-                    Variaciones ({editData.variations.length})
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="font-medium">Variaciones ({variacionesReales.length})</span>
+                    {onEditarVariaciones && (
+                      <Button size="small" onClick={() => onEditarVariaciones(editData)}>
+                        Editar variaciones
+                      </Button>
+                    )}
                   </div>
-                  <div className="space-y-1">
-                    {editData.variations.map((v: any) => (
-                      <div
-                        key={v.id}
-                        className="flex justify-between text-sm gap-3"
-                      >
+                  <div className="mb-3 space-y-1">
+                    {variacionesReales.map((v: any) => (
+                      <div key={v.id} className="flex justify-between gap-3 text-sm">
                         <span>
-                          {etiquetaVariacion(v)}{" "}
-                          <Text type="secondary">{v.sku}</Text>
+                          {etiquetaVariacion(v)} <Text type="secondary">{v.sku}</Text>
                         </span>
-                        <span>
-                          S/ {Number(v.price).toFixed(2)} ·{" "}
-                          <Tag color={v.stock > 0 ? "green" : "red"}>
-                            {v.stock}
-                          </Tag>
-                        </span>
+                        <Tag color={v.stock > 0 ? "green" : "red"}>{v.stock}</Tag>
                       </div>
                     ))}
                   </div>
-                  <Text type="secondary" className="block mt-2">
-                    Para agregar, editar o ajustar el stock de cada una, usa
-                    «Variaciones» en la lista de productos.
-                  </Text>
+                  <div className="mb-1 font-medium">Agregar más</div>
                 </>
-              ) : (
-                <Text type="secondary">
-                  Al guardar se abrirá el editor de variaciones para que crees
-                  cada marca, color o medida con su SKU, precio y stock.
-                </Text>
               )}
+              <VariationGenerator
+                existentes={clavesExistentes}
+                skuProducto={skuWatch}
+                conStock
+                onChange={setCombos}
+              />
             </div>
           )}
 
@@ -526,25 +524,34 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
             items={[
               {
                 key: "mas",
-                label: "Más opciones (costo, IGV, alerta de stock)",
+                label: "Más opciones (IGV, alerta de stock, costo)",
                 children: (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4">
-                    <Form.Item label="Costo" name="cost">
-                      <InputNumber
-                        min={0}
-                        style={{ width: "100%" }}
-                        addonBefore="S/"
-                      />
+                  <div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+                      <Form.Item
+                        label={`${impuesto.nombre} %`}
+                        extra="Lo define el país de tu tienda (Mi tienda › General)."
+                      >
+                        <InputNumber disabled style={{ width: "100%" }} value={impuesto.tasa} />
+                      </Form.Item>
+                      <Form.Item
+                        label="Avisar con stock bajo de"
+                        name="lowStockThreshold"
+                        extra={hasVariations ? "Es el valor de partida; cada variación puede tener el suyo." : undefined}
+                      >
+                        <InputNumber min={0} style={{ width: "100%" }} />
+                      </Form.Item>
+                    </div>
+                    <Form.Item name="cost" hidden>
+                      <InputNumber />
                     </Form.Item>
-                    <Form.Item label="IGV %" name="taxRate">
-                      <InputNumber min={0} max={100} style={{ width: "100%" }} />
-                    </Form.Item>
-                    <Form.Item
-                      label="Avisar con stock bajo de"
-                      name="lowStockThreshold"
-                    >
-                      <InputNumber min={0} style={{ width: "100%" }} />
-                    </Form.Item>
+                    <CostoReferencia
+                      productId={editData?.id}
+                      costoActual={editData?.cost != null ? Number(editData.cost) : null}
+                      precio={precioWatch ?? null}
+                      estimado={costoWatch ?? null}
+                      onEstimado={(v) => form.setFieldsValue({ cost: v ?? undefined })}
+                    />
                   </div>
                 ),
               },
@@ -555,38 +562,80 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
       </Modal>
 
       <Modal
-        title="Ajustar stock"
-        open={stockOpen}
-        onCancel={() => setStockOpen(false)}
-        onOk={guardarAjusteStock}
-        okText="Guardar ajuste"
-        confirmLoading={stockLoading}
-        okButtonProps={{ disabled: stockNuevo == null }}
+        open={!!decisionPrecio}
+        title="Cambiaste el precio base"
+        onCancel={() => setDecisionPrecio(null)}
+        footer={[
+          <Button key="c" onClick={() => setDecisionPrecio(null)}>
+            Cancelar
+          </Button>,
+          <Button
+            key="b"
+            onClick={() => {
+              const v = decisionPrecio!.valores;
+              setDecisionPrecio(null);
+              handleSubmit(v, "base_only");
+            }}
+          >
+            Solo las que usan el precio base
+          </Button>,
+          <Button
+            key="a"
+            type="primary"
+            onClick={() => {
+              const v = decisionPrecio!.valores;
+              setDecisionPrecio(null);
+              handleSubmit(v, "all");
+            }}
+          >
+            Cambiar todas
+          </Button>,
+        ]}
       >
-        <p className="mb-3">
-          Stock actual: <b>{stockActual}</b>. Escribe la cantidad que hay
-          realmente; la diferencia queda registrada en el kardex.
-        </p>
-        <Form layout="vertical">
-          <Form.Item label="Stock real">
-            <InputNumber
-              min={0}
-              style={{ width: "100%" }}
-              value={stockNuevo}
-              onChange={(v) => setStockNuevo(v)}
-            />
-          </Form.Item>
-          <Form.Item label="Motivo (opcional)">
-            <Input
-              value={stockNota}
-              onChange={(e) => setStockNota(e.target.value)}
-              placeholder="Conteo físico, compra, merma…"
-            />
-          </Form.Item>
-        </Form>
+        {decisionPrecio && (
+          <div className="space-y-3 text-[13px]">
+            <p>
+              El precio pasa de <b>S/ {decisionPrecio.datos.precioAnterior.toFixed(2)}</b> a{" "}
+              <b>S/ {decisionPrecio.datos.precioNuevo.toFixed(2)}</b>. Estas{" "}
+              {decisionPrecio.datos.variaciones.length} de {decisionPrecio.datos.total} variaciones tienen un precio
+              propio:
+            </p>
+            <ul className="space-y-1 rounded border border-line-soft p-2">
+              {decisionPrecio.datos.variaciones.map((v) => (
+                <li key={v.id} className="flex justify-between">
+                  <span>{v.label}</span>
+                  <span className="font-semibold">S/ {v.precio.toFixed(2)}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-muted">
+              «Solo las que usan el precio base» deja estas como están. «Cambiar todas» las pisa con el precio nuevo.
+              Tus clientes ven en la tienda el precio más bajo con «Desde».
+            </p>
+          </div>
+        )}
       </Modal>
 
-      {modalRecorte}
+      <MovementModal
+        open={movOpen}
+        item={
+          variacionPorDefecto
+            ? { id: variacionPorDefecto.id, nombre: editData?.name ?? "Producto", stock: stockActual }
+            : null
+        }
+        onClose={() => setMovOpen(false)}
+        onDone={() => {
+          apiTienda
+            .get(`/products/${editData.id}`)
+            .then((r) => {
+              const v = (r.data.data.variations ?? []).find((x: any) => x.isDefault);
+              setStockActual(Number(v?.stock ?? 0));
+            })
+            .catch(() => undefined);
+          onSuccess();
+        }}
+      />
+
       {/* Modal de Galería */}
       <GalleryModal
         open={galleryOpen}

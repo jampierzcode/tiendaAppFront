@@ -1,4 +1,5 @@
 import axios from "axios";
+import { cabeceraCliente } from "./cliente";
 
 /**
  * Cliente de la tienda pública.
@@ -14,6 +15,7 @@ export const storeApi = axios.create({
 
 export interface Tienda {
   slug: string;
+  country?: string;
   businessType: "retail" | "restaurant";
   name: string;
   description: string | null;
@@ -38,6 +40,13 @@ export interface Tienda {
   tiktok: string | null;
 }
 
+export interface PromoEtiqueta {
+  id: number;
+  name: string;
+  /** «−20%», «S/ 5.00 menos», «2x1»… */
+  label: string;
+}
+
 export interface ProductoResumen {
   id: number;
   name: string;
@@ -49,6 +58,9 @@ export interface ProductoResumen {
   price: number;
   originalPrice: number | null;
   discount: number;
+  /** Hay variaciones con precios distintos: el precio mostrado es el más bajo. */
+  desde?: boolean;
+  promos?: PromoEtiqueta[];
   currencySymbol: string;
   stock: number;
   disponible: boolean;
@@ -158,6 +170,8 @@ export interface RespuestaPedido {
   shippingCost: number;
   currencySymbol: string;
   whatsappUrl: string | null;
+  /** Código de un solo uso para crear la cuenta y ver este pedido. */
+  claimToken?: string;
 }
 
 export const crearPedido = (
@@ -165,15 +179,17 @@ export const crearPedido = (
   datos: {
     customerName: string;
     customerPhone: string;
+    customerEmail?: string;
     deliveryMethod: "envio" | "recojo" | "mesa";
     deliveryAddress?: string;
     deliveryCity?: string;
     note?: string;
+    couponCode?: string;
     items: { variationId: number; quantity: number }[];
   }
 ) =>
   storeApi
-    .post<{ data: RespuestaPedido }>(`${base(slug)}/orders`, datos)
+    .post<{ data: RespuestaPedido }>(`${base(slug)}/orders`, datos, { headers: cabeceraCliente() })
     .then((r) => r.data.data);
 
 export const marcarPedidoEnviado = (slug: string, code: string) =>
@@ -205,6 +221,7 @@ export interface PlatoMenu {
   imageUrl: string | null;
   price: number;
   originalPrice: number | null;
+  promos?: PromoEtiqueta[];
   categoryIds: number[];
   subcategoryIds: number[];
   tags: { name: string; color: string | null }[];
@@ -230,10 +247,12 @@ export const crearPedidoMenu = (
   datos: {
     customerName: string;
     customerPhone: string;
+    customerEmail?: string;
     deliveryMethod: "envio" | "recojo" | "mesa";
     deliveryAddress?: string;
     tableLabel?: string;
     note?: string;
+    couponCode?: string;
     items: {
       productId: number;
       quantity: number;
@@ -243,7 +262,7 @@ export const crearPedidoMenu = (
   }
 ) =>
   storeApi
-    .post<{ data: RespuestaPedido }>(`${base(slug)}/orders`, datos)
+    .post<{ data: RespuestaPedido }>(`${base(slug)}/orders`, datos, { headers: cabeceraCliente() })
     .then((r) => r.data.data);
 
 export interface SeguimientoPedido {
@@ -257,10 +276,53 @@ export interface SeguimientoPedido {
   paymentInstructions: string | null;
   currencySymbol: string;
   createdAt: string;
-  items: { name: string; quantity: number; lineTotal: number; modifiers: string[]; note: string | null }[];
+  items: {
+    name: string;
+    quantity: number;
+    lineTotal: number;
+    modifiers: string[];
+    note: string | null;
+    imageUrl?: string | null;
+    variation?: string | null;
+    unitPrice?: number;
+  }[];
 }
 
 export const obtenerSeguimiento = (slug: string, code: string) =>
   storeApi
     .get<{ data: SeguimientoPedido }>(`${base(slug)}/orders/${code}`)
+    .then((r) => r.data.data);
+
+// --- Promociones y cupones ---
+
+export interface PromoPublica extends PromoEtiqueta {
+  kind: "percent" | "fixed" | "bundle";
+  scope: "all" | "selection";
+  /** «Polo, Casaca y 2 más». */
+  alcance: string | null;
+  /** «viernes y sábado»; null si es todos los días. */
+  dias: string | null;
+  product: { name: string; slug: string } | null;
+  category: { name: string; slug: string } | null;
+  endDate: string | null;
+}
+
+export const obtenerPromociones = (slug: string) =>
+  storeApi.get<{ data: PromoPublica[] }>(`${base(slug)}/promotions`).then((r) => r.data.data);
+
+export interface Cotizacion {
+  /** A precio de lista, antes de promociones. */
+  subtotal: number;
+  descuento: number;
+  cupon: { codigo: string; valido: boolean; mensaje: string } | null;
+}
+
+/** Cuánto ahorra el carrito (promociones y cupón). Informativo: el pedido lo recalcula el servidor. */
+export const cotizarCarrito = (
+  slug: string,
+  items: { variationId?: number; productId?: number; quantity: number; extras?: number }[],
+  couponCode?: string
+) =>
+  storeApi
+    .post<{ data: Cotizacion }>(`${base(slug)}/quote`, { items, couponCode })
     .then((r) => r.data.data);

@@ -36,6 +36,8 @@ const GalleryModal: React.FC<GalleryModalProps> = ({ open, onClose, onSelect }) 
       } else {
         message.success(res.message);
       }
+      // La foto recién subida queda elegida: solo falta «Usar esta imagen».
+      if (res.data?.[0]?.id) setSelected(res.data[0].id);
     } catch (error: any) {
       message.error(
         error?.response?.data?.message ?? "No se pudo subir la imagen"

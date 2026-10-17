@@ -9,6 +9,7 @@ import {
 } from "./api";
 import FacetPanel, { type SeleccionFiltros } from "./components/FacetPanel";
 import ProductCard from "./components/ProductCard";
+import PromoStrip from "./components/PromoStrip";
 import { useStore } from "./StoreContext";
 
 const POR_PAGINA = 24;
@@ -220,6 +221,8 @@ export default function StoreHome() {
           </div>
         </section>
       )}
+
+      <PromoStrip />
 
       <div className="mx-auto max-w-7xl px-4 py-5">
         {/* Migas: dónde está parado y cómo volver un nivel */}

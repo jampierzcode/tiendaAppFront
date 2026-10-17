@@ -8,7 +8,8 @@ import {
   type ReactNode,
 } from "react";
 import { useParams } from "react-router-dom";
-import { obtenerTienda, type Tienda } from "./api";
+import { obtenerTienda, type Cotizacion, type Tienda } from "./api";
+import { useCotizacion } from "./useCotizacion";
 
 export interface LineaCarrito {
   variationId: number;
@@ -28,7 +29,14 @@ interface StoreContextType {
   error: string | null;
   carrito: LineaCarrito[];
   totalItems: number;
+  /** A precio de lista; las promociones se restan aparte en `descuento`. */
   subtotal: number;
+  descuento: number;
+  /** Código de cupón que el cliente escribió (aunque aún no sea válido). */
+  cupon: string;
+  cuponEstado: Cotizacion["cupon"];
+  aplicarCupon: (codigo: string) => void;
+  quitarCupon: () => void;
   envio: number;
   total: number;
   agregar: (linea: Omit<LineaCarrito, "quantity">, cantidad?: number) => void;
@@ -59,6 +67,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [carrito, setCarrito] = useState<LineaCarrito[]>(() => leerCarrito(slug));
+  const [cupon, setCupon] = useState("");
 
   useEffect(() => {
     let vigente = true;
@@ -101,6 +110,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     raiz.style.setProperty("--tienda-primario", tienda.primaryColor);
     raiz.style.setProperty("--tienda-secundario", tienda.secondaryColor);
     document.title = tienda.name;
+    // La pestaña lleva el logo de la tienda: el cliente la reconoce como «su» app.
+    if (tienda.logoUrl) {
+      let enlace = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
+      if (!enlace) {
+        enlace = document.createElement("link");
+        enlace.rel = "icon";
+        document.head.appendChild(enlace);
+      }
+      enlace.href = tienda.logoUrl;
+    }
+    try {
+      localStorage.setItem("cliente:ultima-tienda", tienda.slug);
+    } catch {
+      // sin almacenamiento
+    }
   }, [tienda]);
 
   const agregar = useCallback(
@@ -139,15 +163,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const vaciar = useCallback(() => setCarrito([]), []);
 
-  const { totalItems, subtotal, envio, total } = useMemo(() => {
+  // El servidor dice cuánto ahorra el carrito (promociones y cupón).
+  const cotizacion = useCotizacion(
+    slug,
+    carrito.map((l) => ({ variationId: l.variationId, quantity: l.quantity })),
+    cupon
+  );
+
+  const { totalItems, subtotal, descuento, envio, total } = useMemo(() => {
     const items = carrito.reduce((t, l) => t + l.quantity, 0);
-    const sub = carrito.reduce((t, l) => t + l.price * l.quantity, 0);
+    const local = carrito.reduce((t, l) => t + l.price * l.quantity, 0);
+    // Con cotización, el subtotal es a precio de lista y el descuento va aparte;
+    // sin ella, los precios del carrito ya traen las promociones por producto.
+    const sub = cotizacion ? cotizacion.subtotal : local;
+    const desc = cotizacion ? cotizacion.descuento : 0;
+    const neto = sub - desc;
 
     let costoEnvio = tienda?.shippingCost ?? 0;
     if (
       tienda?.freeShippingFrom !== null &&
       tienda?.freeShippingFrom !== undefined &&
-      sub >= tienda.freeShippingFrom
+      neto >= tienda.freeShippingFrom
     ) {
       costoEnvio = 0;
     }
@@ -156,10 +192,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return {
       totalItems: items,
       subtotal: sub,
+      descuento: desc,
       envio: costoEnvio,
-      total: sub + costoEnvio,
+      total: neto + costoEnvio,
     };
-  }, [carrito, tienda]);
+  }, [carrito, tienda, cotizacion]);
 
   const precio = useCallback(
     (valor: number) => `${tienda?.currencySymbol ?? "S/"} ${Number(valor).toFixed(2)}`,
@@ -176,6 +213,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         carrito,
         totalItems,
         subtotal,
+        descuento,
+        cupon,
+        cuponEstado: cotizacion?.cupon ?? null,
+        aplicarCupon: setCupon,
+        quitarCupon: () => setCupon(""),
         envio,
         total,
         agregar,

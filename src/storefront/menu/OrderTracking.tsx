@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { obtenerSeguimiento, type SeguimientoPedido } from "../api";
 import { useStore } from "../StoreContext";
+import InvitacionCuenta from "../components/InvitacionCuenta";
+import MensajesPedido from "../components/MensajesPedido";
+import { leerClaim } from "../cliente";
 
-const PASOS = [
+export const PASOS = [
   { estado: "pendiente", texto: "Recibido" },
   { estado: "confirmado", texto: "Confirmado" },
   { estado: "preparando", texto: "Preparando" },
@@ -12,7 +15,7 @@ const PASOS = [
 ];
 
 /** Estados que equivalen a un paso de la línea de tiempo. */
-const PASO_DE: Record<string, number> = {
+export const PASO_DE: Record<string, number> = {
   pendiente: 0,
   confirmado: 1,
   pagado: 1,
@@ -26,7 +29,9 @@ export default function OrderTracking() {
   const { slug, precio } = useStore();
   const { code = "" } = useParams();
   const location = useLocation();
-  const whatsappUrl = (location.state as { whatsappUrl?: string | null } | null)?.whatsappUrl;
+  const estado = location.state as { whatsappUrl?: string | null; claimToken?: string; nuevo?: boolean } | null;
+  const whatsappUrl = estado?.whatsappUrl;
+  const claimToken = estado?.claimToken ?? leerClaim(slug, code);
   const [pedido, setPedido] = useState<SeguimientoPedido | null>(null);
   const [noExiste, setNoExiste] = useState(false);
 
@@ -66,8 +71,13 @@ export default function OrderTracking() {
   const actual = PASO_DE[pedido.status] ?? 0;
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="mx-auto w-full max-w-3xl space-y-4 p-4">
       <section className="rounded-3xl bg-white p-5 shadow-sm">
+        {estado?.nuevo && (
+          <p className="mb-3 rounded-2xl bg-green-50 p-3 text-sm font-semibold text-green-700">
+            ✓ ¡Pedido registrado! Aquí puedes seguirlo cuando quieras.
+          </p>
+        )}
         <p className="text-xs font-bold uppercase tracking-wider text-neutral-400">Tu pedido</p>
         <h2 className="text-2xl font-black">{pedido.code}</h2>
         {pedido.tableLabel && (
@@ -149,11 +159,15 @@ export default function OrderTracking() {
         <h3 className="font-bold">Detalle</h3>
         <ul className="mt-3 divide-y divide-neutral-100">
           {pedido.items.map((it, i) => (
-            <li key={i} className="flex justify-between gap-3 py-2 text-sm">
-              <div>
+            <li key={i} className="flex items-center justify-between gap-3 py-2 text-sm">
+              {it.imageUrl && (
+                <img src={it.imageUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl bg-neutral-100 object-cover" />
+              )}
+              <div className="min-w-0 flex-1">
                 <p className="font-semibold">
                   {it.quantity} × {it.name}
                 </p>
+                {it.variation && <p className="text-xs text-neutral-500">{it.variation}</p>}
                 {it.modifiers.length > 0 && (
                   <p className="text-xs text-neutral-500">{it.modifiers.join(" · ")}</p>
                 )}
@@ -168,6 +182,10 @@ export default function OrderTracking() {
           <span className="tabular-nums">{precio(pedido.total)}</span>
         </p>
       </section>
+
+      <MensajesPedido code={code} claimToken={claimToken} />
+
+      <InvitacionCuenta code={code} claimToken={claimToken} />
 
       <div className="flex flex-col gap-2">
         {whatsappUrl && (

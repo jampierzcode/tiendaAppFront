@@ -2,6 +2,10 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { crearPedidoMenu } from "../api";
+import TelefonoPais from "../components/TelefonoPais";
+import { correoValido, dialDePais, errorTelefono, separarTelefono, telefonoCompleto } from "../../utilities/paises";
+import { enlaceMapa, guardarClaim, useCliente } from "../cliente";
+import CuponCarrito from "../components/CuponCarrito";
 import { useStore } from "../StoreContext";
 import { precioUnitario, useMenuCart } from "./MenuCart";
 
@@ -16,13 +20,18 @@ const claveContacto = "menu-contacto";
 
 export default function CartSheet({ abierto, onClose }: Props) {
   const { slug, tienda, precio } = useStore();
-  const { lineas, subtotal, cambiarCantidad, quitar, vaciar } = useMenuCart();
+  const { lineas, subtotal, descuento, cupon, cuponEstado, aplicarCupon, quitarCupon, cambiarCantidad, quitar, vaciar } =
+    useMenuCart();
   const navigate = useNavigate();
+  const { cliente } = useCliente();
 
   const [metodo, setMetodo] = useState<Metodo>("recojo");
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
+  const [dial, setDial] = useState<string | null>(null);
+  const dialActual = dial ?? dialDePais(tienda?.country);
   const [direccion, setDireccion] = useState("");
+  const [correo, setCorreo] = useState("");
   const [nota, setNota] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,11 +43,23 @@ export default function CartSheet({ abierto, onClose }: Props) {
       if (guardado) {
         setNombre(guardado.nombre ?? "");
         setTelefono(guardado.telefono ?? "");
+        if (guardado.dial) setDial(guardado.dial);
       }
     } catch {
       // sin datos guardados
     }
   }, []);
+
+  // Con sesión de cliente, el perfil rellena lo que falte.
+  useEffect(() => {
+    if (!cliente) return;
+    const tel = separarTelefono(cliente.phone);
+    if (tel.dial) setDial((d) => d ?? tel.dial);
+    setNombre((v) => v || cliente.name);
+    setTelefono((v) => v || tel.nacional);
+    setDireccion((v) => v || cliente.deliveryAddress || "");
+    setCorreo((v) => v || cliente.email);
+  }, [cliente]);
 
   useEffect(() => {
     if (!abierto) return;
@@ -50,13 +71,14 @@ export default function CartSheet({ abierto, onClose }: Props) {
 
   if (!tienda) return null;
 
+  const neto = subtotal - descuento;
   const envio =
     metodo !== "envio"
       ? 0
-      : tienda.freeShippingFrom !== null && subtotal >= tienda.freeShippingFrom
+      : tienda.freeShippingFrom !== null && neto >= tienda.freeShippingFrom
         ? 0
         : tienda.shippingCost;
-  const total = subtotal + envio;
+  const total = neto + envio;
 
   const enviar = async (e: FormEvent) => {
     e.preventDefault();
@@ -64,15 +86,29 @@ export default function CartSheet({ abierto, onClose }: Props) {
 
     if (!lineas.length) return;
     if (metodo === "envio" && !direccion.trim()) return setError("Falta la dirección de entrega");
+    const falloTel = errorTelefono(dialActual, telefono);
+    if (falloTel) return setError(falloTel);
+    if (correo.trim() && !correoValido(correo)) return setError("El correo no parece válido. Revísalo o déjalo vacío.");
 
     setEnviando(true);
     try {
       const pedido = await crearPedidoMenu(slug, {
         customerName: nombre,
-        customerPhone: telefono,
+        customerPhone: telefonoCompleto(dialActual, telefono),
+        customerEmail: correo.trim() || undefined,
         deliveryMethod: metodo,
         deliveryAddress: metodo === "envio" ? direccion : undefined,
-        note: nota || undefined,
+        note:
+          [
+            nota.trim(),
+            cliente && metodo === "envio" && direccion === cliente.deliveryAddress && enlaceMapa(cliente)
+              ? `Ubicación: ${enlaceMapa(cliente)}`
+              : "",
+          ]
+            .filter(Boolean)
+            .join("\n") || undefined,
+        // Solo se manda un cupón que el servidor ya dio por bueno.
+        couponCode: cuponEstado?.valido ? cuponEstado.codigo : undefined,
         items: lineas.map((l) => ({
           productId: l.productId,
           quantity: l.quantity,
@@ -82,15 +118,16 @@ export default function CartSheet({ abierto, onClose }: Props) {
       });
 
       try {
-        localStorage.setItem(claveContacto, JSON.stringify({ nombre, telefono }));
+        localStorage.setItem(claveContacto, JSON.stringify({ nombre, telefono, dial: dialActual }));
       } catch {
         // no pasa nada
       }
 
       vaciar();
       onClose();
+      if (pedido.claimToken) guardarClaim(slug, pedido.code, pedido.claimToken);
       navigate(`/t/${slug}/pedido/${pedido.code}`, {
-        state: { whatsappUrl: pedido.whatsappUrl },
+        state: { whatsappUrl: pedido.whatsappUrl, claimToken: pedido.claimToken, nuevo: true },
       });
     } catch (err: any) {
       setError(
@@ -258,14 +295,21 @@ export default function CartSheet({ abierto, onClose }: Props) {
                   autoComplete="name"
                   required
                 />
+                <TelefonoPais
+                  dial={dialActual}
+                  onDial={setDial}
+                  value={telefono}
+                  onValue={setTelefono}
+                  placeholder="Tu WhatsApp (te avisamos)"
+                  className="h-12 w-full rounded-2xl border border-neutral-200 bg-white focus-within:border-neutral-400"
+                />
                 <input
                   className={campo}
-                  placeholder="Tu WhatsApp (te avisamos cuando esté listo)"
-                  value={telefono}
-                  onChange={(e) => setTelefono(e.target.value)}
-                  inputMode="tel"
-                  autoComplete="tel"
-                  required
+                  type="email"
+                  placeholder="Tu correo (opcional)"
+                  value={correo}
+                  onChange={(e) => setCorreo(e.target.value)}
+                  autoComplete="email"
                 />
                 <textarea
                   className="w-full resize-none rounded-2xl border border-neutral-200 p-4 text-sm outline-none focus:border-neutral-400"
@@ -279,11 +323,18 @@ export default function CartSheet({ abierto, onClose }: Props) {
             </div>
 
             <div className="border-t border-neutral-100 p-4">
+              <CuponCarrito aplicado={cupon} estado={cuponEstado} onAplicar={aplicarCupon} onQuitar={quitarCupon} />
               <dl className="mb-3 space-y-1 text-sm">
                 <div className="flex justify-between text-neutral-600">
                   <dt>Subtotal</dt>
                   <dd className="tabular-nums">{precio(subtotal)}</dd>
                 </div>
+                {descuento > 0 && (
+                  <div className="flex justify-between text-emerald-700">
+                    <dt>Promociones{cuponEstado?.valido ? " y cupón" : ""}</dt>
+                    <dd className="tabular-nums">− {precio(descuento)}</dd>
+                  </div>
+                )}
                 {metodo === "envio" && (
                   <div className="flex justify-between text-neutral-600">
                     <dt>Delivery</dt>

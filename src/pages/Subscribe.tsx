@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Button, Form, Input, Steps, message } from "antd";
+import { Button, Form, Input, Select, Steps, message } from "antd";
 import axios from "axios";
 import {
   TbBuildingStore,
@@ -12,6 +12,7 @@ import {
 import { apiTienda } from "../api/apiTienda";
 import { useAuth } from "../hooks/useAuth";
 import PhoneInput from "../components/ui/PhoneInput";
+import { errorWhatsapp, opcionesPais } from "../utilities/paises";
 
 type Plantilla = {
   key: string;
@@ -107,6 +108,7 @@ export default function Subscribe() {
       business_type: tipo,
       template: plantilla ?? undefined,
       whatsapp_phone: String(v.whatsapp_phone).replace(/\D/g, ""),
+      country: v.country ?? "PE",
       city: v.city || undefined,
       address: v.address || undefined,
       schedule: v.schedule || undefined,
@@ -178,7 +180,7 @@ export default function Subscribe() {
             className="mb-7"
           />
 
-          <Form form={form} layout="vertical" requiredMark={false} size="large">
+          <Form form={form} layout="vertical" requiredMark={false} size="large" initialValues={{ country: "PE" }}>
             {/* 0 · Cuenta */}
             <div hidden={vista !== 0}>
               <Form.Item
@@ -298,20 +300,27 @@ export default function Subscribe() {
                 <Input placeholder="Pollería Don Pepe" />
               </Form.Item>
               <Form.Item
+                label="País"
+                name="country"
+                extra="Define tu impuesto (IGV o IVA) y el formato de tu WhatsApp."
+              >
+                <Select options={opcionesPais} />
+              </Form.Item>
+              <Form.Item
                 label="WhatsApp donde recibes pedidos"
                 name="whatsapp_phone"
-                extra="Elige tu país y escribe solo tu número."
+                extra="Solo se aceptan números de tu país."
                 rules={[
                   { required: true, message: "Escribe tu WhatsApp" },
                   {
-                    validator: (_, v) =>
-                      !v || /^\d{8,15}$/.test(String(v).replace(/\D/g, ""))
-                        ? Promise.resolve()
-                        : Promise.reject(new Error("Revisa el número: faltan dígitos")),
+                    validator: (_, v) => {
+                      const error = errorWhatsapp(form.getFieldValue("country") ?? "PE", v);
+                      return error ? Promise.reject(new Error(error)) : Promise.resolve();
+                    },
                   },
                 ]}
               >
-                <PhoneInput />
+                <PhoneInput pais={form.getFieldValue("country") ?? "PE"} />
               </Form.Item>
               <div className="grid gap-x-3 sm:grid-cols-2">
                 <Form.Item label="Ciudad" name="city">

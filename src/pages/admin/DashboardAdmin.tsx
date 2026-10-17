@@ -38,6 +38,7 @@ interface InsumoBajo {
 interface BajoStock {
   id: number;
   stock: number;
+  pendiente?: number;
   product: { name: string };
   attributes: { value: { value: string } }[];
 }
@@ -282,6 +283,7 @@ export default function DashboardAdmin() {
                     className={`pill ${v.stock === 0 ? "bg-danger-bg text-danger" : "bg-warn-bg text-warn"}`}
                   >
                     {v.stock === 0 ? "Agotado" : `Quedan ${v.stock}`}
+                    {(v.pendiente ?? 0) > 0 && ` · +${v.pendiente} por llegar`}
                   </span>
                 </li>
               ))}

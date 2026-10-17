@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
-import { Drawer, Empty, Input, Spin, Table, message } from "antd";
+import { Button, Drawer, Empty, Form, Input, Modal, Select, Spin, Table, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { motion } from "motion/react";
-import { TbBrandWhatsapp, TbUsers } from "react-icons/tb";
+import { TbBrandWhatsapp, TbEdit, TbUsers } from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
 import BadgeEstado, { type EstadoPedido } from "../../components/ui/EstadoPedido";
+import { useBusiness } from "../../context/BusinessContext";
+import { PAISES_TEL, dialDePais, errorTelefono, separarTelefono, telefonoCompleto } from "../../utilities/paises";
 
 interface Cliente {
   id: number;
@@ -40,6 +42,45 @@ export default function CustomersPage() {
   const [busqueda, setBusqueda] = useState("");
   const [detalle, setDetalle] = useState<ClienteDetalle | null>(null);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
+  const [editando, setEditando] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [form] = Form.useForm();
+  const { business } = useBusiness();
+
+  const abrirEdicion = () => {
+    if (!detalle) return;
+    const tel = separarTelefono(detalle.phone);
+    form.setFieldsValue({
+      name: detalle.name,
+      dial: tel.dial ?? dialDePais(business?.country),
+      phone: tel.nacional,
+      email: detalle.email ?? "",
+      address: detalle.address ?? "",
+      city: detalle.city ?? "",
+    });
+    setEditando(true);
+  };
+
+  const guardar = async (v: any) => {
+    if (!detalle) return;
+    setGuardando(true);
+    try {
+      await apiTienda.put(`/customers/${detalle.id}`, {
+        name: v.name,
+        phone: telefonoCompleto(v.dial, v.phone),
+        email: v.email ?? "",
+        address: v.address ?? "",
+        city: v.city ?? "",
+      });
+      message.success("Cliente actualizado");
+      setEditando(false);
+      await Promise.all([abrir(detalle.id), cargar()]);
+    } catch (e: any) {
+      message.error(e?.response?.data?.message ?? "No se pudo guardar");
+    } finally {
+      setGuardando(false);
+    }
+  };
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -185,6 +226,14 @@ export default function CustomersPage() {
                 <TbBrandWhatsapp className="text-base" />
                 {detalle.phone}
               </a>
+              {detalle.email && (
+                <a href={`mailto:${detalle.email}`} className="mt-1 block text-[13px] text-brand-600 hover:underline">
+                  ✉️ {detalle.email}
+                </a>
+              )}
+              <Button size="small" icon={<TbEdit />} className="mt-2" onClick={abrirEdicion}>
+                Editar datos
+              </Button>
               {(detalle.address || detalle.city) && (
                 <p className="mt-1.5 text-[13px] text-ink-soft">
                   {[detalle.address, detalle.city].filter(Boolean).join(", ")}
@@ -236,6 +285,65 @@ export default function CustomersPage() {
           </motion.div>
         )}
       </Drawer>
+
+      <Modal
+        open={editando}
+        title="Editar cliente"
+        okText="Guardar"
+        cancelText="Cancelar"
+        confirmLoading={guardando}
+        onCancel={() => setEditando(false)}
+        onOk={() => form.submit()}
+        zIndex={1100}
+        forceRender
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={guardar}
+          onFinishFailed={() => message.warning("Revisa los datos marcados en rojo")}
+          requiredMark={false}
+        >
+          <Form.Item name="name" label="Nombre" rules={[{ required: true, message: "Escribe el nombre" }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="phone"
+            label="WhatsApp"
+            rules={[
+              {
+                validator: (_, valor) => {
+                  const problema = errorTelefono(form.getFieldValue("dial"), String(valor ?? ""));
+                  return problema ? Promise.reject(new Error(problema)) : Promise.resolve();
+                },
+              },
+            ]}
+          >
+            <Input
+              placeholder="933 735 080"
+              inputMode="tel"
+              addonBefore={
+                <Form.Item name="dial" noStyle>
+                  <Select
+                    style={{ width: 110 }}
+                    popupMatchSelectWidth={false}
+                    options={PAISES_TEL.map((p) => ({ value: p.dial, label: `${p.bandera} +${p.dial}` }))}
+                  />
+                </Form.Item>
+              }
+            />
+          </Form.Item>
+          <Form.Item name="email" label="Correo" rules={[{ type: "email", message: "El correo no parece válido" }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="address" label="Dirección">
+            <Input />
+          </Form.Item>
+          <Form.Item name="city" label="Ciudad">
+            <Input />
+          </Form.Item>
+        </Form>
+      </Modal>
     </>
   );
 }

@@ -187,6 +187,11 @@ export default function ProductDetail() {
     return `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`;
   })();
 
+  // Cuántas unidades quiere; nunca más de las que hay.
+  const [cantidad, setCantidad] = useState(1);
+  const maxCantidad = Math.max(1, variacion?.stock ?? 1);
+  useEffect(() => setCantidad(1), [variacion?.id]);
+
   const alAgregar = () => {
     if (!producto || !variacion) return;
 
@@ -198,8 +203,9 @@ export default function ProductDetail() {
       imageUrl: variacion.imageUrl ?? producto.imageUrl,
       price: variacion.price,
       stock: variacion.stock,
-    });
+    }, Math.min(cantidad, maxCantidad));
 
+    setCantidad(1);
     setAgregado(true);
     setTimeout(() => setAgregado(false), 1600);
   };
@@ -396,6 +402,20 @@ export default function ProductDetail() {
             )}
           </div>
 
+          {(producto.promos?.length ?? 0) > 0 && (
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {producto.promos!.map((p) => (
+                <li
+                  key={p.id}
+                  className="rounded-full px-3 py-1 text-xs font-semibold text-white"
+                  style={{ backgroundColor: "var(--tienda-secundario, #F59E0B)" }}
+                >
+                  {p.name} · {p.label}
+                </li>
+              ))}
+            </ul>
+          )}
+
           {producto.description && (
             <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-neutral-600">{producto.description}</p>
           )}
@@ -483,6 +503,9 @@ export default function ProductDetail() {
               agregado={agregado}
               aceptaPedidos={tienda?.aceptaPedidos ?? false}
               onAgregar={alAgregar}
+              cantidad={cantidad}
+              maxCantidad={maxCantidad}
+              onCantidad={setCantidad}
               onVerCarrito={abrirCarrito}
               consultarPrecio={consultarPrecio}
               urlConsulta={urlConsulta}
@@ -528,6 +551,9 @@ export default function ProductDetail() {
           agregado={agregado}
           aceptaPedidos={tienda?.aceptaPedidos ?? false}
           onAgregar={alAgregar}
+          cantidad={cantidad}
+          maxCantidad={maxCantidad}
+          onCantidad={setCantidad}
           onVerCarrito={abrirCarrito}
           consultarPrecio={consultarPrecio}
           urlConsulta={urlConsulta}
@@ -570,10 +596,16 @@ function BotonComprar({
   agregado,
   aceptaPedidos,
   onAgregar,
+  cantidad,
+  maxCantidad,
+  onCantidad,
   onVerCarrito,
   consultarPrecio,
   urlConsulta,
 }: {
+  cantidad: number;
+  maxCantidad: number;
+  onCantidad: (n: number) => void;
   consultarPrecio: boolean;
   urlConsulta: string | null;
   faltaElegir: boolean;
@@ -609,8 +641,39 @@ function BotonComprar({
     );
   }
 
+  const puedeElegirCantidad = !faltaElegir && !sinStock;
+
   return (
     <div className="flex gap-2">
+      {puedeElegirCantidad && (
+        <div
+          className="flex shrink-0 items-center rounded-lg border border-neutral-300"
+          role="group"
+          aria-label="Cantidad"
+        >
+          <button
+            type="button"
+            onClick={() => onCantidad(Math.max(1, cantidad - 1))}
+            disabled={cantidad <= 1}
+            aria-label="Menos"
+            className="h-full w-9 text-lg text-neutral-700 disabled:text-neutral-300"
+          >
+            −
+          </button>
+          <span className="w-7 text-center text-sm font-semibold tabular-nums" aria-live="polite">
+            {cantidad}
+          </span>
+          <button
+            type="button"
+            onClick={() => onCantidad(Math.min(maxCantidad, cantidad + 1))}
+            disabled={cantidad >= maxCantidad}
+            aria-label="Más"
+            className="h-full w-9 text-lg text-neutral-700 disabled:text-neutral-300"
+          >
+            +
+          </button>
+        </div>
+      )}
       <motion.button
         onClick={onAgregar}
         disabled={faltaElegir || sinStock}

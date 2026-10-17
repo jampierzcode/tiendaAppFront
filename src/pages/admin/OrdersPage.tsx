@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Empty, Input, Segmented, Spin, Table, message } from "antd";
+import { useSearchParams } from "react-router-dom";
+import { Badge, Button, Empty, Input, Segmented, Spin, Table, Tooltip, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { TbCash, TbClock, TbReceipt, TbTruckDelivery } from "react-icons/tb";
+import { TbCash, TbClock, TbMessageCircle, TbReceipt, TbTruckDelivery } from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
 import StatCard from "../../components/ui/StatCard";
 import BadgeEstado, { type EstadoPedido } from "../../components/ui/EstadoPedido";
 import OrderDetailDrawer from "../../components/admin/OrderDetailDrawer";
+import PedidoChat from "../../components/admin/PedidoChat";
+import { usePolling } from "../../hooks/usePolling";
 
 interface ItemPedido {
   id: number;
@@ -25,6 +28,8 @@ interface Pedido {
   channel: string;
   customerName: string;
   customerPhone: string | null;
+  customerEmail?: string | null;
+  platformUnread?: number;
   deliveryMethod: string;
   deliveryAddress: string | null;
   deliveryCity: string | null;
@@ -62,6 +67,30 @@ export default function OrdersPage() {
   const [filtro, setFiltro] = useState<string>("todos");
   const [busqueda, setBusqueda] = useState("");
   const [detalleId, setDetalleId] = useState<number | null>(null);
+  const [chat, setChat] = useState<Pedido | null>(null);
+  // Mensajes sin leer por cliente (clave: últimos 9 dígitos del teléfono).
+  const [noLeidos, setNoLeidos] = useState<Record<string, number>>({});
+
+  usePolling(async () => {
+    try {
+      const c = await apiTienda.get("/whatsapp/conversations");
+      const mapa: Record<string, number> = {};
+      for (const x of c.data.data ?? []) if (x.unread > 0) mapa[x.contact] = x.unread;
+      setNoLeidos(mapa);
+    } catch {
+      // sin WhatsApp conectado no hay conversaciones: la lista de pedidos sigue igual
+    }
+  }, 10000);
+
+  // Una notificación llega aquí con ?pedido=ID: se abre ese pedido y se limpia la URL.
+  const [params, setParams] = useSearchParams();
+  const pedidoDeAviso = params.get("pedido");
+  useEffect(() => {
+    if (!pedidoDeAviso) return;
+    const id = Number(pedidoDeAviso);
+    if (Number.isFinite(id) && id > 0) setDetalleId(id);
+    setParams({}, { replace: true });
+  }, [pedidoDeAviso, setParams]);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -109,6 +138,7 @@ export default function OrdersPage() {
         <div className="min-w-0">
           <p className="truncate font-medium text-ink">{nombre}</p>
           <p className="font-mono text-[11px] text-muted">{row.customerPhone}</p>
+          {row.customerEmail && <p className="truncate text-[11px] text-muted">{row.customerEmail}</p>}
         </div>
       ),
     },
@@ -155,11 +185,24 @@ export default function OrdersPage() {
       title: "",
       key: "acciones",
       align: "right",
-      render: (_, row) => (
-        <Button size="small" onClick={() => setDetalleId(row.id)}>
-          Ver
-        </Button>
-      ),
+      render: (_, row) => {
+        const sinLeer =
+          (noLeidos[(row.customerPhone ?? "").replace(/\D/g, "").slice(-9)] ?? 0) + (row.platformUnread ?? 0);
+        return (
+          <div className="flex justify-end gap-1.5">
+            {(row.customerPhone || row.customerEmail) && (
+              <Tooltip title="Conversar con el cliente">
+                <Badge count={sinLeer} size="small">
+                  <Button size="small" icon={<TbMessageCircle />} onClick={() => setChat(row)} />
+                </Badge>
+              </Tooltip>
+            )}
+            <Button size="small" onClick={() => setDetalleId(row.id)}>
+              Ver
+            </Button>
+          </div>
+        );
+      },
     },
   ];
 
@@ -256,6 +299,8 @@ export default function OrdersPage() {
           />
         )}
       </div>
+
+      <PedidoChat pedido={chat} onCerrar={() => setChat(null)} />
 
       <OrderDetailDrawer
         pedidoId={detalleId}

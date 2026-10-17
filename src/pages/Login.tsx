@@ -32,6 +32,11 @@ export default function Login() {
             "Aún no tienes una tienda registrada. Pide a tu administrador que te cree una."
           );
         }
+      } else if (role === "cliente") {
+        // Los clientes no usan el panel: su sesión vive aparte y entran por «Mi cuenta».
+        localStorage.setItem("cliente:token", auth.token ?? "");
+        localStorage.removeItem("token");
+        navigate("/mis-pedidos", { replace: true });
       } else {
         navigate("/");
       }
@@ -52,9 +57,9 @@ export default function Login() {
   };
 
   const ventajas = [
-    { icono: <TbQrcode />, texto: "Tu catálogo en un QR, siempre actualizado" },
+    { icono: <TbQrcode />, texto: "Tu carta o catálogo en un QR, siempre actualizado" },
     { icono: <TbBrandWhatsapp />, texto: "Los pedidos te llegan por WhatsApp" },
-    { icono: <TbBox />, texto: "Stock que cuadra entre mostrador y online" },
+    { icono: <TbBox />, texto: "Cocina, stock y ventas que cuadran entre mostrador y online" },
   ];
 
   return (
@@ -82,15 +87,15 @@ export default function Login() {
               transition={{ duration: 0.5, delay: 0.06, ease: [0.22, 1, 0.36, 1] }}
               className="mt-3 max-w-md text-[38px] font-extrabold leading-[1.1] text-white"
             >
-              Tu tienda de ropa, ordenada en un solo lugar.
+              Tu negocio, ordenado en un solo lugar.
             </motion.h1>
             <motion.p
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.14 }}
-              className="mt-4 max-w-sm text-[15px] leading-relaxed text-white/70"
+              className="mt-4 max-w-md text-[15px] leading-relaxed text-white/70"
             >
-              Vende en físico y online, controla tu stock y envía a todo el Perú.
+              Para restaurantes (cevicherías, pollerías, cafeterías…) y tiendas (ropa, repuestos, calzado…): vende en físico y online, controla tu inventario y recibe pedidos por WhatsApp.
             </motion.p>
           </div>
 
@@ -129,7 +134,7 @@ export default function Login() {
               Entra a tu panel
             </h2>
             <p className="mt-1.5 text-[14px] text-muted">
-              Gestiona tu catálogo, tus pedidos y tu tienda online.
+              Gestiona tu carta o catálogo, tus pedidos y tu negocio online.
             </p>
           </div>
 

@@ -18,7 +18,7 @@ interface Props {
 
 /**
  * Columna de filtros del catálogo: categorías (con subcategorías de la que
- * está abierta), atributos (marca, medida, color…) y etiquetas (vehículos).
+ * está abierta), atributos (color, talla… lo que configure el negocio) y etiquetas.
  * Cada opción muestra cuántos productos hay detrás, y las que quedarían en
  * cero ni aparecen: hacer clic nunca lleva a una pantalla vacía.
  */
@@ -98,9 +98,8 @@ export default function FacetPanel({ facetas, seleccion, onCategoria, onEtiqueta
       </Seccion>
 
       {[...facetas.attributes]
+        // En el orden en que el negocio configuró sus atributos (color, talla, material…).
         .filter((a) => a.values.length > 0)
-        // Lo que más se usa para buscar un repuesto va primero.
-        .sort((a, b) => prioridad(a.name) - prioridad(b.name))
         .map((atributo) => (
           <Seccion key={atributo.id} titulo={atributo.name}>
             {atributo.type === "color" ? (
@@ -139,7 +138,7 @@ export default function FacetPanel({ facetas, seleccion, onCategoria, onEtiqueta
         ))}
 
       {facetas.tags.length > 0 && (
-        <Seccion titulo="Vehículo y marca">
+        <Seccion titulo="Etiquetas">
           <ListaOpciones
             opciones={facetas.tags.map((t) => ({
               clave: t.slug,
@@ -154,12 +153,6 @@ export default function FacetPanel({ facetas, seleccion, onCategoria, onEtiqueta
     </div>
   );
 }
-
-const PRIORIDAD = ["marca", "medida", "color"];
-const prioridad = (nombre: string) => {
-  const i = PRIORIDAD.indexOf(nombre.trim().toLowerCase());
-  return i === -1 ? PRIORIDAD.length : i;
-};
 
 function Seccion({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (

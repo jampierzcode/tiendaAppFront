@@ -1,7 +1,12 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { crearPedido, marcarPedidoEnviado, type RespuestaPedido } from "../api";
+import CuponCarrito from "./CuponCarrito";
 import { useStore } from "../StoreContext";
+import TelefonoPais from "./TelefonoPais";
+import { correoValido, dialDePais, errorTelefono, separarTelefono, telefonoCompleto } from "../../utilities/paises";
+import { enlaceMapa, guardarClaim, useCliente } from "../cliente";
 
 interface Props {
   abierto: boolean;
@@ -17,10 +22,30 @@ type Paso = "carrito" | "datos" | "listo";
  * el pedido aunque el cliente cierre el chat sin enviar el mensaje.
  */
 export default function CartDrawer({ abierto, onCerrar }: Props) {
-  const { slug, tienda, carrito, subtotal, envio, total, cambiarCantidad, quitar, vaciar, precio } =
-    useStore();
+  const {
+    slug,
+    tienda,
+    carrito,
+    subtotal,
+    descuento,
+    cupon,
+    cuponEstado,
+    aplicarCupon,
+    quitarCupon,
+    envio,
+    total,
+    cambiarCantidad,
+    quitar,
+    vaciar,
+    precio,
+  } = useStore();
 
+  const navigate = useNavigate();
+  const { cliente } = useCliente();
   const [paso, setPaso] = useState<Paso>("carrito");
+  // El código de país arranca con el de la tienda; el cliente puede cambiarlo.
+  const [dial, setDial] = useState<string | null>(null);
+  const dialActual = dial ?? dialDePais(tienda?.country);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pedido, setPedido] = useState<RespuestaPedido | null>(null);
@@ -28,11 +53,53 @@ export default function CartDrawer({ abierto, onCerrar }: Props) {
   const [form, setForm] = useState({
     customerName: "",
     customerPhone: "",
+    customerEmail: "",
     deliveryMethod: "envio" as "envio" | "recojo",
     deliveryAddress: "",
     deliveryCity: tienda?.city ?? "",
     note: "",
   });
+
+  // Con sesión de cliente, el perfil rellena nombre, WhatsApp y dirección.
+  useEffect(() => {
+    if (!cliente) return;
+    const tel = separarTelefono(cliente.phone);
+    if (tel.dial) setDial((d) => d ?? tel.dial);
+    setForm((f) => ({
+      ...f,
+      customerName: f.customerName || cliente.name,
+      customerPhone: f.customerPhone || tel.nacional,
+      customerEmail: f.customerEmail || cliente.email,
+      deliveryAddress: f.deliveryAddress || cliente.deliveryAddress || "",
+      deliveryCity: f.deliveryCity || cliente.deliveryCity || tienda?.city || "",
+    }));
+  }, [cliente, tienda?.city]);
+
+  // Con sesión, los datos precargados se ven como fichas con un lápiz para editarlos.
+  const [editarContacto, setEditarContacto] = useState(false);
+  const [editarDireccion, setEditarDireccion] = useState(false);
+  const contactoListo =
+    Boolean(cliente) &&
+    form.customerName.trim().length > 1 &&
+    !errorTelefono(dialActual, form.customerPhone) &&
+    (!form.customerEmail.trim() || correoValido(form.customerEmail));
+  const direccionLista = Boolean(cliente) && form.deliveryAddress.trim().length > 0 && form.deliveryCity.trim().length > 0;
+  const usaUbicacionGuardada = Boolean(
+    cliente && enlaceMapa(cliente) && form.deliveryAddress === cliente.deliveryAddress
+  );
+
+  // El panel bloquea el desplazamiento de la página de atrás; solo se mueve su propio contenido.
+  useEffect(() => {
+    if (!abierto) return;
+    const ancho = window.innerWidth - document.documentElement.clientWidth;
+    const antes = { overflow: document.body.style.overflow, padding: document.body.style.paddingRight };
+    document.body.style.overflow = "hidden";
+    if (ancho > 0) document.body.style.paddingRight = `${ancho}px`; // evita el salto al quitar la barra
+    return () => {
+      document.body.style.overflow = antes.overflow;
+      document.body.style.paddingRight = antes.padding;
+    };
+  }, [abierto]);
 
   // Cerrar con Escape es lo que espera cualquiera que abra un panel.
   useEffect(() => {
@@ -52,7 +119,17 @@ export default function CartDrawer({ abierto, onCerrar }: Props) {
   const confirmar = async () => {
     setError(null);
 
-    if (!form.customerName.trim() || !form.customerPhone.trim()) {
+    const telefono = telefonoCompleto(dialActual, form.customerPhone);
+    const falloTel = errorTelefono(dialActual, form.customerPhone);
+    if (falloTel) {
+      setError(falloTel);
+      return;
+    }
+    if (form.customerEmail.trim() && !correoValido(form.customerEmail)) {
+      setError("El correo no parece válido. Revísalo o déjalo vacío.");
+      return;
+    }
+    if (!form.customerName.trim()) {
       setError("Necesitamos tu nombre y tu teléfono para contactarte.");
       return;
     }
@@ -65,17 +142,38 @@ export default function CartDrawer({ abierto, onCerrar }: Props) {
     try {
       const respuesta = await crearPedido(slug, {
         ...form,
+        customerPhone: telefono,
+        // Si usa la dirección guardada con ubicación, el negocio recibe el enlace al mapa.
+        note:
+          [
+            form.note.trim(),
+            cliente && form.deliveryMethod === "envio" && form.deliveryAddress === cliente.deliveryAddress
+              ? enlaceMapa(cliente)
+                ? `Ubicación: ${enlaceMapa(cliente)}`
+                : ""
+              : "",
+          ]
+            .filter(Boolean)
+            .join("\n") || undefined,
+        // Solo se manda un cupón que el servidor ya dio por bueno.
+        couponCode: cuponEstado?.valido ? cuponEstado.codigo : undefined,
         items: carrito.map((l) => ({ variationId: l.variationId, quantity: l.quantity })),
       });
 
       setPedido(respuesta);
-      setPaso("listo");
       vaciar();
 
+      if (respuesta.claimToken) guardarClaim(slug, respuesta.code, respuesta.claimToken);
       if (respuesta.whatsappUrl) {
         marcarPedidoEnviado(slug, respuesta.code);
         window.open(respuesta.whatsappUrl, "_blank", "noopener");
       }
+      // El cliente aterriza en el detalle de su pedido, donde puede seguirlo
+      // y, si quiere, crear su cuenta.
+      onCerrar();
+      navigate(`/t/${slug}/pedido/${respuesta.code}`, {
+        state: { whatsappUrl: respuesta.whatsappUrl, claimToken: respuesta.claimToken, nuevo: true },
+      });
     } catch (e: any) {
       setError(e?.response?.data?.message ?? "No pudimos registrar tu pedido. Intenta de nuevo.");
     } finally {
@@ -84,8 +182,8 @@ export default function CartDrawer({ abierto, onCerrar }: Props) {
   };
 
   const faltaParaEnvioGratis =
-    tienda?.freeShippingFrom != null && subtotal > 0 && subtotal < tienda.freeShippingFrom
-      ? tienda.freeShippingFrom - subtotal
+    tienda?.freeShippingFrom != null && subtotal > 0 && subtotal - descuento < tienda.freeShippingFrom
+      ? tienda.freeShippingFrom - (subtotal - descuento)
       : 0;
 
   return (
@@ -125,7 +223,7 @@ export default function CartDrawer({ abierto, onCerrar }: Props) {
               </button>
             </header>
 
-            <div className="flex-1 overflow-y-auto px-5 py-4">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4">
               {paso === "carrito" && (
                 <>
                   {carrito.length === 0 ? (
@@ -205,21 +303,57 @@ export default function CartDrawer({ abierto, onCerrar }: Props) {
 
               {paso === "datos" && (
                 <div className="space-y-3">
-                  <Campo
-                    id="nombre"
-                    label="Tu nombre"
-                    value={form.customerName}
-                    onChange={(v) => setForm({ ...form, customerName: v })}
-                    placeholder="Ana Torres"
-                  />
-                  <Campo
-                    id="telefono"
-                    label="Tu WhatsApp"
-                    value={form.customerPhone}
-                    onChange={(v) => setForm({ ...form, customerPhone: v })}
-                    placeholder="987 654 321"
-                    type="tel"
-                  />
+                  {contactoListo && !editarContacto ? (
+                    <DatoCargado titulo="Tus datos" onEditar={() => setEditarContacto(true)}>
+                      <p className="text-sm font-semibold text-neutral-900">{form.customerName}</p>
+                      <p className="text-sm text-neutral-600">
+                        +{dialActual} {form.customerPhone}
+                      </p>
+                      {form.customerEmail && <p className="truncate text-sm text-neutral-600">{form.customerEmail}</p>}
+                    </DatoCargado>
+                  ) : (
+                    <>
+                      <Campo
+                        id="nombre"
+                        label="Tu nombre"
+                        value={form.customerName}
+                        onChange={(v) => setForm({ ...form, customerName: v })}
+                        placeholder="Ana Torres"
+                      />
+                      <div>
+                        <label htmlFor="telefono" className="mb-1 block text-xs font-medium text-neutral-700">
+                          Tu WhatsApp
+                        </label>
+                        <TelefonoPais
+                          id="telefono"
+                          dial={dialActual}
+                          onDial={setDial}
+                          value={form.customerPhone}
+                          onValue={(v) => setForm({ ...form, customerPhone: v })}
+                          placeholder="987 654 321"
+                          className="h-[38px] rounded-lg border border-neutral-300 focus-within:border-neutral-900 focus-within:ring-1 focus-within:ring-neutral-900"
+                        />
+                      </div>
+                      <Campo
+                        id="correo"
+                        label="Tu correo (opcional)"
+                        value={form.customerEmail}
+                        onChange={(v) => setForm({ ...form, customerEmail: v })}
+                        placeholder="ana@correo.com"
+                        type="email"
+                      />
+                      {editarContacto && (
+                        <button
+                          type="button"
+                          onClick={() => setEditarContacto(false)}
+                          disabled={!contactoListo}
+                          className="text-sm font-semibold underline disabled:opacity-40"
+                        >
+                          Listo
+                        </button>
+                      )}
+                    </>
+                  )}
 
                   <fieldset>
                     <legend className="mb-1.5 text-xs font-medium text-neutral-700">Entrega</legend>
@@ -247,20 +381,44 @@ export default function CartDrawer({ abierto, onCerrar }: Props) {
                       animate={{ opacity: 1, height: "auto" }}
                       className="space-y-3 overflow-hidden"
                     >
-                      <Campo
-                        id="direccion"
-                        label="Dirección"
-                        value={form.deliveryAddress}
-                        onChange={(v) => setForm({ ...form, deliveryAddress: v })}
-                        placeholder="Av. Brasil 123, dpto 401"
-                      />
-                      <Campo
-                        id="ciudad"
-                        label="Ciudad"
-                        value={form.deliveryCity}
-                        onChange={(v) => setForm({ ...form, deliveryCity: v })}
-                        placeholder="Lima"
-                      />
+                      {direccionLista && !editarDireccion ? (
+                        <DatoCargado titulo="Enviar a" onEditar={() => setEditarDireccion(true)}>
+                          <p className="text-sm font-semibold text-neutral-900">{form.deliveryAddress}</p>
+                          <p className="text-sm text-neutral-600">{form.deliveryCity}</p>
+                          {usaUbicacionGuardada && (
+                            <span className="mt-1 inline-block rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800">
+                              📍 Ubicación guardada
+                            </span>
+                          )}
+                        </DatoCargado>
+                      ) : (
+                        <>
+                          <Campo
+                            id="direccion"
+                            label="Dirección"
+                            value={form.deliveryAddress}
+                            onChange={(v) => setForm({ ...form, deliveryAddress: v })}
+                            placeholder="Av. Brasil 123, dpto 401"
+                          />
+                          <Campo
+                            id="ciudad"
+                            label="Ciudad"
+                            value={form.deliveryCity}
+                            onChange={(v) => setForm({ ...form, deliveryCity: v })}
+                            placeholder="Lima"
+                          />
+                          {editarDireccion && (
+                            <button
+                              type="button"
+                              onClick={() => setEditarDireccion(false)}
+                              disabled={!direccionLista}
+                              className="text-sm font-semibold underline disabled:opacity-40"
+                            >
+                              Listo
+                            </button>
+                          )}
+                        </>
+                      )}
                     </motion.div>
                   )}
 
@@ -318,11 +476,20 @@ export default function CartDrawer({ abierto, onCerrar }: Props) {
 
             {paso !== "listo" && carrito.length > 0 && (
               <footer className="border-t border-neutral-200 px-5 py-4">
+                {paso === "carrito" && (
+                  <CuponCarrito aplicado={cupon} estado={cuponEstado} onAplicar={aplicarCupon} onQuitar={quitarCupon} />
+                )}
                 <dl className="mb-3 space-y-1 text-sm">
                   <div className="flex justify-between text-neutral-600">
                     <dt>Subtotal</dt>
                     <dd className="tabular-nums">{precio(subtotal)}</dd>
                   </div>
+                  {descuento > 0 && (
+                    <div className="flex justify-between text-emerald-700">
+                      <dt>Promociones{cuponEstado?.valido ? " y cupón" : ""}</dt>
+                      <dd className="tabular-nums">− {precio(descuento)}</dd>
+                    </div>
+                  )}
                   <div className="flex justify-between text-neutral-600">
                     <dt>Envío</dt>
                     <dd className="tabular-nums">{envio === 0 ? "Gratis" : precio(envio)}</dd>
@@ -396,6 +563,36 @@ function Campo({
         placeholder={placeholder}
         className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-900 focus:ring-1 focus:ring-neutral-900"
       />
+    </div>
+  );
+}
+
+/** Dato ya cargado (del perfil): se ve como ficha, con un lápiz para cambiarlo en este pedido. */
+function DatoCargado({
+  titulo,
+  onEditar,
+  children,
+}: {
+  titulo: string;
+  onEditar: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+      <div className="min-w-0 flex-1">
+        <p className="mb-0.5 text-[11px] font-bold uppercase tracking-wide text-neutral-400">{titulo}</p>
+        {children}
+      </div>
+      <button
+        type="button"
+        onClick={onEditar}
+        aria-label={`Editar ${titulo.toLowerCase()}`}
+        className="shrink-0 rounded-full p-1.5 text-neutral-500 hover:bg-neutral-200"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+        </svg>
+      </button>
     </div>
   );
 }

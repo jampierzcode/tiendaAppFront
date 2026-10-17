@@ -4,6 +4,7 @@ import { Tooltip, message } from "antd";
 import { TbMenu2, TbExternalLink, TbCopy, TbCheck } from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
 import { useAuth } from "../../hooks/useAuth";
+import NotificationBell from "./NotificationBell";
 
 interface Props {
   abrirMovil: () => void;
@@ -61,6 +62,7 @@ export default function TopNavigation({ abrirMovil }: Props) {
         </button>
 
         <div className="ml-auto flex min-w-0 items-center gap-2">
+          <NotificationBell />
           {diasPrueba !== null && (
             <span className="pill shrink-0 whitespace-nowrap bg-brand-50 text-brand-700">
               Prueba gratis: {diasPrueba} {diasPrueba === 1 ? "día" : "días"}

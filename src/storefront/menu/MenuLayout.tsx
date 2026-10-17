@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { esClaro } from "../color";
 import { useStore } from "../StoreContext";
 import CartSheet from "./CartSheet";
@@ -8,7 +8,7 @@ import { MenuCartProvider, useMenuCart } from "./MenuCart";
 
 function Contenido() {
   const { tienda, cargando, error, precio } = useStore();
-  const { totalItems, subtotal } = useMenuCart();
+  const { totalItems, subtotal, descuento } = useMenuCart();
   const [abierto, setAbierto] = useState(false);
   const { pathname } = useLocation();
 
@@ -39,7 +39,7 @@ function Contenido() {
   }
 
   const textoSobrePrimario = esClaro(tienda.primaryColor) ? "#111827" : "#ffffff";
-  const enSeguimiento = pathname.includes("/pedido/");
+  const enSeguimiento = pathname.includes("/pedido/") || pathname.endsWith("/cuenta");
 
   return (
     <div className="min-h-screen bg-neutral-50 pb-28">
@@ -54,6 +54,13 @@ function Contenido() {
             className="absolute inset-0 h-full w-full object-cover opacity-30"
           />
         )}
+        <Link
+          to={`/t/${tienda.slug}/cuenta`}
+          className="absolute right-4 top-4 z-10 rounded-full bg-black/20 px-3 py-1.5 text-xs font-bold backdrop-blur"
+          style={{ color: textoSobrePrimario }}
+        >
+          Mi cuenta
+        </Link>
         <div className="relative mx-auto flex max-w-2xl items-center gap-4 px-5 py-6">
           {tienda.logoUrl ? (
             <img
@@ -104,7 +111,7 @@ function Contenido() {
                 </span>
                 Ver mi pedido
               </span>
-              <span className="tabular-nums">{precio(subtotal)}</span>
+              <span className="tabular-nums">{precio(subtotal - descuento)}</span>
             </button>
           </motion.div>
         )}

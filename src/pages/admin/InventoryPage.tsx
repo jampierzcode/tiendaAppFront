@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Button, Empty, InputNumber, Modal, Segmented, Spin, Table, message } from "antd";
+import { Button, Empty, Modal, Segmented, Select, Spin, Table, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { TbAdjustments, TbAlertTriangle, TbArrowDown, TbArrowUp } from "react-icons/tb";
+import { TbAdjustments, TbAlertTriangle, TbArrowDown, TbArrowUp, TbPlus } from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
+import MovementModal from "../../components/admin/MovementModal";
 
 interface Movimiento {
   id: number;
@@ -23,6 +24,7 @@ interface Movimiento {
 interface Variacion {
   id: number;
   stock: number;
+  pendiente?: number;
   product: { name: string; lowStockThreshold: number };
   attributes: { value?: { value: string } }[];
 }
@@ -34,6 +36,8 @@ const etiquetaTipo: Record<string, { texto: string; clase: string }> = {
   ajuste: { texto: "Ajuste", clase: "bg-warn-bg text-warn" },
   inicial: { texto: "Inicial", clase: "bg-line-soft text-muted" },
   merma: { texto: "Merma", clase: "bg-danger-bg text-danger" },
+  entrada_manual: { texto: "Aumento manual", clase: "bg-ok-bg text-ok" },
+  salida_manual: { texto: "Disminución manual", clase: "bg-danger-bg text-danger" },
 };
 
 const variacionTexto = (attrs?: { value?: { value: string } }[]) =>
@@ -52,6 +56,41 @@ export default function InventoryPage() {
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [alertas, setAlertas] = useState<Variacion[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [elegirOpen, setElegirOpen] = useState(false);
+  const [catalogo, setCatalogo] = useState<{ value: number; label: string; stock: number }[]>([]);
+  const [item, setItem] = useState<{ id: number; nombre: string; stock: number } | null>(null);
+  const [movOpen, setMovOpen] = useState(false);
+
+  /** Productos simples y variaciones, listos para elegir a cuál moverle el stock. */
+  const abrirElegir = async () => {
+    setElegirOpen(true);
+    if (catalogo.length) return;
+    try {
+      const r = await apiTienda.get("/products");
+      const opciones: { value: number; label: string; stock: number }[] = [];
+      for (const p of r.data.data ?? []) {
+        const todas = p.variations ?? [];
+        const conTallas = todas.some((v: any) => !v.isDefault && (v.attributes ?? []).length > 0);
+        for (const v of conTallas ? todas.filter((x: any) => !x.isDefault) : todas) {
+          const texto = variacionTexto(v.attributes);
+          opciones.push({
+            value: v.id,
+            label: `${p.name}${texto ? ` — ${texto}` : ""}`,
+            stock: Number(v.stock),
+          });
+        }
+      }
+      setCatalogo(opciones);
+    } catch {
+      message.error("No se pudieron cargar los productos");
+    }
+  };
+
+  const mover = (id: number, nombre: string, stock: number) => {
+    setItem({ id, nombre, stock });
+    setElegirOpen(false);
+    setMovOpen(true);
+  };
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -73,46 +112,12 @@ export default function InventoryPage() {
     cargar();
   }, [cargar]);
 
-  const ajustar = (v: Variacion) => {
-    let nuevo = v.stock;
-    Modal.confirm({
-      title: `Ajustar stock — ${v.product.name}`,
-      icon: null,
-      content: (
-        <div className="pt-2">
-          <p className="mb-2 text-[13px] text-muted">
-            {variacionTexto(v.attributes) || "Sin variante"} · actual{" "}
-            <strong className="text-ink">{v.stock}</strong>
-          </p>
-          <InputNumber
-            autoFocus
-            defaultValue={v.stock}
-            min={0}
-            className="w-full"
-            onChange={(x) => (nuevo = Number(x))}
-          />
-          <p className="mt-2 text-[12px] text-muted">
-            La diferencia queda registrada en el kardex como ajuste, con tu nombre.
-          </p>
-        </div>
-      ),
-      okText: "Ajustar",
-      cancelText: "Cancelar",
-      onOk: async () => {
-        try {
-          await apiTienda.post("/inventory/adjust", {
-            variationId: v.id,
-            newStock: nuevo,
-            note: "Ajuste desde el panel",
-          });
-          message.success("Inventario ajustado");
-          await cargar();
-        } catch (e: any) {
-          message.error(e?.response?.data?.message ?? "No se pudo ajustar");
-        }
-      },
-    });
-  };
+  const ajustar = (v: Variacion) =>
+    mover(
+      v.id,
+      `${v.product.name}${variacionTexto(v.attributes) ? ` — ${variacionTexto(v.attributes)}` : ""}`,
+      v.stock
+    );
 
   const columnasMovimientos: ColumnsType<Movimiento> = [
     {
@@ -189,10 +194,15 @@ export default function InventoryPage() {
       title: "Quedan",
       dataIndex: "stock",
       align: "right",
-      render: (s: number) => (
-        <span className={`pill ${s === 0 ? "bg-danger-bg text-danger" : "bg-warn-bg text-warn"}`}>
-          {s === 0 ? "Agotado" : s}
-        </span>
+      render: (s: number, v) => (
+        <div className="flex items-center justify-end gap-2">
+          <span className={`pill ${s === 0 ? "bg-danger-bg text-danger" : "bg-warn-bg text-warn"}`}>
+            {s === 0 ? "Agotado" : s}
+          </span>
+          {(v.pendiente ?? 0) > 0 && (
+            <span className="text-[11px] text-info">+{v.pendiente} por llegar</span>
+          )}
+        </div>
       ),
     },
     {
@@ -201,7 +211,7 @@ export default function InventoryPage() {
       align: "right",
       render: (_, v) => (
         <Button size="small" icon={<TbAdjustments />} onClick={() => ajustar(v)}>
-          Ajustar
+          Movimiento
         </Button>
       ),
     },
@@ -211,7 +221,12 @@ export default function InventoryPage() {
     <>
       <PageHeader
         titulo="Inventario"
-        descripcion="Cada entrada y salida queda escrita aquí, con su motivo y su autor. Para corregir un error se registra un ajuste, no se borra el historial."
+        descripcion="Cada entrada y salida queda escrita aquí, con su motivo y su autor. Las compras suben el stock desde Compras; aquí registras aumentos, disminuciones y ajustes manuales."
+        acciones={
+          <Button type="primary" icon={<TbPlus />} onClick={abrirElegir}>
+            Registrar movimiento
+          </Button>
+        }
       />
 
       <div className="card overflow-hidden">
@@ -255,7 +270,7 @@ export default function InventoryPage() {
           <>
             <p className="flex items-center gap-2 border-b border-line-soft bg-warn-bg px-4 py-2.5 text-[13px] text-warn">
               <TbAlertTriangle className="text-base" />
-              Estas tallas están en o por debajo del mínimo que definiste en cada producto.
+              Estas tallas quedarían en o por debajo del mínimo aun contando lo que viene en camino (compras pendientes).
             </p>
             <Table
               rowKey="id"
@@ -266,6 +281,37 @@ export default function InventoryPage() {
           </>
         )}
       </div>
+
+      <Modal
+        open={elegirOpen}
+        title="¿A qué producto?"
+        footer={null}
+        onCancel={() => setElegirOpen(false)}
+        destroyOnClose
+      >
+        <Select
+          showSearch
+          autoFocus
+          optionFilterProp="label"
+          placeholder="Busca un producto o variación…"
+          style={{ width: "100%" }}
+          options={catalogo.map((c) => ({ value: c.value, label: `${c.label} (stock ${c.stock})` }))}
+          onChange={(id: number) => {
+            const c = catalogo.find((x) => x.value === id);
+            if (c) mover(c.value, c.label, c.stock);
+          }}
+        />
+      </Modal>
+
+      <MovementModal
+        open={movOpen}
+        item={item}
+        onClose={() => setMovOpen(false)}
+        onDone={() => {
+          setCatalogo([]); // el stock cambió: se vuelve a pedir al abrir
+          cargar();
+        }}
+      />
     </>
   );
 }
