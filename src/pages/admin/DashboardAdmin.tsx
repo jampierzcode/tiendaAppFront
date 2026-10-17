@@ -6,6 +6,7 @@ import { motion } from "motion/react";
 import {
   TbAlertTriangle,
   TbCash,
+  TbChefHat,
   TbClock,
   TbPackage,
 } from "react-icons/tb";
@@ -26,6 +27,14 @@ interface PedidoResumen {
   createdAt: string;
 }
 
+interface InsumoBajo {
+  id: number;
+  name: string;
+  unit: string;
+  stock: number;
+  minStock: number;
+}
+
 interface BajoStock {
   id: number;
   stock: number;
@@ -41,6 +50,7 @@ export default function DashboardAdmin() {
   const [resumen, setResumen] = useState<any>(null);
   const [ultimos, setUltimos] = useState<PedidoResumen[]>([]);
   const [bajoStock, setBajoStock] = useState<BajoStock[]>([]);
+  const [insumosBajos, setInsumosBajos] = useState<InsumoBajo[]>([]);
   const [productos, setProductos] = useState(0);
   const [cargando, setCargando] = useState(true);
 
@@ -48,18 +58,29 @@ export default function DashboardAdmin() {
     Promise.all([
       apiTienda.get("/orders/summary").then((r) => r.data.data),
       apiTienda.get("/orders", { params: { perPage: 6 } }).then((r) => r.data.data),
-      apiTienda.get("/inventory/low-stock").then((r) => r.data.data),
+      // En restaurantes lo que se acaba son los insumos, no los platos.
+      esRestaurante
+        ? apiTienda.get("/ingredients").then((r) => r.data.data)
+        : apiTienda.get("/inventory/low-stock").then((r) => r.data.data),
       apiTienda.get("/products").then((r) => r.data.data),
     ])
       .then(([s, o, l, p]) => {
         setResumen(s);
         setUltimos(o ?? []);
-        setBajoStock(l ?? []);
+        if (esRestaurante) {
+          setInsumosBajos(
+            ((l ?? []) as (InsumoBajo & { low: boolean })[])
+              .filter((i) => i.low)
+              .sort((a, b) => a.stock - b.stock)
+          );
+        } else {
+          setBajoStock(l ?? []);
+        }
         setProductos((p ?? []).length);
       })
       .catch(() => undefined)
       .finally(() => setCargando(false));
-  }, [uuid_business]);
+  }, [uuid_business, esRestaurante]);
 
   if (cargando) {
     return (
@@ -73,7 +94,7 @@ export default function DashboardAdmin() {
     <>
       <PageHeader
         titulo={`Hola, ${auth.user?.name?.split(" ")[0] ?? ""}`}
-        descripcion="Así va tu tienda hoy."
+        descripcion={esRestaurante ? "Así va tu restaurante hoy." : "Así va tu tienda hoy."}
       />
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -91,6 +112,26 @@ export default function DashboardAdmin() {
           tono="warn"
           indice={1}
         />
+        {esRestaurante ? (
+          <>
+            <StatCard
+              etiqueta="En cocina"
+              valor={(resumen?.porEstado?.preparando ?? 0) + (resumen?.porEstado?.listo ?? 0)}
+              icono={<TbChefHat />}
+              detalle="Preparando o listos"
+              indice={2}
+            />
+            <StatCard
+              etiqueta="Insumos por reponer"
+              valor={insumosBajos.length}
+              icono={<TbAlertTriangle />}
+              tono={insumosBajos.length ? "danger" : "ok"}
+              detalle={insumosBajos.length ? "Revisa tus insumos" : "Todo en orden"}
+              indice={3}
+            />
+          </>
+        ) : (
+          <>
         <StatCard
           etiqueta="Productos activos"
           valor={productos}
@@ -105,6 +146,8 @@ export default function DashboardAdmin() {
           detalle={bajoStock.length ? "Necesitan reposición" : "Todo en orden"}
           indice={3}
         />
+          </>
+        )}
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -149,6 +192,56 @@ export default function DashboardAdmin() {
             </ul>
           )}
         </motion.section>
+
+        {esRestaurante && (
+          <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.22 }}
+            className="card p-5"
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-[15px] font-bold text-ink">Insumos que se acaban</h2>
+              <Link
+                to={`/b/${uuid_business}/ingredients`}
+                className="text-[13px] font-medium text-brand-600 hover:underline"
+              >
+                Ver insumos
+              </Link>
+            </div>
+
+            {insumosBajos.length === 0 ? (
+              <Empty
+                className="py-8"
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="Ningún insumo por debajo del mínimo"
+              />
+            ) : (
+              <ul className="divide-y divide-line-soft">
+                {insumosBajos.slice(0, 6).map((i) => (
+                  <li key={i.id}>
+                    <Link
+                      to={`/b/${uuid_business}/ingredients`}
+                      className="flex items-center justify-between gap-3 py-2.5 hover:opacity-80"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-medium text-ink">{i.name}</p>
+                        <p className="text-[11px] text-muted">
+                          Mínimo {i.minStock} {i.unit}
+                        </p>
+                      </div>
+                      <span
+                        className={`pill ${i.stock <= 0 ? "bg-danger-bg text-danger" : "bg-warn-bg text-warn"}`}
+                      >
+                        {i.stock <= 0 ? "Agotado" : `Quedan ${i.stock} ${i.unit}`}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </motion.section>
+        )}
 
         {!esRestaurante && (
         <motion.section
