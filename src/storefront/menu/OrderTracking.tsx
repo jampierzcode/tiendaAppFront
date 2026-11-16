@@ -148,6 +148,24 @@ export default function OrderTracking() {
                   ? "Paga para que confirmemos tu pedido."
                   : "Pagas al recibir tu pedido."}
               </p>
+              {(pedido.paymentMethods ?? []).map((m) => (
+                <div key={m.nombre} className="mt-2 rounded-2xl bg-neutral-100 p-3">
+                  <p className="font-bold">{m.nombre}</p>
+                  {m.numero && <p className="font-mono text-base font-semibold">{m.numero}</p>}
+                  {m.cci && <p className="text-xs text-neutral-500">CCI: {m.cci}</p>}
+                  {m.titular && <p className="text-xs text-neutral-500">Titular: {m.titular}</p>}
+                  {m.instrucciones && <p className="mt-1 text-xs text-neutral-600">{m.instrucciones}</p>}
+                  {m.imagenes.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {m.imagenes.map((u) => (
+                        <a key={u} href={u} target="_blank" rel="noopener noreferrer">
+                          <img src={u} alt={`QR ${m.nombre}`} className="h-32 w-32 rounded-xl bg-white object-contain" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
               {pedido.paymentInstructions && (
                 <p className="mt-2 whitespace-pre-line rounded-2xl bg-neutral-100 p-3 font-semibold">
                   {pedido.paymentInstructions}

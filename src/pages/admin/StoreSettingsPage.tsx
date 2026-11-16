@@ -15,7 +15,8 @@ import {
 import QRCode from "qrcode";
 import QrPosterModal from "../../components/admin/QrPosterModal";
 import { motion } from "motion/react";
-import { TbBrandWhatsapp, TbDownload, TbExternalLink, TbPalette, TbPrinter } from "react-icons/tb";
+import { TbBrandWhatsapp, TbCreditCard, TbDownload, TbExternalLink, TbPalette, TbPrinter } from "react-icons/tb";
+import PaymentMethodsTab from "../../components/admin/PaymentMethodsTab";
 import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
 import GalleryModal from "../../components/admin/GalleryModal";
@@ -181,7 +182,7 @@ export default function StoreSettingsPage() {
         >
           <Tabs
             defaultActiveKey={
-              ["general", "whatsapp", "apariencia", "envios"].includes(tabInicial)
+              ["general", "pagos", "whatsapp", "apariencia", "envios"].includes(tabInicial)
                 ? tabInicial
                 : "general"
             }
@@ -248,7 +249,7 @@ export default function StoreSettingsPage() {
                     <Form.Item
                       name="payment_instructions"
                       label="Instrucciones de pago para el cliente"
-                      extra="Lo ve el cliente en la carta y en el seguimiento de su pedido."
+                      extra="Texto libre de respaldo. Para Yape, Plin o cuentas con su QR usa la pestaña «Métodos de pago»."
                     >
                       <Input.TextArea rows={2} maxLength={500} placeholder="Yape o Plin al 987 654 321 (Mi Negocio SAC)" />
                     </Form.Item>
@@ -284,6 +285,19 @@ export default function StoreSettingsPage() {
                         <Input addonBefore="@" placeholder="visullboutique" />
                       </Form.Item>
                     </div>
+                  </div>
+                ),
+              },
+              {
+                key: "pagos",
+                label: (
+                  <span className="flex items-center gap-1.5">
+                    <TbCreditCard /> Métodos de pago
+                  </span>
+                ),
+                children: (
+                  <div className="p-5">
+                    <PaymentMethodsTab />
                   </div>
                 ),
               },

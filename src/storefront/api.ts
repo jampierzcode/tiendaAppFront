@@ -291,6 +291,15 @@ export interface SeguimientoPedido {
   paidTotal: number;
   paymentPolicy: "none" | "on_confirm" | "on_delivery";
   paymentInstructions: string | null;
+  paymentMethods?: {
+    nombre: string;
+    tipo: string;
+    numero: string;
+    cci: string;
+    titular: string;
+    instrucciones: string;
+    imagenes: string[];
+  }[];
   currencySymbol: string;
   createdAt: string;
   items: {
