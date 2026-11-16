@@ -106,7 +106,6 @@ export default function StoreSettingsPage() {
           logo_url: d.logoUrl,
           business_type: d.businessType ?? "retail",
           payment_policy: d.paymentPolicy ?? "none",
-          payment_instructions: d.paymentInstructions ?? "",
         });
       })
       .catch(() => message.error("No se pudo cargar la configuración"))
@@ -244,14 +243,6 @@ export default function StoreSettingsPage() {
                           { value: "on_delivery", label: "Contra entrega: al entregar el pedido" },
                         ]}
                       />
-                    </Form.Item>
-
-                    <Form.Item
-                      name="payment_instructions"
-                      label="Instrucciones de pago para el cliente"
-                      extra="Texto libre de respaldo. Para Yape, Plin o cuentas con su QR usa la pestaña «Métodos de pago»."
-                    >
-                      <Input.TextArea rows={2} maxLength={500} placeholder="Yape o Plin al 987 654 321 (Mi Negocio SAC)" />
                     </Form.Item>
 
                     <Form.Item name="description" label="Descripción">

@@ -166,7 +166,7 @@ export default function OrderTracking() {
                   )}
                 </div>
               ))}
-              {pedido.paymentInstructions && (
+              {pedido.paymentInstructions && !(pedido.paymentMethods ?? []).length && (
                 <p className="mt-2 whitespace-pre-line rounded-2xl bg-neutral-100 p-3 font-semibold">
                   {pedido.paymentInstructions}
                 </p>

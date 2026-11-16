@@ -57,6 +57,9 @@ export default function PaymentMethodsTab() {
   const [editando, setEditando] = useState<MetodoPago | null>(null);
   const [galeria, setGaleria] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  // Texto libre de antes («Instrucciones de pago»): se pasa a un método o se borra.
+  const [antiguo, setAntiguo] = useState<string | null>(null);
+  const [borrarAntiguo, setBorrarAntiguo] = useState(false);
 
   useEffect(() => {
     apiTienda
@@ -64,6 +67,7 @@ export default function PaymentMethodsTab() {
       .then((r) => {
         setMetodos(r.data.data ?? []);
         setOriginal(JSON.stringify(r.data.data ?? []));
+        setAntiguo(r.data.legacyInstructions || null);
       })
       .catch(() => message.error("No se pudieron cargar los métodos de pago"));
   }, []);
@@ -75,14 +79,16 @@ export default function PaymentMethodsTab() {
   );
 
   if (!metodos) return <Spin />;
-  const cambios = JSON.stringify(metodos) !== original;
+  const cambios = JSON.stringify(metodos) !== original || borrarAntiguo;
 
   const guardar = async () => {
     setGuardando(true);
     try {
-      const r = await apiTienda.put("/payment-methods", { methods: metodos });
+      const r = await apiTienda.put("/payment-methods", { methods: metodos, clearLegacy: borrarAntiguo });
       setMetodos(r.data.data);
       setOriginal(JSON.stringify(r.data.data));
+      setAntiguo(r.data.legacyInstructions || null);
+      setBorrarAntiguo(false);
       message.success("Métodos de pago guardados");
     } catch (e: any) {
       message.error(e?.response?.data?.message ?? "No se pudo guardar");
@@ -142,6 +148,49 @@ export default function PaymentMethodsTab() {
           </Button>
         </div>
       </div>
+
+      {antiguo && !borrarAntiguo && (
+        <div className="mb-4 rounded-xl border border-warn/30 bg-warn-bg p-3 text-[13px]">
+          <p className="font-semibold text-warn">Tienes instrucciones de pago escritas de antes:</p>
+          <p className="mt-1 whitespace-pre-line text-ink-soft">{antiguo}</p>
+          <p className="mt-1 text-[12px] text-muted">
+            {metodos.some((m) => m.activo)
+              ? "Como ya tienes métodos activos, este texto ya no se muestra a tus clientes. Bórralo para dejarlo limpio."
+              : "Mientras no tengas métodos activos, tus clientes siguen viendo este texto."}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              size="small"
+              type="primary"
+              onClick={() => {
+                setMetodos([
+                  ...metodos,
+                  {
+                    id: nuevoId(),
+                    nombre: /plin/i.test(antiguo) && !/yape/i.test(antiguo) ? "Plin" : /yape/i.test(antiguo) ? "Yape" : "Pago",
+                    tipo: /yape|plin/i.test(antiguo) ? "billetera" : "otro",
+                    numero: antiguo.match(/\b9\d{2}\s?\d{3}\s?\d{3}\b/)?.[0] ?? "",
+                    cci: "",
+                    titular: "",
+                    instrucciones: antiguo.slice(0, 800),
+                    activo: true,
+                    imagenes: [],
+                  },
+                ]);
+                setBorrarAntiguo(true);
+              }}
+            >
+              Convertir en método
+            </Button>
+            <Button size="small" danger onClick={() => setBorrarAntiguo(true)}>
+              Borrar texto
+            </Button>
+          </div>
+        </div>
+      )}
+      {borrarAntiguo && (
+        <p className="mb-3 text-[12px] text-muted">El texto antiguo se borrará al pulsar «Guardar métodos».</p>
+      )}
 
       {metodos.length === 0 ? (
         <Empty description="Aún no agregaste métodos de pago" />
