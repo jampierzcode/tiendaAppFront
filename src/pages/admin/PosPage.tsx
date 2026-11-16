@@ -374,18 +374,18 @@ export default function PosPage() {
                 <p className="mb-3 text-[12px] text-muted">
                   {totalCatalogo} producto{totalCatalogo === 1 ? "" : "s"} · toca uno para agregarlo
                 </p>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
                   {resultados.map((p) => (
                     <button
                       key={p.id}
                       onClick={() => tocar(p)}
                       className="group flex flex-col overflow-hidden rounded-xl border border-line bg-white text-left transition hover:border-brand-400 hover:shadow-md"
                     >
-                      <div className="relative aspect-square w-full bg-canvas">
+                      <div className="relative aspect-square w-full overflow-hidden bg-canvas">
                         {p.imageUrl ? (
-                          <img src={p.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                          <img src={p.imageUrl} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
                         ) : (
-                          <div className="grid h-full place-items-center text-3xl text-line">
+                          <div className="absolute inset-0 grid place-items-center text-3xl text-line">
                             <TbPhoto />
                           </div>
                         )}
