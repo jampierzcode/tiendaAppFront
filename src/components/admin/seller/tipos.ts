@@ -25,6 +25,8 @@ export interface TipoEntrega {
   direccion: string;
   reglas: string;
   soloRespaldo: boolean;
+  /** Pedido mínimo en productos; null = sin mínimo. */
+  minimo: number | null;
 }
 
 export interface ZonaEnvio {
@@ -54,6 +56,15 @@ export interface Sede {
   referencia: string;
 }
 
+export interface ConfigRestaurante {
+  horario: { dia: number; abre: string; cierra: string }[];
+  mensajeCerrado: string;
+  programados: boolean;
+  prepMin: number | null;
+  sugerencias: string;
+  reservas: { activo: boolean; instrucciones: string };
+}
+
 export interface ConfigVendedor {
   nombre: string;
   publico: string;
@@ -69,6 +80,7 @@ export interface ConfigVendedor {
   derivarCuando: string[];
   descuentos: string;
   sedes: Sede[];
+  restaurante: ConfigRestaurante;
 }
 
 export const nuevoId = () => Math.random().toString(36).slice(2, 10);
@@ -84,7 +96,9 @@ export const DIAS = [
 ] as const;
 
 /** Plantillas al pulsar «Agregar» un tipo de entrega. */
-export function plantillaTipo(clase: ClaseEntrega | "shalom"): TipoEntrega {
+export function plantillaTipo(
+  clase: ClaseEntrega | "shalom" | "delivery_resto" | "recojo_resto"
+): TipoEntrega {
   const base: TipoEntrega = {
     id: nuevoId(),
     nombre: "Entrega",
@@ -100,7 +114,31 @@ export function plantillaTipo(clase: ClaseEntrega | "shalom"): TipoEntrega {
     direccion: "",
     reglas: "",
     soloRespaldo: false,
+    minimo: null,
   };
+  // Restaurante: delivery propio en minutos y recojo en el local.
+  if (clase === "delivery_resto") {
+    return {
+      ...base,
+      nombre: "Delivery",
+      clase: "motorizado",
+      costo: { ...base.costo, monto: 5 },
+      promesaResto: "30 a 45 minutos",
+      pago: { ...base.pago, tipo: "contraentrega" },
+      datos: ["Nombre completo", "Dirección", "Referencia"],
+    };
+  }
+  if (clase === "recojo_resto") {
+    return {
+      ...base,
+      nombre: "Recojo en el local",
+      clase: "recojo",
+      costo: { ...base.costo, tipo: "gratis" },
+      promesaResto: "Listo en 20 minutos",
+      pago: { ...base.pago, tipo: "tienda" },
+      datos: ["Nombre completo"],
+    };
+  }
   if (clase === "motorizado") {
     return {
       ...base,
@@ -146,6 +184,10 @@ export function resumenCosto(t: TipoEntrega, s: string) {
   if (c.tipo === "transportista") return `Lo cobra el transportista${c.referencia ? ` (${c.referencia})` : ""}`;
   if (c.tipo === "rango") return `${s}${c.monto ?? 0} – ${s}${c.maximo ?? c.monto ?? 0}`;
   return `${s}${c.monto ?? 0}${t.gratisDesde != null ? ` (gratis desde ${s}${t.gratisDesde})` : ""}`;
+}
+
+export function resumenMinimo(t: TipoEntrega, s: string) {
+  return t.minimo != null ? `Pedido mínimo ${s}${t.minimo}` : null;
 }
 
 export function resumenPago(t: TipoEntrega, s: string) {

@@ -19,6 +19,7 @@ import {
   plantillaTipo,
   resumenCosto,
   resumenEntrega,
+  resumenMinimo,
   resumenPago,
   type TipoEntrega,
   type ZonaEnvio,
@@ -30,10 +31,22 @@ interface Props {
   simbolo: string;
   datosSugeridos: string[];
   mostrarPeru: boolean;
+  /** Restaurante: zonas de reparto en la ciudad, sin agencias ni provincias. */
+  restaurante?: boolean;
 }
 
 /** Zonas de envío con sus regiones y tipos de entrega (Envíos y plazos). */
-export default function ShippingZonesEditor({ zonas, onChange, simbolo, datosSugeridos, mostrarPeru }: Props) {
+export default function ShippingZonesEditor({
+  zonas,
+  onChange,
+  simbolo,
+  datosSugeridos,
+  mostrarPeru,
+  restaurante = false,
+}: Props) {
+  const grupos = restaurante
+    ? GRUPOS_PRINCIPALES.filter((g) => g.clave === "lima" || g.clave === "callao")
+    : GRUPOS_PRINCIPALES;
   const [abiertas, setAbiertas] = useState<Record<string, boolean>>({});
   const [editando, setEditando] = useState<{ zonaId: string; tipo: TipoEntrega } | null>(null);
 
@@ -81,8 +94,17 @@ export default function ShippingZonesEditor({ zonas, onChange, simbolo, datosSug
           <Empty
             description={
               <span className="text-[13px] text-muted">
-                Sin zonas, el vendedor usa el envío general de <b>Mi tienda</b>. Crea zonas para ofrecer
-                motorizado en Lima, agencia a provincias, recojo en tienda…
+                {restaurante ? (
+                  <>
+                    Sin zonas, el vendedor usa el envío general de <b>Mi tienda</b>. Crea zonas de reparto (por
+                    distritos) con su costo, pedido mínimo y tiempo; el recojo en el local y la mesa funcionan siempre.
+                  </>
+                ) : (
+                  <>
+                    Sin zonas, el vendedor usa el envío general de <b>Mi tienda</b>. Crea zonas para ofrecer
+                    motorizado en Lima, agencia a provincias, recojo en tienda…
+                  </>
+                )}
               </span>
             }
           />
@@ -99,7 +121,7 @@ export default function ShippingZonesEditor({ zonas, onChange, simbolo, datosSug
                   <Input
                     variant="borderless"
                     className="!px-0 text-[16px] font-bold"
-                    placeholder="Ponle un nombre: Lima, Provincias…"
+                    placeholder={restaurante ? "Ponle un nombre: Zona cercana, Zona 2…" : "Ponle un nombre: Lima, Provincias…"}
                     value={z.nombre}
                     maxLength={80}
                     onChange={(e) => cambiarZona(z.id, { nombre: e.target.value })}
@@ -145,7 +167,7 @@ export default function ShippingZonesEditor({ zonas, onChange, simbolo, datosSug
                   />
                   {mostrarPeru && (
                     <div className="mt-2 flex flex-wrap gap-2">
-                      {GRUPOS_PRINCIPALES.map((g) => {
+                      {grupos.map((g) => {
                         const todas = g.regiones.every((r) => z.regiones.includes(r));
                         return (
                           <Button
@@ -191,13 +213,19 @@ export default function ShippingZonesEditor({ zonas, onChange, simbolo, datosSug
                     <p className="text-[13px] font-bold text-ink">Tipos de entrega</p>
                     <Dropdown
                       menu={{
-                        items: [
-                          { key: "motorizado", label: "Motorizado (contraentrega, por horario)" },
-                          { key: "shalom", label: "Agencia Shalom (adelanto parcial)" },
-                          { key: "agencia", label: "Otra agencia (Olva, Marvisur…)" },
-                          { key: "recojo", label: "Recojo en tienda" },
-                          { key: "otro", label: "Personalizado / Otro" },
-                        ],
+                        items: restaurante
+                          ? [
+                              { key: "delivery_resto", label: "Delivery (costo, tiempo y pedido mínimo)" },
+                              { key: "recojo_resto", label: "Recojo en el local" },
+                              { key: "otro", label: "Personalizado / Otro" },
+                            ]
+                          : [
+                              { key: "motorizado", label: "Motorizado (contraentrega, por horario)" },
+                              { key: "shalom", label: "Agencia Shalom (adelanto parcial)" },
+                              { key: "agencia", label: "Otra agencia (Olva, Marvisur…)" },
+                              { key: "recojo", label: "Recojo en tienda" },
+                              { key: "otro", label: "Personalizado / Otro" },
+                            ],
                         onClick: ({ key }) =>
                           setEditando({ zonaId: z.id, tipo: plantillaTipo(key as Parameters<typeof plantillaTipo>[0]) }),
                       }}
@@ -273,6 +301,7 @@ export default function ShippingZonesEditor({ zonas, onChange, simbolo, datosSug
                           </span>
                           <span className="flex items-center gap-1.5">
                             <TbCreditCard /> Pago: {resumenPago(t, simbolo)}
+                            {resumenMinimo(t, simbolo) && ` · ${resumenMinimo(t, simbolo)}`}
                           </span>
                           {t.datos.length > 0 && (
                             <span className="flex items-center gap-1.5">
@@ -318,6 +347,7 @@ export default function ShippingZonesEditor({ zonas, onChange, simbolo, datosSug
         abierto={editando?.tipo ?? null}
         simbolo={simbolo}
         datosSugeridos={datosSugeridos}
+        restaurante={restaurante}
         onCancel={() => setEditando(null)}
         onSave={(t) => editando && guardarTipo(editando.zonaId, t)}
       />

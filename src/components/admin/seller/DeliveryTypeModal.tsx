@@ -7,9 +7,15 @@ interface Props {
   abierto: TipoEntrega | null;
   simbolo: string;
   datosSugeridos: string[];
+  /** Restaurante: sin agencias ni plazos en días; tiempo en minutos y pedido mínimo. */
+  restaurante?: boolean;
   onCancel: () => void;
   onSave: (t: TipoEntrega) => void;
 }
+
+const NOMBRES_RESTO = ["Delivery", "Delivery propio", "Rappi / PedidosYa", "Recojo en el local"].map((v) => ({
+  value: v,
+}));
 
 const NOMBRES = ["Motorizado", "Shalom", "Olva Courier", "Marvisur", "Delivery propio", "Recojo en tienda"].map(
   (v) => ({ value: v })
@@ -33,7 +39,14 @@ function Bloque({ titulo, ayuda, children }: { titulo: string; ayuda?: string; c
 }
 
 /** Edición de un tipo de entrega: costo, plazos, pago y datos a pedir. */
-export default function DeliveryTypeModal({ abierto, simbolo, datosSugeridos, onCancel, onSave }: Props) {
+export default function DeliveryTypeModal({
+  abierto,
+  simbolo,
+  datosSugeridos,
+  restaurante = false,
+  onCancel,
+  onSave,
+}: Props) {
   const [t, setT] = useState<TipoEntrega | null>(abierto);
   useEffect(() => setT(abierto), [abierto]);
   if (!t) return null;
@@ -58,10 +71,10 @@ export default function DeliveryTypeModal({ abierto, simbolo, datosSugeridos, on
             <label className="text-[12px] font-semibold text-ink-soft">Nombre (lo verá el cliente)</label>
             <AutoComplete
               className="w-full"
-              options={NOMBRES}
+              options={restaurante ? NOMBRES_RESTO : NOMBRES}
               value={t.nombre}
               onChange={(v) => set({ nombre: v })}
-              placeholder="Ej.: Motorizado, Shalom"
+              placeholder={restaurante ? "Ej.: Delivery, Recojo en el local" : "Ej.: Motorizado, Shalom"}
             />
           </div>
           <div>
@@ -70,12 +83,20 @@ export default function DeliveryTypeModal({ abierto, simbolo, datosSugeridos, on
               className="w-full"
               value={t.clase}
               onChange={(v) => set({ clase: v })}
-              options={[
-                { value: "motorizado", label: "Motorizado / delivery" },
-                { value: "agencia", label: "Agencia (Shalom, Olva…)" },
-                { value: "recojo", label: "Recojo en tienda" },
-                { value: "otro", label: "Personalizado / Otro" },
-              ]}
+              options={
+                restaurante
+                  ? [
+                      { value: "motorizado", label: "Delivery (repartidor propio o app)" },
+                      { value: "recojo", label: "Recojo en el local" },
+                      { value: "otro", label: "Personalizado / Otro" },
+                    ]
+                  : [
+                      { value: "motorizado", label: "Motorizado / delivery" },
+                      { value: "agencia", label: "Agencia (Shalom, Olva…)" },
+                      { value: "recojo", label: "Recojo en tienda" },
+                      { value: "otro", label: "Personalizado / Otro" },
+                    ]
+              }
             />
           </div>
         </div>
@@ -139,6 +160,17 @@ export default function DeliveryTypeModal({ abierto, simbolo, datosSugeridos, on
               />
             )}
           </div>
+          <div className="mt-3 flex items-center gap-2 text-[13px]">
+            <span className="text-ink-soft">Pedido mínimo</span>
+            <InputNumber
+              min={0}
+              addonBefore={simbolo}
+              placeholder="Ej. 25"
+              value={t.minimo}
+              onChange={(v) => set({ minimo: v })}
+            />
+            <span className="text-[12px] text-muted">Opcional</span>
+          </div>
           {(t.costo.tipo === "fijo" || t.costo.tipo === "rango") && (
             <div className="mt-3 flex items-center gap-2 text-[13px]">
               <span className="text-ink-soft">Envío gratis desde</span>
@@ -154,6 +186,16 @@ export default function DeliveryTypeModal({ abierto, simbolo, datosSugeridos, on
           )}
         </Bloque>
 
+        {restaurante ? (
+          <Bloque titulo="Tiempo estimado" ayuda="Lo que el vendedor promete al cliente. Los días y horas de atención van en «Horario».">
+            <Input
+              maxLength={120}
+              placeholder="Ej. 30 a 45 minutos"
+              value={t.promesaResto}
+              onChange={(e) => set({ promesaResto: e.target.value })}
+            />
+          </Bloque>
+        ) : (
         <Bloque
           titulo="Plazos de entrega"
           ayuda="Lo que el vendedor promete según la hora en que el cliente pide."
@@ -226,6 +268,7 @@ export default function DeliveryTypeModal({ abierto, simbolo, datosSugeridos, on
             </div>
           </div>
         </Bloque>
+        )}
 
         <Bloque titulo="Forma de pago">
           <Segmented
@@ -291,7 +334,7 @@ export default function DeliveryTypeModal({ abierto, simbolo, datosSugeridos, on
             onChange={(e) => set({ reglas: e.target.value })}
             placeholder="Ej.: Los pedidos de los sábados salen el lunes. No entregamos en cerros."
           />
-          <div className="mt-3 flex items-center gap-2">
+          <div className={`mt-3 flex items-center gap-2 ${restaurante ? "hidden" : ""}`}>
             <Switch size="small" checked={t.soloRespaldo} onChange={(v) => set({ soloRespaldo: v })} />
             <span className="text-[13px] text-ink-soft">
               Usar solo como respaldo (se ofrece si ninguna otra opción de la zona le sirve)

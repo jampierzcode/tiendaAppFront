@@ -5,6 +5,7 @@ import {
   Button,
   Empty,
   Input,
+  InputNumber,
   Modal,
   Popconfirm,
   Radio,
@@ -22,6 +23,7 @@ import { useBusiness } from "../../context/BusinessContext";
 import PageHeader from "../../components/ui/PageHeader";
 import ShippingZonesEditor from "../../components/admin/seller/ShippingZonesEditor";
 import SedesEditor from "../../components/admin/seller/SedesEditor";
+import HorarioEditor from "../../components/admin/seller/HorarioEditor";
 import {
   nuevoId,
   type ConfigVendedor,
@@ -42,6 +44,21 @@ interface Datos {
 }
 
 const CATEGORIAS_FAQ = ["Productos", "Horarios", "Envíos", "Pagos", "Devoluciones", "Otros"];
+const CATEGORIAS_FAQ_RESTO = ["Carta", "Horarios", "Delivery", "Pagos", "Reservas", "Alérgenos", "Otros"];
+
+const EJEMPLO_RESTO = `Cliente: Hola, ¿tienen delivery a Miraflores?
+Vendedor: ¡Hola! 😋 Sí llegamos a Miraflores: el delivery cuesta S/5 y demora de 30 a 45 minutos. Aquí está nuestra carta: (enlace) ¿Qué se te antoja hoy?
+Cliente: Una hamburguesa clásica
+Vendedor: ¡Buena elección! 🍔 ¿Cómo quieres el término de la carne: jugoso, a punto o bien cocido? ¿Y la acompañas con papas o camotes?
+Cliente: A punto con papas
+Vendedor: Perfecto. ¿Le agregamos una bebida helada o un postre para completar?
+Cliente: Una chicha
+Vendedor: Listo, tu pedido:
+*1 Hamburguesa clásica* (a punto, con papas): S/24
+*1 Chicha morada*: S/6
+*Delivery Miraflores*: S/5
+*Total:* S/35
+¿A qué dirección te lo enviamos y alguna referencia?`;
 
 const SITUACIONES = [
   "Problema con el pago",
@@ -176,7 +193,11 @@ export default function SellerAgentPage() {
     setFaq(null);
   };
 
-  const categoriasFaq = [...new Set([...CATEGORIAS_FAQ, ...config.faqs.map((f) => f.categoria)])];
+  const categoriasFaq = [
+    ...new Set([...(datos.isRestaurant ? CATEGORIAS_FAQ_RESTO : CATEGORIAS_FAQ), ...config.faqs.map((f) => f.categoria)]),
+  ];
+  const resto = config.restaurante;
+  const setResto = (c: Partial<ConfigVendedor["restaurante"]>) => set({ restaurante: { ...resto, ...c } });
 
   const personalidad = (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
@@ -196,7 +217,11 @@ export default function SellerAgentPage() {
             maxLength={400}
             value={config.publico}
             onChange={(e) => set({ publico: e.target.value })}
-            placeholder="Ej.: Mujeres de 18 a 35 años que buscan lencería y ropa a la moda"
+            placeholder={
+              datos.isRestaurant
+                ? "Ej.: Familias y oficinas de Miraflores que piden almuerzo y cena"
+                : "Ej.: Mujeres de 18 a 35 años que buscan lencería y ropa a la moda"
+            }
           />
         </Campo>
         <Campo titulo="Tono">
@@ -287,7 +312,11 @@ export default function SellerAgentPage() {
             disabled={!config.saludo.activo}
             value={config.saludo.texto}
             onChange={(e) => set({ saludo: { ...config.saludo, texto: e.target.value } })}
-            placeholder={"¡Hola! 👋 Bienvenida a {{tienda}} 💖\nMira todo nuestro catálogo aquí: {{catalogo}}\n¿Qué estás buscando hoy?"}
+            placeholder={
+              datos.isRestaurant
+                ? "¡Hola! 👋 Bienvenido a {{tienda}} 🍔\nMira nuestra carta aquí: {{catalogo}}\n¿Delivery, recojo o comes aquí?"
+                : "¡Hola! 👋 Bienvenida a {{tienda}} 💖\nMira todo nuestro catálogo aquí: {{catalogo}}\n¿Qué estás buscando hoy?"
+            }
           />
           <Campo titulo="Cómo se envía">
             <Radio.Group
@@ -316,7 +345,11 @@ export default function SellerAgentPage() {
             showCount
             value={instrucciones}
             onChange={(e) => setInstrucciones(e.target.value)}
-            placeholder={"Ej.: Los cambios de talla se aceptan hasta 7 días con boleta.\nOfrece siempre el set completo cuando pidan una sola prenda."}
+            placeholder={
+              datos.isRestaurant
+                ? "Ej.: El menú del día cambia a diario: entrada + segundo + refresco a S/15.\nLos pedidos grandes (más de 10 platos) con 2 horas de anticipación."
+                : "Ej.: Los cambios de talla se aceptan hasta 7 días con boleta.\nOfrece siempre el set completo cuando pidan una sola prenda."
+            }
           />
         </section>
       </div>
@@ -380,8 +413,8 @@ export default function SellerAgentPage() {
       <section className="card space-y-3 p-5">
         <div className="flex items-center justify-between gap-2">
           <p className="eyebrow">Conversación de ejemplo</p>
-          {!config.ejemplo && !datos.isRestaurant && (
-            <Button size="small" onClick={() => set({ ejemplo: EJEMPLO })}>
+          {!config.ejemplo && (
+            <Button size="small" onClick={() => set({ ejemplo: datos.isRestaurant ? EJEMPLO_RESTO : EJEMPLO })}>
               Cargar ejemplo
             </Button>
           )}
@@ -415,6 +448,41 @@ export default function SellerAgentPage() {
             options={SITUACIONES.map((x) => ({ value: x, label: x }))}
           />
         </section>
+        {datos.isRestaurant && (
+          <section className="card space-y-3 p-5">
+            <p className="eyebrow">Sugerencias para subir el pedido</p>
+            <p className="text-[12px] text-muted">Lo que el vendedor ofrece una sola vez antes de cerrar, sin insistir.</p>
+            <Input.TextArea
+              rows={2}
+              maxLength={600}
+              value={resto.sugerencias}
+              onChange={(e) => setResto({ sugerencias: e.target.value })}
+              placeholder="Ej.: Ofrece una bebida helada o el postre del día. Si piden 2 platos, sugiere el combo para 2."
+            />
+          </section>
+        )}
+        {datos.isRestaurant && (
+          <section className="card space-y-3 p-5">
+            <div className="flex items-center justify-between">
+              <p className="eyebrow">Reservas de mesa</p>
+              <Switch
+                checked={resto.reservas.activo}
+                onChange={(v) => setResto({ reservas: { ...resto.reservas, activo: v } })}
+              />
+            </div>
+            <p className="text-[12px] text-muted">
+              El vendedor pide nombre, personas, fecha y hora, y te avisa en Notificaciones. Tú la confirmas por el chat.
+            </p>
+            <Input.TextArea
+              rows={2}
+              maxLength={600}
+              disabled={!resto.reservas.activo}
+              value={resto.reservas.instrucciones}
+              onChange={(e) => setResto({ reservas: { ...resto.reservas, instrucciones: e.target.value } })}
+              placeholder="Ej.: Máximo 8 personas. Solo de jueves a domingo. Tolerancia de 15 minutos."
+            />
+          </section>
+        )}
         <section className="card space-y-3 p-5">
           <p className="eyebrow">Descuentos permitidos</p>
           <p className="text-[12px] text-muted">
@@ -425,7 +493,11 @@ export default function SellerAgentPage() {
             maxLength={600}
             value={config.descuentos}
             onChange={(e) => set({ descuentos: e.target.value })}
-            placeholder="Ej.: Si lleva 3 prendas o más puede dejarle S/10 menos. Nunca más del 10%."
+            placeholder={
+              datos.isRestaurant
+                ? "Ej.: Sin descuentos, salvo las promociones de la carta."
+                : "Ej.: Si lleva 3 prendas o más puede dejarle S/10 menos. Nunca más del 10%."
+            }
           />
         </section>
       </div>
@@ -467,11 +539,51 @@ export default function SellerAgentPage() {
           { key: "personalidad", label: "Personalidad y saludo", children: personalidad },
           {
             key: "envios",
-            label: "Envíos y plazos",
+            label: datos.isRestaurant ? "Horario y delivery" : "Envíos y plazos",
             children: (
               <>
+                {datos.isRestaurant && (
+                  <div className="mb-5 grid grid-cols-1 gap-5 xl:grid-cols-[1fr_360px]">
+                    <section className="card p-5">
+                      <p className="eyebrow">Horario de atención</p>
+                      <p className="mt-1 text-[12px] text-muted">
+                        El vendedor sabe si estás abierto ahora y cuándo abres. Sin horario, usa el texto de «Mi tienda».
+                      </p>
+                      <HorarioEditor value={resto.horario} onChange={(horario) => setResto({ horario })} />
+                    </section>
+                    <section className="card space-y-4 p-5">
+                      <p className="eyebrow">Cuando está cerrado</p>
+                      <div className="flex items-center gap-2">
+                        <Switch size="small" checked={resto.programados} onChange={(v) => setResto({ programados: v })} />
+                        <span className="text-[13px] text-ink-soft">
+                          Tomar pedidos programados (se preparan al abrir)
+                        </span>
+                      </div>
+                      <Campo titulo="Mensaje de cerrado" ayuda="Opcional; el vendedor ya dice a qué hora abres.">
+                        <Input.TextArea
+                          rows={3}
+                          maxLength={500}
+                          value={resto.mensajeCerrado}
+                          onChange={(e) => setResto({ mensajeCerrado: e.target.value })}
+                          placeholder="Ej.: ¡Ya cerramos por hoy! 🌙 Mañana desde las 12:00 te atendemos con gusto."
+                        />
+                      </Campo>
+                      <Campo titulo="Tiempo de preparación" ayuda="Para recojo en el local o pedidos en mesa.">
+                        <InputNumber
+                          min={0}
+                          max={240}
+                          addonAfter="minutos"
+                          value={resto.prepMin}
+                          onChange={(v) => setResto({ prepMin: v })}
+                        />
+                      </Campo>
+                    </section>
+                  </div>
+                )}
                 <p className="mb-3 text-[13px] text-muted">
-                  Define las zonas de entrega, los tipos de envío y los plazos que maneja tu vendedor.
+                  {datos.isRestaurant
+                    ? "Zonas de reparto: distritos a los que llegas, con su costo, pedido mínimo y tiempo estimado. El recojo en el local y la mesa funcionan siempre."
+                    : "Define las zonas de entrega, los tipos de envío y los plazos que maneja tu vendedor."}
                 </p>
                 <ShippingZonesEditor
                   zonas={zonas}
@@ -479,6 +591,7 @@ export default function SellerAgentPage() {
                   simbolo={s}
                   datosSugeridos={datos.datosSugeridos}
                   mostrarPeru={(business?.country ?? "PE") === "PE"}
+                  restaurante={datos.isRestaurant}
                 />
               </>
             ),
@@ -540,7 +653,7 @@ export default function SellerAgentPage() {
                 maxLength={60}
                 onChange={(v) => setFaq({ ...faq, categoria: v })}
                 options={categoriasFaq.map((c) => ({ value: c }))}
-                placeholder="Productos, Envíos o una propia"
+                placeholder={datos.isRestaurant ? "Carta, Delivery o una propia" : "Productos, Envíos o una propia"}
               />
             </Campo>
             <Campo titulo="Pregunta">
@@ -548,7 +661,7 @@ export default function SellerAgentPage() {
                 maxLength={300}
                 value={faq.pregunta}
                 onChange={(e) => setFaq({ ...faq, pregunta: e.target.value })}
-                placeholder="Ej.: ¿Hacen cambios de talla?"
+                placeholder={datos.isRestaurant ? "Ej.: ¿Tienen opciones vegetarianas?" : "Ej.: ¿Hacen cambios de talla?"}
               />
             </Campo>
             <Campo titulo="Respuesta">
@@ -558,7 +671,11 @@ export default function SellerAgentPage() {
                 showCount
                 value={faq.respuesta}
                 onChange={(e) => setFaq({ ...faq, respuesta: e.target.value })}
-                placeholder="Ej.: Sí, dentro de los 7 días con la prenda sin usar y con etiqueta."
+                placeholder={
+                  datos.isRestaurant
+                    ? "Ej.: Sí, tenemos la hamburguesa de lentejas y ensaladas; avísanos si eres alérgico a algo."
+                    : "Ej.: Sí, dentro de los 7 días con la prenda sin usar y con etiqueta."
+                }
               />
             </Campo>
             <div className="flex items-center gap-2">
