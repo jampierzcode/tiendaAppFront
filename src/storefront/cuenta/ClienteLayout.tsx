@@ -105,16 +105,21 @@ export default function ClienteLayout() {
 
   if (!cliente) {
     return (
-      <div className="min-h-screen bg-neutral-50">
-        <header className="flex items-center gap-3 px-5 py-4">
-          {marca}
-          <span className="truncate text-base font-bold">{tienda?.name}</span>
-          <Link to={`/t/${slug}`} className="ml-auto text-sm font-semibold underline">
-            Ir a la tienda
+      // Pantalla de acceso centrada: la marca de la tienda arriba de la tarjeta y
+      // todo en el medio de la pantalla, no repartido en los bordes.
+      <div className="grid min-h-screen place-items-center bg-neutral-50 px-4 py-10">
+        <div className="w-full max-w-md">
+          <Link to={`/t/${slug}`} className="mb-5 flex flex-col items-center gap-2 text-center">
+            {marca}
+            <span className="text-lg font-extrabold">{tienda?.name}</span>
           </Link>
-        </header>
-        <div className="mx-auto w-full max-w-md px-4 pb-10 pt-2">
           <Acceso slug={slug} nombreTienda={tienda?.name ?? ""} />
+          <Link
+            to={`/t/${slug}`}
+            className="mt-5 block text-center text-sm font-semibold text-neutral-500 underline hover:text-neutral-800"
+          >
+            ← Volver a la tienda
+          </Link>
         </div>
       </div>
     );
