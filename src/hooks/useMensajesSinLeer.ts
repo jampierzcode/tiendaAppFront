@@ -17,7 +17,14 @@ export function useMensajesSinLeer(activo: boolean) {
         const r = await apiTienda.get("/whatsapp/unread");
         const n = Number(r.data.data.unread ?? 0);
         if (anterior.current !== null && n > anterior.current) {
-          avisar("Mensaje nuevo de un cliente", "Abre «Mensajes» para responder", "chat");
+          // Misma etiqueta que el aviso push del servidor: si llegan los dos, se reemplazan.
+          const negocio = window.location.pathname.match(/^\/b\/[^/]+/)?.[0] ?? "";
+          avisar(
+            n - anterior.current > 1 ? `${n - anterior.current} mensajes nuevos` : "Mensaje nuevo de un cliente",
+            "Toca para abrir «Mensajes» y responder",
+            "chat",
+            negocio ? `${negocio}/chat` : undefined
+          );
         }
         anterior.current = n;
         setSinLeer(n);
@@ -26,7 +33,9 @@ export function useMensajesSinLeer(activo: boolean) {
       }
     },
     15000,
-    activo
+    activo,
+    // Debe sonar y avisar aunque estés en otra pestaña.
+    true
   );
 
   return sinLeer;

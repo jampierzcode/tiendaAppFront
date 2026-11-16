@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef } from "react";
  * Sondeo que no malgasta peticiones:
  *  - espera a que termine la anterior antes de programar la siguiente (no se
  *    apilan si el servidor tarda);
- *  - se pausa con la pestaña oculta y consulta al instante al volver;
+ *  - se pausa con la pestaña oculta y consulta al instante al volver (salvo
+ *    `enSegundoPlano`, para lo que debe avisar aunque no estés mirando);
  *  - el intervalo puede ser una función, para ir rápido solo cuando algo
  *    está cambiando (p. ej. mientras sale el QR) y despacio el resto del tiempo.
  *
@@ -14,7 +15,8 @@ import { useCallback, useEffect, useRef } from "react";
 export function usePolling(
   fn: () => void | Promise<void>,
   intervalo: number | (() => number),
-  activo = true
+  activo = true,
+  enSegundoPlano = false
 ) {
   const fnRef = useRef(fn);
   const msRef = useRef(intervalo);
@@ -33,7 +35,7 @@ export function usePolling(
     const tick = async () => {
       const mia = ++generacion;
       if (!vivo) return;
-      if (!document.hidden) {
+      if (enSegundoPlano || !document.hidden) {
         try {
           await fnRef.current();
         } catch {
@@ -61,7 +63,7 @@ export function usePolling(
       if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", alVolver);
     };
-  }, [activo]);
+  }, [activo, enSegundoPlano]);
 
   return useCallback(() => reiniciar.current(), []);
 }

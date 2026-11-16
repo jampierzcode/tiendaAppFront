@@ -17,13 +17,18 @@ export function pitar() {
 }
 
 /** Notificación del navegador, solo si el usuario ya dio permiso. */
-export function avisar(titulo: string, cuerpo: string, etiqueta?: string) {
+export function avisar(titulo: string, cuerpo: string, etiqueta?: string, ruta?: string) {
   pitar();
   if (!soportado() || Notification.permission !== "granted") return;
   try {
     const n = new Notification(titulo, { body: cuerpo, tag: etiqueta });
     n.onclick = () => {
       window.focus();
+      // La app es una SPA: se navega sin recargar (React Router escucha popstate).
+      if (ruta && window.location.pathname + window.location.search !== ruta) {
+        window.history.pushState({}, "", ruta);
+        window.dispatchEvent(new PopStateEvent("popstate"));
+      }
       n.close();
     };
   } catch {

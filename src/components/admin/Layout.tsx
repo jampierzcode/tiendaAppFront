@@ -4,6 +4,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { useBusiness } from "../../context/BusinessContext";
 import Sidebar from "./Sidebar";
 import TopNavigation from "./TopNavigation";
+import AvisosBanner from "./AvisosBanner";
 import { useMensajesSinLeer } from "../../hooks/useMensajesSinLeer";
 import { usePolling } from "../../hooks/usePolling";
 import { apiTienda } from "../../api/apiTienda";
@@ -76,6 +77,7 @@ export default function AdminLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         <TopNavigation abrirMovil={() => setMovilAbierto(true)} />
         <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 sm:py-8">
+          <AvisosBanner />
           <Outlet />
         </main>
       </div>
