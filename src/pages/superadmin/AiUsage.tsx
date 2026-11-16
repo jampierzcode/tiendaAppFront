@@ -30,7 +30,12 @@ export default function AiUsagePage() {
     apiTienda
       .get("/ai-usage")
       .then((r) => setD(r.data.data))
-      .catch(() => message.error("No se pudo cargar el consumo"));
+      .catch((e) => {
+        // Se muestra el motivo real (código y mensaje del servidor) para poder diagnosticarlo.
+        const status = e?.response?.status;
+        const detalle = e?.response?.data?.message ?? e?.message ?? "";
+        message.error(`No se pudo cargar el consumo${status ? ` (error ${status})` : ""}${detalle ? `: ${detalle}` : ""}`, 8);
+      });
   }, []);
 
   if (!d) {
