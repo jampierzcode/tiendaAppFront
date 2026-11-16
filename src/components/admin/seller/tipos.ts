@@ -43,6 +43,17 @@ export interface PreguntaFrecuente {
   activa: boolean;
 }
 
+export interface Sede {
+  id: string;
+  empresa: string;
+  departamento: string;
+  provincia: string;
+  distrito: string;
+  nombre: string;
+  direccion: string;
+  referencia: string;
+}
+
 export interface ConfigVendedor {
   nombre: string;
   publico: string;
@@ -57,6 +68,7 @@ export interface ConfigVendedor {
   ejemplo: string;
   derivarCuando: string[];
   descuentos: string;
+  sedes: Sede[];
 }
 
 export const nuevoId = () => Math.random().toString(36).slice(2, 10);

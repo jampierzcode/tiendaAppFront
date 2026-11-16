@@ -21,6 +21,7 @@ import { apiTienda } from "../../api/apiTienda";
 import { useBusiness } from "../../context/BusinessContext";
 import PageHeader from "../../components/ui/PageHeader";
 import ShippingZonesEditor from "../../components/admin/seller/ShippingZonesEditor";
+import SedesEditor from "../../components/admin/seller/SedesEditor";
 import {
   nuevoId,
   type ConfigVendedor,
@@ -482,6 +483,25 @@ export default function SellerAgentPage() {
               </>
             ),
           },
+          ...(datos.isRestaurant
+            ? []
+            : [
+                {
+                  key: "sedes",
+                  label: `Sedes de agencias${config.sedes?.length ? ` (${config.sedes.length})` : ""}`,
+                  children: (
+                    <SedesEditor
+                      sedes={config.sedes ?? []}
+                      onChange={(sedes) => set({ sedes })}
+                      empresasSugeridas={[
+                        ...new Set(
+                          zonas.flatMap((z) => z.tipos.filter((t) => t.clase === "agencia").map((t) => t.nombre))
+                        ),
+                      ]}
+                    />
+                  ),
+                },
+              ]),
           {
             key: "faq",
             label: `Preguntas frecuentes${config.faqs.length ? ` (${config.faqs.length})` : ""}`,
