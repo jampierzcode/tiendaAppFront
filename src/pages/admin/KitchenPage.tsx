@@ -32,14 +32,26 @@ interface Pedido {
 }
 
 const COLUMNAS: { estado: string; titulo: string; siguiente?: { a: string; texto: string } }[] = [
-  { estado: "pendiente", titulo: "Nuevos", siguiente: { a: "confirmado", texto: "Confirmar" } },
-  { estado: "confirmado", titulo: "Confirmados", siguiente: { a: "preparando", texto: "A cocina" } },
-  { estado: "preparando", titulo: "Preparando", siguiente: { a: "listo", texto: "Listo" } },
-  { estado: "listo", titulo: "Listos", siguiente: { a: "entregado", texto: "Entregado" } },
+  { estado: "pendiente", titulo: "Nuevos", siguiente: { a: "confirmado", texto: "Aceptar" } },
+  { estado: "confirmado", titulo: "Aceptados", siguiente: { a: "preparando", texto: "A cocina" } },
+  { estado: "preparando", titulo: "En cocina", siguiente: { a: "listo", texto: "Listo" } },
+  { estado: "listo", titulo: "Listos", siguiente: { a: "entregado", texto: "Ya lo recogió" } },
 ];
 
+/** Un pedido listo de delivery sale a reparto; el de recojo o mesa se entrega. */
+const siguienteDe = (c: (typeof COLUMNAS)[number], p: Pedido) =>
+  c.estado === "listo" && p.deliveryMethod === "envio"
+    ? { a: "enviado", texto: "Salió a reparto" }
+    : c.estado === "listo" && p.deliveryMethod === "mesa"
+      ? { a: "entregado", texto: "Servido" }
+      : c.siguiente!;
+
 const donde = (p: Pedido) =>
-  p.deliveryMethod === "envio" ? "Delivery" : "Para recoger";
+  p.deliveryMethod === "envio"
+    ? "Delivery"
+    : p.deliveryMethod === "mesa"
+      ? `Mesa ${(p as Pedido & { tableLabel?: string | null }).tableLabel ?? ""}`.trim()
+      : "Para recoger";
 
 /**
  * Tablero de cocina: una columna por estado, botones grandes, refresco
@@ -201,9 +213,9 @@ export default function KitchenPage() {
                           size="large"
                           block
                           loading={moviendo === p.id}
-                          onClick={() => mover(p, c.siguiente!.a)}
+                          onClick={() => mover(p, siguienteDe(c, p).a)}
                         >
-                          {c.siguiente.texto}
+                          {siguienteDe(c, p).texto}
                         </Button>
                       )}
                       {(p.customerPhone || p.customerEmail) && (

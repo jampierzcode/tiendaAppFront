@@ -65,6 +65,7 @@ export interface Pedido {
   customerPhone: string | null;
   customerEmail?: string | null;
   deliveryMethod: string;
+  tableLabel?: string | null;
   deliveryAddress: string | null;
   deliveryCity: string | null;
   note: string | null;
@@ -94,6 +95,36 @@ const transiciones: Record<EstadoPedido, EstadoPedido[]> = {
   cancelado: [],
   devuelto: [],
 };
+
+/** Restaurante: el siguiente paso depende de si es delivery, recojo o mesa. */
+function transicionesRestaurante(estado: EstadoPedido, metodo: string): EstadoPedido[] {
+  const conReparto = metodo === "envio";
+  const mapa: Record<EstadoPedido, EstadoPedido[]> = {
+    pendiente: ["confirmado", "cancelado"],
+    confirmado: ["preparando", "cancelado"],
+    pagado: ["preparando", "cancelado"],
+    preparando: ["listo", "cancelado"],
+    listo: conReparto ? ["enviado", "entregado", "cancelado"] : ["entregado", "cancelado"],
+    enviado: ["entregado", "cancelado"],
+    entregado: [],
+    cancelado: [],
+    devuelto: [],
+  };
+  return mapa[estado] ?? [];
+}
+
+function textoBoton(destino: EstadoPedido, restaurante: boolean, metodo: string) {
+  if (!restaurante) return `Marcar ${destino}`;
+  const textos: Partial<Record<EstadoPedido, string>> = {
+    confirmado: "Aceptar pedido",
+    preparando: "Pasar a cocina",
+    listo: metodo === "mesa" ? "Listo para servir" : metodo === "envio" ? "Listo para despachar" : "Listo para recoger",
+    enviado: "Salió a reparto",
+    entregado: metodo === "mesa" ? "Servido" : metodo === "envio" ? "Entregado" : "Ya lo recogió",
+    cancelado: "Cancelar pedido",
+  };
+  return textos[destino] ?? `Marcar ${destino}`;
+}
 
 const iconoAccion: Partial<Record<EstadoPedido, React.ReactNode>> = {
   confirmado: <TbCheck />,
@@ -172,7 +203,9 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
     if (!pedido) return;
 
     const avisos: Partial<Record<EstadoPedido, string>> = {
-      confirmado: `Confirmar ${pedido.code} descontará el stock de ${pedido.items.length} productos.`,
+      confirmado: esRestaurante
+        ? `Aceptar ${pedido.code}: se descontarán los insumos de su receta y se avisará al cliente.`
+        : `Confirmar ${pedido.code} descontará el stock de ${pedido.items.length} productos.`,
       cancelado: `¿Cancelar ${pedido.code}? Se repondrá el stock si ya se había descontado y se avisará al cliente por WhatsApp.`,
       devuelto: `Devolver ${pedido.code} repondrá el stock al inventario.`,
     };
@@ -378,9 +411,13 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
                 </Button>
               )}
               <p className="mt-1.5 text-[13px] text-ink-soft">
-                {pedido.deliveryMethod === "recojo"
-                  ? "Recojo en tienda"
-                  : [pedido.deliveryAddress, pedido.deliveryCity].filter(Boolean).join(", ")}
+                {pedido.deliveryMethod === "mesa"
+                  ? `🍽️ Mesa ${pedido.tableLabel ?? ""}`.trim()
+                  : pedido.deliveryMethod === "recojo"
+                    ? esRestaurante
+                      ? "🥡 Recojo en el local"
+                      : "Recojo en tienda"
+                    : `${esRestaurante ? "🛵 Delivery: " : ""}${[pedido.deliveryAddress, pedido.deliveryCity].filter(Boolean).join(", ")}`}
               </p>
               {pedido.note && (
                 <p className="mt-1.5 rounded-lg bg-canvas px-3 py-2 text-[13px] text-ink-soft">
@@ -548,7 +585,10 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
             <section className="border-t border-line pt-4">
               <p className="eyebrow mb-2">Siguiente paso</p>
               <div className="flex flex-wrap gap-2">
-                {(transiciones[pedido.status] ?? []).map((destino) => (
+                {(esRestaurante
+                  ? transicionesRestaurante(pedido.status, pedido.deliveryMethod)
+                  : (transiciones[pedido.status] ?? [])
+                ).map((destino) => (
                   <Button
                     key={destino}
                     type={["cancelado", "devuelto"].includes(destino) ? "default" : "primary"}
@@ -557,10 +597,10 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
                     icon={iconoAccion[destino]}
                     onClick={() => cambiarEstado(destino)}
                   >
-                    Marcar {destino}
+                    {textoBoton(destino, esRestaurante, pedido.deliveryMethod)}
                   </Button>
                 ))}
-                {["confirmado", "pagado", "enviado", "entregado"].includes(pedido.status) && (
+                {!esRestaurante && ["confirmado", "pagado", "enviado", "entregado"].includes(pedido.status) && (
                   <Button
                     icon={<TbArrowBackUp />}
                     onClick={() => setModalDevolucion(true)}
@@ -569,7 +609,10 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
                   </Button>
                 )}
 
-                {(transiciones[pedido.status] ?? []).length === 0 &&
+                {(esRestaurante
+                  ? transicionesRestaurante(pedido.status, pedido.deliveryMethod)
+                  : (transiciones[pedido.status] ?? [])
+                ).length === 0 &&
                   pedido.status !== "entregado" && (
                     <p className="text-[13px] text-muted">Este pedido ya está cerrado.</p>
                   )}

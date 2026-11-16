@@ -1,3 +1,5 @@
+import { useEsRestaurante } from "../../context/BusinessContext";
+
 export type EstadoPedido =
   | "pendiente"
   | "confirmado"
@@ -27,7 +29,19 @@ export const estilosEstado: Record<EstadoPedido, { texto: string; clase: string 
   devuelto: { texto: "Devuelto", clase: "bg-line-soft text-muted" },
 };
 
+/** En un restaurante el pedido se acepta, va a cocina y sale a reparto. */
+const TEXTO_RESTAURANTE: Partial<Record<EstadoPedido, string>> = {
+  confirmado: "Aceptado",
+  preparando: "En cocina",
+  enviado: "En camino",
+};
+
+export function textoEstado(estado: EstadoPedido, restaurante = false) {
+  return (restaurante && TEXTO_RESTAURANTE[estado]) || estilosEstado[estado]?.texto || estado;
+}
+
 export default function BadgeEstado({ estado }: { estado: EstadoPedido }) {
+  const restaurante = useEsRestaurante();
   const e = estilosEstado[estado] ?? estilosEstado.pendiente;
-  return <span className={`pill ${e.clase}`}>{e.texto}</span>;
+  return <span className={`pill ${e.clase}`}>{textoEstado(estado, restaurante)}</span>;
 }

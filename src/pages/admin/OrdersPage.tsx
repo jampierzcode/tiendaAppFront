@@ -7,7 +7,8 @@ import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
 import PaymentProofs from "../../components/admin/PaymentProofs";
 import StatCard from "../../components/ui/StatCard";
-import BadgeEstado, { type EstadoPedido } from "../../components/ui/EstadoPedido";
+import BadgeEstado, { textoEstado, type EstadoPedido } from "../../components/ui/EstadoPedido";
+import { useEsRestaurante } from "../../context/BusinessContext";
 import OrderDetailDrawer from "../../components/admin/OrderDetailDrawer";
 import PedidoChat from "../../components/admin/PedidoChat";
 import { usePolling } from "../../hooks/usePolling";
@@ -56,6 +57,7 @@ const fecha = (iso: string) =>
   });
 
 export default function OrdersPage() {
+  const esRestaurante = useEsRestaurante();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [resumen, setResumen] = useState<{
     porEstado: Record<string, number>;
@@ -242,11 +244,14 @@ export default function OrdersPage() {
 
   const opcionesFiltro = [
     { label: `Todos${resumen ? ` (${resumen.totalPedidos})` : ""}`, value: "todos" },
-    ...(["pendiente", "confirmado", "pagado", "preparando", "listo", "enviado", "entregado", "cancelado"] as const).map(
+    ...(esRestaurante
+      ? (["pendiente", "confirmado", "preparando", "listo", "enviado", "entregado", "cancelado"] as const)
+      : (["pendiente", "confirmado", "pagado", "preparando", "listo", "enviado", "entregado", "cancelado"] as const)
+    ).map(
       (e) => {
         // "Pagado" cuenta pedidos cobrados completos, en cualquier estado.
         const n = e === "pagado" ? resumen?.pagados : resumen?.porEstado?.[e];
-        return { label: `${e[0].toUpperCase()}${e.slice(1)}${n ? ` (${n})` : ""}`, value: e };
+        return { label: `${textoEstado(e, esRestaurante)}${n ? ` (${n})` : ""}`, value: e };
       }
     ),
   ];
@@ -255,7 +260,11 @@ export default function OrdersPage() {
     <>
       <PageHeader
         titulo="Pedidos"
-        descripcion="Todo lo que entra por tu tienda online. Confirmar un pedido descuenta el stock; cancelarlo lo repone."
+        descripcion={
+          esRestaurante
+            ? "Todo lo que entra por tu carta y WhatsApp: delivery, recojo y mesas. Aceptar un pedido descuenta los insumos; cancelarlo los repone."
+            : "Todo lo que entra por tu tienda online. Confirmar un pedido descuenta el stock; cancelarlo lo repone."
+        }
         acciones={
           porValidar > 0 ? (
             <Button type="primary" icon={<TbReceipt />} onClick={() => setVerComprobantes(true)}>
