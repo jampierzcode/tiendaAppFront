@@ -390,7 +390,9 @@ export default function Sidebar({
     <>
       {/* Escritorio */}
       <aside
-        className={`relative hidden shrink-0 bg-gradient-to-b from-brand-700 via-brand-800 to-brand-950 transition-[width] duration-300 md:block ${
+        // Fijo al hacer scroll: ocupa el alto de la ventana y el menú se
+        // desplaza por dentro si no cabe.
+        className={`sticky top-0 z-20 hidden h-screen shrink-0 self-start bg-gradient-to-b from-brand-700 via-brand-800 to-brand-950 transition-[width] duration-300 md:block ${
           open ? "w-[248px]" : "w-[76px]"
         }`}
       >

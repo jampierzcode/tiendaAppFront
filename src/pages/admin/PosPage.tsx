@@ -4,10 +4,10 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   TbCash,
   TbChevronDown,
+  TbDiscount,
   TbPhoto,
   TbPrinter,
   TbSearch,
-  TbShoppingCart,
   TbTrash,
   TbX,
 } from "react-icons/tb";
@@ -21,6 +21,7 @@ interface VariacionPos {
   sku: string | null;
   stock: number;
   price: number;
+  originalPrice: number | null;
   isDefault: boolean;
   label: string;
 }
@@ -30,9 +31,24 @@ interface ProductoPos {
   name: string;
   sku: string | null;
   price: number;
+  originalPrice: number | null;
+  desde: boolean;
+  promo: boolean;
+  promoLabels: string[];
+  unlimitedStock: boolean;
+  stock: number;
   imageUrl: string | null;
   variations: VariacionPos[];
 }
+
+interface Categoria {
+  id: number;
+  name: string;
+  isActive?: boolean;
+  subcategories?: { id: number; name: string }[];
+}
+
+const POR_PAGINA = 24;
 
 interface LineaCaja {
   variationId: number;
@@ -70,26 +86,61 @@ export default function PosPage() {
   const [ticket, setTicket] = useState<DatosTicket | null>(null);
   const buscadorRef = useRef<any>(null);
 
-  const buscar = useCallback(async (q: string) => {
-    if (q.trim().length < 2) {
-      setResultados([]);
-      return;
-    }
-    setBuscando(true);
-    try {
-      const r = await apiTienda.get("/pos/search", { params: { q } });
-      setResultados(r.data.data ?? []);
-    } catch {
-      message.error("No se pudo buscar");
-    } finally {
-      setBuscando(false);
-    }
-  }, []);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [categoria, setCategoria] = useState<number | null>(null);
+  const [subcategoria, setSubcategoria] = useState<number | null>(null);
+  const [soloPromo, setSoloPromo] = useState(false);
+  const [pagina, setPagina] = useState(1);
+  const [totalCatalogo, setTotalCatalogo] = useState(0);
+  const [eligiendo, setEligiendo] = useState<ProductoPos | null>(null);
 
   useEffect(() => {
-    const t = setTimeout(() => buscar(termino), 280);
+    apiTienda
+      .get("/categories")
+      .then((r) => setCategorias((r.data.data ?? []).filter((c: Categoria) => c.isActive !== false)))
+      .catch(() => undefined);
+  }, []);
+
+  // Todo el catálogo vendible, filtrado; «Cargar más» suma la página siguiente.
+  const buscar = useCallback(
+    async (q: string, pag: number) => {
+      setBuscando(true);
+      try {
+        const r = await apiTienda.get("/pos/search", {
+          params: {
+            q: q.trim() || undefined,
+            categoryId: categoria ?? undefined,
+            subcategoryId: subcategoria ?? undefined,
+            promo: soloPromo ? 1 : undefined,
+            page: pag,
+            perPage: POR_PAGINA,
+          },
+        });
+        const lista: ProductoPos[] = r.data.data ?? [];
+        setResultados((actual) => (pag === 1 ? lista : [...actual, ...lista]));
+        setTotalCatalogo(Number(r.data.meta?.total ?? lista.length));
+        setPagina(pag);
+      } catch {
+        message.error("No se pudo cargar el catálogo");
+      } finally {
+        setBuscando(false);
+      }
+    },
+    [categoria, subcategoria, soloPromo]
+  );
+
+  useEffect(() => {
+    const t = setTimeout(() => buscar(termino, 1), termino ? 280 : 0);
     return () => clearTimeout(t);
   }, [termino, buscar]);
+
+  const subcategorias = categorias.find((c) => c.id === categoria)?.subcategories ?? [];
+
+  /** Un clic: si tiene una sola variación entra directo; si no, se elige talla/color. */
+  const tocar = (p: ProductoPos) => {
+    if (p.variations.length === 1) agregar(p, p.variations[0]);
+    else setEligiendo(p);
+  };
 
   // El foco vuelve al buscador tras cada acción: en caja se trabaja con el
   // lector de códigos y las manos no van al ratón.
@@ -121,7 +172,7 @@ export default function PosPage() {
         },
       ];
     });
-    setTermino("");
+    setEligiendo(null);
   };
 
   const cambiar = (variationId: number, cantidad: number) =>
@@ -203,71 +254,148 @@ export default function PosPage() {
       />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_380px]">
-        {/* Búsqueda y resultados */}
+        {/* Catálogo */}
         <div className="card flex flex-col overflow-hidden">
-          <div className="border-b border-line-soft p-4">
+          <div className="space-y-3 border-b border-line-soft p-4">
             <Input
               ref={buscadorRef}
               size="large"
               autoFocus
               prefix={<TbSearch className="text-muted" />}
-              placeholder="Busca por nombre o código…"
+              placeholder="Busca por nombre o código (o usa el lector)…"
               value={termino}
               onChange={(e) => setTermino(e.target.value)}
+              onPressEnter={() => {
+                // Lector de códigos: un solo resultado con una sola variación entra al carrito.
+                if (resultados.length === 1 && resultados[0].variations.length === 1) {
+                  agregar(resultados[0], resultados[0].variations[0]);
+                  setTermino("");
+                }
+              }}
               allowClear
             />
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                onClick={() => {
+                  setCategoria(null);
+                  setSubcategoria(null);
+                }}
+                className={`rounded-full border px-3 py-1 text-[12px] font-medium transition ${
+                  categoria === null ? "border-brand-500 bg-brand-600 text-white" : "border-line text-ink-soft hover:border-brand-300"
+                }`}
+              >
+                Todo
+              </button>
+              {categorias.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    setCategoria(c.id === categoria ? null : c.id);
+                    setSubcategoria(null);
+                  }}
+                  className={`rounded-full border px-3 py-1 text-[12px] font-medium transition ${
+                    categoria === c.id ? "border-brand-500 bg-brand-600 text-white" : "border-line text-ink-soft hover:border-brand-300"
+                  }`}
+                >
+                  {c.name}
+                </button>
+              ))}
+              <button
+                onClick={() => setSoloPromo((v) => !v)}
+                className={`ml-auto inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[12px] font-semibold transition ${
+                  soloPromo ? "border-danger bg-danger text-white" : "border-danger/40 text-danger hover:bg-danger-bg"
+                }`}
+              >
+                <TbDiscount /> En promoción
+              </button>
+            </div>
+            {subcategorias.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {subcategorias.map((sc) => (
+                  <button
+                    key={sc.id}
+                    onClick={() => setSubcategoria(sc.id === subcategoria ? null : sc.id)}
+                    className={`rounded-full px-2.5 py-0.5 text-[11.5px] transition ${
+                      subcategoria === sc.id ? "bg-brand-100 font-semibold text-brand-700" : "bg-canvas text-ink-soft hover:bg-brand-50"
+                    }`}
+                  >
+                    {sc.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="min-h-[420px] flex-1 p-4">
-            {buscando ? (
+            {buscando && pagina === 1 && resultados.length === 0 ? (
               <div className="flex justify-center py-16">
                 <Spin size="large" />
-              </div>
-            ) : termino.trim().length < 2 ? (
-              <div className="grid place-items-center py-20 text-center">
-                <TbShoppingCart className="text-4xl text-line" />
-                <p className="mt-3 max-w-xs text-[13px] text-muted">
-                  Escribe el nombre o el código del producto para empezar la venta.
-                </p>
               </div>
             ) : resultados.length === 0 ? (
               <Empty
                 className="py-16"
-                description="Nada con ese nombre, o está agotado"
+                description={
+                  termino || categoria || soloPromo
+                    ? "Nada con ese filtro, o está agotado"
+                    : "No hay productos con stock para vender"
+                }
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
               />
             ) : (
-              <ul className="space-y-3">
-                {resultados.map((p) => (
-                  <li key={p.id} className="rounded-xl border border-line p-3">
-                    <div className="flex items-center gap-3">
-                      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-canvas">
-                        {p.imageUrl && (
-                          <img src={p.imageUrl} alt="" className="h-full w-full object-cover" />
+              <>
+                <p className="mb-3 text-[12px] text-muted">
+                  {totalCatalogo} producto{totalCatalogo === 1 ? "" : "s"} · toca uno para agregarlo
+                </p>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                  {resultados.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => tocar(p)}
+                      className="group flex flex-col overflow-hidden rounded-xl border border-line bg-white text-left transition hover:border-brand-400 hover:shadow-md"
+                    >
+                      <div className="relative aspect-square w-full bg-canvas">
+                        {p.imageUrl ? (
+                          <img src={p.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+                        ) : (
+                          <div className="grid h-full place-items-center text-3xl text-line">
+                            <TbPhoto />
+                          </div>
                         )}
+                        {p.promo && (
+                          <span className="absolute left-1.5 top-1.5 rounded-md bg-danger px-1.5 py-0.5 text-[10.5px] font-bold text-white">
+                            {p.promoLabels[0] ?? "Promo"}
+                          </span>
+                        )}
+                        <span className="absolute bottom-1.5 right-1.5 rounded-md bg-black/60 px-1.5 py-0.5 text-[10.5px] font-semibold text-white">
+                          {p.unlimitedStock ? "∞" : `${p.stock} und.`}
+                        </span>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13px] font-semibold text-ink">{p.name}</p>
-                        <p className="font-mono text-[11px] text-muted">{p.sku ?? "—"}</p>
+                      <div className="flex flex-1 flex-col p-2.5">
+                        <p className="line-clamp-2 text-[12.5px] font-semibold leading-snug text-ink">{p.name}</p>
+                        <div className="mt-auto pt-1.5">
+                          {p.originalPrice !== null && (
+                            <span className="mr-1.5 text-[11px] text-muted line-through">{soles(p.originalPrice)}</span>
+                          )}
+                          <span className="text-[13px] font-bold text-brand-700">
+                            {p.desde && <span className="text-[10.5px] font-medium text-muted">desde </span>}
+                            {soles(p.price)}
+                          </span>
+                          {p.variations.length > 1 && (
+                            <span className="ml-1 text-[10.5px] text-muted">· {p.variations.length} opciones</span>
+                          )}
+                        </div>
                       </div>
-                      <span className="shrink-0 text-[13px] font-semibold">{soles(p.price)}</span>
-                    </div>
-
-                    <div className="mt-2.5 flex flex-wrap gap-1.5">
-                      {p.variations.map((v) => (
-                        <button
-                          key={v.id}
-                          onClick={() => agregar(p, v)}
-                          className="rounded-lg border border-line px-2.5 py-1.5 text-[12px] font-medium text-ink-soft transition hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700"
-                        >
-                          {v.label || "Único"}
-                          <span className="ml-1.5 text-[11px] text-muted">({v.stock})</span>
-                        </button>
-                      ))}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                    </button>
+                  ))}
+                </div>
+                {resultados.length < totalCatalogo && (
+                  <div className="mt-4 flex justify-center">
+                    <Button loading={buscando} onClick={() => buscar(termino, pagina + 1)}>
+                      Cargar más ({totalCatalogo - resultados.length})
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -577,6 +705,36 @@ export default function PosPage() {
               </Button>
             </div>
           </>
+        )}
+      </Modal>
+      <Modal
+        open={Boolean(eligiendo)}
+        title={eligiendo?.name}
+        footer={null}
+        onCancel={() => setEligiendo(null)}
+        destroyOnHidden
+      >
+        {eligiendo && (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {eligiendo.variations.map((v) => (
+              <button
+                key={v.id}
+                onClick={() => agregar(eligiendo, v)}
+                className="rounded-xl border border-line p-2.5 text-left transition hover:border-brand-400 hover:bg-brand-50"
+              >
+                <p className="text-[13px] font-semibold text-ink">{v.label || "Único"}</p>
+                <p className="text-[12px]">
+                  {v.originalPrice !== null && (
+                    <span className="mr-1 text-muted line-through">{soles(v.originalPrice)}</span>
+                  )}
+                  <b className="text-brand-700">{soles(v.price)}</b>
+                </p>
+                <p className="text-[11px] text-muted">
+                  {eligiendo.unlimitedStock ? "Stock ilimitado" : `${v.stock} en stock`}
+                </p>
+              </button>
+            ))}
+          </div>
         )}
       </Modal>
     </>
