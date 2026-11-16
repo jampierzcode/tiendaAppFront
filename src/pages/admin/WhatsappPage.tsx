@@ -369,6 +369,15 @@ export default function WhatsappPage() {
           />
         )}
 
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-brand-50 px-4 py-3">
+          <p className="text-[13px] text-ink-soft">
+            Personalidad, saludo, <b>zonas de envío</b>, preguntas frecuentes y conversación de ejemplo.
+          </p>
+          <Button type="primary" onClick={() => navigate(`/b/${business?.uuid}/vendedor-ia`)}>
+            Configurar vendedor IA
+          </Button>
+        </div>
+
         <div className="mt-4">
           <label className="text-[13px] font-semibold text-ink">
             Lo que el asistente debe saber de tu negocio

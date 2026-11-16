@@ -60,6 +60,7 @@ interface Product {
   description?: string;
   price: number;
   stock: number;
+  unlimitedStock?: boolean;
   status: string;
   business_image_id?: number;
   image_url?: string;
@@ -336,7 +337,12 @@ export default function ProductsPage(): React.ReactElement {
               title: "Stock",
               dataIndex: "stock",
               key: "stock",
-              render: (v: number) => <Tag color={v > 0 ? "green" : "red"}>{v}</Tag>,
+              render: (v: number, row: Product) =>
+                row.unlimitedStock ? (
+                  <Tag color="blue">Ilimitado</Tag>
+                ) : (
+                  <Tag color={v > 0 ? "green" : "red"}>{v}</Tag>
+                ),
             },
             {
               title: "Variaciones",

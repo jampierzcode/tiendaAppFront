@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Badge, Button, Empty, Input, Segmented, Spin, Table, Tooltip, message } from "antd";
+import { Badge, Button, Empty, Input, Modal, Segmented, Spin, Table, Tooltip, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { TbCash, TbClock, TbMessageCircle, TbReceipt, TbTruckDelivery } from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
+import PaymentProofs from "../../components/admin/PaymentProofs";
 import StatCard from "../../components/ui/StatCard";
 import BadgeEstado, { type EstadoPedido } from "../../components/ui/EstadoPedido";
 import OrderDetailDrawer from "../../components/admin/OrderDetailDrawer";
@@ -84,9 +85,32 @@ export default function OrdersPage() {
 
   // Una notificación llega aquí con ?pedido=ID (y &chat=1 si es un mensaje): se abre ese
   // pedido y, si es un mensaje, también la conversación; luego se limpia la URL.
+  const [verComprobantes, setVerComprobantes] = useState(false);
+  const [porValidar, setPorValidar] = useState(0);
+  const contarComprobantes = useCallback(async () => {
+    try {
+      const r = await apiTienda.get("/payment-proofs", { params: { status: "por_validar" } });
+      setPorValidar((r.data.data ?? []).length);
+    } catch {
+      // sin comprobantes o sin permiso: no se muestra el botón
+    }
+  }, []);
+  useEffect(() => {
+    contarComprobantes();
+    const t = setInterval(contarComprobantes, 30000);
+    return () => clearInterval(t);
+  }, [contarComprobantes]);
+
   const [params, setParams] = useSearchParams();
   const pedidoDeAviso = params.get("pedido");
   const conChat = params.get("chat") === "1";
+  const deComprobantes = params.get("comprobantes") === "1";
+  useEffect(() => {
+    if (deComprobantes) {
+      setVerComprobantes(true);
+      setParams({}, { replace: true });
+    }
+  }, [deComprobantes, setParams]);
   useEffect(() => {
     if (!pedidoDeAviso) return;
     const id = Number(pedidoDeAviso);
@@ -232,7 +256,33 @@ export default function OrdersPage() {
       <PageHeader
         titulo="Pedidos"
         descripcion="Todo lo que entra por tu tienda online. Confirmar un pedido descuenta el stock; cancelarlo lo repone."
+        acciones={
+          porValidar > 0 ? (
+            <Button type="primary" icon={<TbReceipt />} onClick={() => setVerComprobantes(true)}>
+              Comprobantes por validar ({porValidar})
+            </Button>
+          ) : undefined
+        }
       />
+      <Modal
+        open={verComprobantes}
+        title="Comprobantes por validar"
+        footer={null}
+        width={620}
+        onCancel={() => setVerComprobantes(false)}
+        destroyOnHidden
+      >
+        <PaymentProofs
+          onChange={() => {
+            contarComprobantes();
+            cargar();
+          }}
+          onAbrirPedido={(id) => {
+            setVerComprobantes(false);
+            setDetalleId(id);
+          }}
+        />
+      </Modal>
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard

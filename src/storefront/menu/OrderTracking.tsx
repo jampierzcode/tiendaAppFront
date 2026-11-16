@@ -5,6 +5,7 @@ import { useStore } from "../StoreContext";
 import InvitacionCuenta from "../components/InvitacionCuenta";
 import MensajesPedido from "../components/MensajesPedido";
 import { leerClaim } from "../cliente";
+import SeguimientoEnvio from "../components/SeguimientoEnvio";
 
 export const PASOS = [
   { estado: "pendiente", texto: "Recibido" },
@@ -127,6 +128,8 @@ export default function OrderTracking() {
           </ol>
         )}
       </section>
+
+      {!cancelado && (pedido.shipments ?? []).map((e, i) => <SeguimientoEnvio key={i} envio={e} />)}
 
       {!cancelado && pedido.paymentPolicy !== "none" && (
         <section className="rounded-3xl bg-white p-5 shadow-sm">

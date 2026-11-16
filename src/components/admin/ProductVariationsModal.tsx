@@ -17,6 +17,7 @@ import {
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { apiTienda } from "../../api/apiTienda";
 import GalleryModal from "./GalleryModal";
+import GaleriaFotos, { type Foto } from "./GaleriaFotos";
 import SkuField from "./SkuField";
 import MovementModal from "./MovementModal";
 import CostoReferencia from "./CostoReferencia";
@@ -94,6 +95,8 @@ function VariationFormModal({
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [fotosExtra, setFotosExtra] = useState<Foto[]>([]);
+  const [fotosCargadas, setFotosCargadas] = useState<string>("");
   const [imagen, setImagen] = useState<{ id: number; url: string } | null>(null);
   const { business } = useBusiness();
   const impuesto = impuestoDe((business as any)?.country);
@@ -143,7 +146,20 @@ function VariationFormModal({
       }));
 
       setAttributeRows(rows.length ? rows : [{ key: "0" }]);
+
+      setFotosExtra([]);
+      setFotosCargadas("");
+      apiTienda
+        .get(`/products/${productId}/gallery`)
+        .then((r) => {
+          const lista: Foto[] = r.data.data?.variations?.[variationToEdit.id] ?? [];
+          setFotosExtra(lista);
+          setFotosCargadas(lista.map((f) => f.id).join(","));
+        })
+        .catch(() => undefined);
     } else {
+      setFotosExtra([]);
+      setFotosCargadas("");
       form.resetFields();
       setAttributeRows([{ key: "0" }]);
       setImagen(null);
@@ -261,6 +277,13 @@ function VariationFormModal({
 
       if (!variationId) {
         throw new Error("No se pudo obtener el ID de la variación");
+      }
+
+      if (fotosExtra.map((f) => f.id).join(",") !== fotosCargadas) {
+        await apiTienda.put(`/products/${productId}/gallery`, {
+          variationId,
+          imageIds: fotosExtra.map((f) => f.id),
+        });
       }
 
       // Al editar sí se sincronizan los atributos; al crear ya fueron en el alta.
@@ -413,6 +436,13 @@ function VariationFormModal({
                 </Button>
               )}
             </Space>
+          </div>
+          <div className="mt-3">
+            <GaleriaFotos
+              value={fotosExtra}
+              onChange={setFotosExtra}
+              titulo="Más fotos de esta variación"
+            />
           </div>
         </Form.Item>
 

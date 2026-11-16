@@ -10,6 +10,7 @@ import Login from "./pages/Login";
 import Subscribe from "./pages/Subscribe";
 import { UsersPage } from "./pages/superadmin/Users";
 import { BusinessesPage } from "./pages/superadmin/Business";
+import AiUsagePage from "./pages/superadmin/AiUsage";
 import Notfound from "./pages/Notfound";
 import PrivateRoute from "./layouts/PrivateRoute";
 import SuperAdminLayout from "./components/superAdmin/Layout";
@@ -43,6 +44,7 @@ import ModifiersPage from "./pages/admin/ModifiersPage";
 import KitchenPage from "./pages/admin/KitchenPage";
 import ChatPage from "./pages/admin/ChatPage";
 import WhatsappPage from "./pages/admin/WhatsappPage";
+import SellerAgentPage from "./pages/admin/SellerAgentPage";
 import IngredientsPage from "./pages/admin/IngredientsPage";
 
 /**
@@ -110,6 +112,16 @@ export default function App() {
             }
           />
           <Route
+            path="/ai-usage"
+            element={
+              <PrivateRoute roles={["superadmin"]}>
+                <SuperAdminLayout>
+                  <AiUsagePage />
+                </SuperAdminLayout>
+              </PrivateRoute>
+            }
+          />
+          <Route
             path="/businesses"
             element={
               <PrivateRoute roles={["superadmin"]}>
@@ -141,6 +153,7 @@ export default function App() {
             <Route path="kitchen" element={<KitchenPage />} />
             <Route path="chat" element={<ChatPage />} />
             <Route path="whatsapp" element={<WhatsappPage />} />
+            <Route path="vendedor-ia" element={<SellerAgentPage />} />
             <Route path="ingredients" element={<IngredientsPage />} />
             {/* Subruta desconocida dentro del panel: al inicio, que para un
                 usuario con sesión es su propio tablero. Pintar aquí la pantalla

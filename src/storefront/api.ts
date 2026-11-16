@@ -79,6 +79,8 @@ export interface Variacion {
   label: string;
   /** Foto propia de la variación. Si es null se usa la del producto. */
   imageUrl: string | null;
+  /** Foto principal + galería de la variación. */
+  images?: string[];
   attributes: {
     attributeId: number;
     attributeName: string;
@@ -90,6 +92,8 @@ export interface Variacion {
 
 export interface ProductoDetalle extends ProductoResumen {
   description: string | null;
+  /** Foto principal + galería del producto. */
+  images?: string[];
   categorias: {
     category: { name: string; slug: string };
     subcategory: { name: string; slug: string } | null;
@@ -265,7 +269,20 @@ export const crearPedidoMenu = (
     .post<{ data: RespuestaPedido }>(`${base(slug)}/orders`, datos, { headers: cabeceraCliente() })
     .then((r) => r.data.data);
 
+export interface EnvioPublico {
+  carrier: string | null;
+  trackingCode: string | null;
+  trackingUrl: string | null;
+  agency: string | null;
+  status: "preparando" | "en_transito" | "en_agencia" | "entregado" | "incidencia" | "cancelado";
+  estimatedAt: string | null;
+  shippedAt: string | null;
+  deliveredAt: string | null;
+  events: { status: string; happenedAt: string }[];
+}
+
 export interface SeguimientoPedido {
+  shipments?: EnvioPublico[];
   code: string;
   status: string;
   deliveryMethod: string;

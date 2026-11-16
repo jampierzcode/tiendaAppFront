@@ -142,13 +142,14 @@ export default function ProductDetail() {
 
     const vistas = new Map<string, { url: string; etiqueta: string }>();
 
-    if (producto.imageUrl) {
-      vistas.set(producto.imageUrl, { url: producto.imageUrl, etiqueta: producto.name });
+    for (const url of producto.images?.length ? producto.images : [producto.imageUrl]) {
+      if (url) vistas.set(url, { url, etiqueta: producto.name });
     }
 
+    // Cada variación aporta su foto principal y su galería (p. ej. el negro de frente y de espalda).
     for (const v of producto.variations) {
-      if (v.imageUrl && !vistas.has(v.imageUrl)) {
-        vistas.set(v.imageUrl, { url: v.imageUrl, etiqueta: v.label || producto.name });
+      for (const url of v.images?.length ? v.images : [v.imageUrl]) {
+        if (url && !vistas.has(url)) vistas.set(url, { url, etiqueta: v.label || producto.name });
       }
     }
 

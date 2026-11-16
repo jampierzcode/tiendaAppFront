@@ -15,6 +15,7 @@ import {
 } from "antd";
 
 import GalleryModal from "./GalleryModal";
+import GaleriaFotos, { type Foto } from "./GaleriaFotos";
 import SkuField from "./SkuField";
 import MovementModal from "./MovementModal";
 import CostoReferencia from "./CostoReferencia";
@@ -89,6 +90,8 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const impuesto = impuestoDe((business as any)?.country);
   const [loading, setLoading] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [fotosExtra, setFotosExtra] = useState<Foto[]>([]);
+  const [fotosCargadas, setFotosCargadas] = useState<Foto[]>([]);
   const [selectedImage, setSelectedImage] = useState<{
     id: number;
     url: string;
@@ -115,6 +118,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const skuWatch = Form.useWatch("sku", form) as string | undefined;
   const costoWatch = Form.useWatch("cost", form) as number | undefined;
   const precioWatch = Form.useWatch("price", form) as number | undefined;
+  const ilimitado = Boolean(Form.useWatch("unlimitedStock", form));
 
   const variacionPorDefecto = useMemo(
     () => editData?.variations?.find((v: any) => v.isDefault),
@@ -147,6 +151,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         sku: editData.sku,
         taxRate: Number(editData.taxRate ?? 18),
         lowStockThreshold: editData.lowStockThreshold ?? 5,
+        unlimitedStock: Boolean(editData.unlimitedStock),
         active: editData.status !== "inactivo",
         categoryKeys: (editData.categoryLinks ?? []).map((l: any) =>
           keyOf(l.categoryId, l.subcategoryId)
@@ -154,6 +159,15 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         tagIds: (editData.tags ?? []).map((t: any) => t.id),
       });
       setHasVariations(productoTieneVariaciones(editData));
+      setFotosExtra([]);
+      setFotosCargadas([]);
+      apiTienda
+        .get(`/products/${editData.id}/gallery`)
+        .then((r) => {
+          setFotosExtra(r.data.data?.product ?? []);
+          setFotosCargadas(r.data.data?.product ?? []);
+        })
+        .catch(() => undefined);
       setStockActual(Number(variacionPorDefecto?.stock ?? editData.stock ?? 0));
       if (editData.businessImages) {
         setSelectedImage({
@@ -169,10 +183,13 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         active: true,
         taxRate: 18,
         lowStockThreshold: 5,
+        unlimitedStock: false,
         stock: 0,
       });
       setHasVariations(false);
       setSelectedImage(null);
+      setFotosExtra([]);
+      setFotosCargadas([]);
     }
   }, [editData, form, variacionPorDefecto]);
 
@@ -230,6 +247,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         // Vacío = que el servidor genere el SKU por defecto.
         sku: values.sku?.trim() ? values.sku.trim() : undefined,
         low_stock_threshold: values.lowStockThreshold ?? 5,
+        unlimited_stock: Boolean(values.unlimitedStock),
         status: values.active ? "activo" : "inactivo",
         business_image_id: selectedImage?.id || null,
         category_links,
@@ -240,7 +258,9 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
       // El stock inicial solo existe al crear. Después se ajusta con el botón
       // "Ajustar stock", que deja constancia en el kardex.
       // Un plato no tiene stock propio: lo que se agota son los insumos.
-      if (!editData && !hasVariations && !esRestaurante) payload.stock = values.stock ?? 0;
+      if (!editData && !hasVariations && !esRestaurante && !values.unlimitedStock) {
+        payload.stock = values.stock ?? 0;
+      }
       // Atributos elegidos aquí: el producto nace ya con sus variaciones.
       const nuevasVariaciones = combos.map((c) => ({
         attributeValueIds: c.valueIds,
@@ -259,6 +279,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         delete payload.tag_ids;
         delete payload.sku;
         delete payload.low_stock_threshold;
+        delete payload.unlimited_stock;
       }
 
       let saved: any = editData;
@@ -272,6 +293,15 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         const res = await apiTienda.post(`/products`, payload);
         saved = res.data.data;
         message.success("Producto creado correctamente");
+      }
+
+      const cambiaronFotos =
+        fotosExtra.map((f) => f.id).join(",") !== fotosCargadas.map((f) => f.id).join(",");
+      if (!esRestaurante && saved?.id && cambiaronFotos) {
+        await apiTienda.put(`/products/${saved.id}/gallery`, {
+          variationId: null,
+          imageIds: fotosExtra.map((f) => f.id),
+        });
       }
 
       onSuccess(undefined, !editData && esRestaurante ? saved : undefined);
@@ -329,6 +359,11 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
                   {selectedImage ? "Cambiar imagen" : "Subir imagen"}
                 </Button>
               </div>
+              {!esRestaurante && (
+                <div className="mt-3">
+                  <GaleriaFotos value={fotosExtra} onChange={setFotosExtra} />
+                </div>
+              )}
             </Form.Item>
 
             <div>
@@ -457,7 +492,22 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
             </Form.Item>
             )}
 
-            {!esRestaurante && !hasVariations && !editData && (
+            {!esRestaurante && (
+              <Form.Item
+                label="Stock ilimitado"
+                name="unlimitedStock"
+                valuePropName="checked"
+                extra={
+                  ilimitado
+                    ? "Nunca se agota: la tienda y el vendedor IA lo venden sin mirar el inventario."
+                    : "Actívalo para productos a pedido, servicios o que siempre tienes."
+                }
+              >
+                <Switch />
+              </Form.Item>
+            )}
+
+            {!esRestaurante && !hasVariations && !editData && !ilimitado && (
               <Form.Item
                 label="Stock inicial"
                 name="stock"
@@ -467,7 +517,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
               </Form.Item>
             )}
 
-            {!esRestaurante && !hasVariations && editData && (
+            {!esRestaurante && !hasVariations && editData && !ilimitado && (
               <Form.Item label="Stock">
                 <div className="flex items-center gap-3">
                   <Tag
@@ -502,7 +552,11 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
                         <span>
                           {etiquetaVariacion(v)} <Text type="secondary">{v.sku}</Text>
                         </span>
-                        <Tag color={v.stock > 0 ? "green" : "red"}>{v.stock}</Tag>
+                        {ilimitado ? (
+                          <Tag color="blue">Ilimitado</Tag>
+                        ) : (
+                          <Tag color={v.stock > 0 ? "green" : "red"}>{v.stock}</Tag>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -512,7 +566,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
               <VariationGenerator
                 existentes={clavesExistentes}
                 skuProducto={skuWatch}
-                conStock
+                conStock={!ilimitado}
                 onChange={setCombos}
               />
             </div>

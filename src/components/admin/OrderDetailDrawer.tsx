@@ -23,9 +23,13 @@ import {
   TbTruckDelivery,
   TbX,
   TbArrowBackUp,
+  TbPrinter,
 } from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
-import { useEsRestaurante } from "../../context/BusinessContext";
+import { useBusiness, useEsRestaurante } from "../../context/BusinessContext";
+import ShipmentPanel, { type Envio } from "./ShipmentPanel";
+import PaymentProofs from "./PaymentProofs";
+import { imprimirEtiqueta } from "./etiquetaEnvio";
 import PedidoChat from "./PedidoChat";
 import BadgeEstado, { type EstadoPedido } from "../ui/EstadoPedido";
 import ComprobanteInput, { type Comprobante } from "../ui/ComprobanteInput";
@@ -111,15 +115,6 @@ const metodos = [
   { value: "otro", label: "Otro" },
 ];
 
-/** Los couriers que más usan las tiendas pequeñas en Perú. */
-const couriers = [
-  "Olva Courier",
-  "Shalom",
-  "Marvisur",
-  "Cruz del Sur Cargo",
-  "Motorizado propio",
-  "Otro",
-];
 
 const soles = (v: number) => `S/ ${Number(v ?? 0).toFixed(2)}`;
 
@@ -150,7 +145,8 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
   const [modalDevolucion, setModalDevolucion] = useState(false);
   const [formDevolucion] = Form.useForm();
   const [formPago] = Form.useForm();
-  const [formEnvio] = Form.useForm();
+  const [envios, setEnvios] = useState<Envio[]>([]);
+  const { business } = useBusiness();
 
   const cargar = useCallback(async () => {
     if (!pedidoId) return;
@@ -158,17 +154,12 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
     try {
       const r = await apiTienda.get(`/orders/${pedidoId}`);
       setPedido(r.data.data);
-      formEnvio.setFieldsValue({
-        courier: r.data.data.courier,
-        tracking_code: r.data.data.trackingCode,
-        tracking_url: r.data.data.trackingUrl,
-      });
     } catch {
       message.error("No se pudo cargar el pedido");
     } finally {
       setCargando(false);
     }
-  }, [pedidoId, formEnvio]);
+  }, [pedidoId]);
 
   useEffect(() => {
     if (pedidoId) cargar();
@@ -296,27 +287,36 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
     }
   };
 
-  const guardarEnvio = async (valores: any) => {
-    if (!pedido) return;
-    setGuardando(true);
-    try {
-      await apiTienda.put(`/orders/${pedido.id}/shipping`, valores);
-      message.success("Datos de envío guardados");
-      await cargar();
-      onCambio();
-    } catch {
-      message.error("No se pudo guardar el envío");
-    } finally {
-      setGuardando(false);
-    }
-  };
+
 
   // Un restaurante entrega con su propio personal: sin courier ni guía.
   const mostrarEnvio =
-    pedido &&
-    !esRestaurante &&
-    pedido.deliveryMethod !== "recojo" &&
-    !["pendiente", "cancelado"].includes(pedido.status);
+    pedido && !esRestaurante && pedido.deliveryMethod !== "recojo" && pedido.status !== "cancelado";
+
+  const etiqueta = async () => {
+    if (!pedido) return;
+    const e = envios[0];
+    try {
+      await imprimirEtiqueta({
+        tienda: business?.name ?? "",
+        codigo: pedido.code,
+        cliente: pedido.customerName,
+        telefono: pedido.customerPhone,
+        destino: [pedido.deliveryAddress, pedido.deliveryCity].filter(Boolean).join(", ") || "—",
+        nota: null,
+        empresa: e?.carrier ?? null,
+        guia: e?.trackingCode ?? null,
+        agencia: e?.agency ?? null,
+        enlace: business?.slug
+          ? `${window.location.origin}/t/${business.slug}/pedido/${pedido.code}`
+          : window.location.origin,
+        total: soles(pedido.total),
+        porCobrar: saldo > 0.01 ? soles(saldo) : null,
+      });
+    } catch (err: any) {
+      message.error(err?.message ?? "No se pudo imprimir");
+    }
+  };
 
   return (
     <>
@@ -453,6 +453,9 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
               </dl>
             </section>
 
+            {/* Comprobantes que mandó el comprador por WhatsApp */}
+            {!esRestaurante && <PaymentProofs orderId={pedido.id} onChange={() => { cargar(); onCambio(); }} />}
+
             {/* Pagos */}
             <section>
               <div className="mb-2 flex items-center justify-between">
@@ -522,33 +525,20 @@ export default function OrderDetailDrawer({ pedidoId, onCerrar, onCambio }: Prop
             {/* Envío */}
             {mostrarEnvio && (
               <section>
-                <p className="eyebrow mb-2">Envío</p>
-                <Form form={formEnvio} layout="vertical" onFinish={guardarEnvio} size="small">
-                  <div className="grid gap-x-3 sm:grid-cols-2">
-                    <Form.Item name="courier" label="Courier">
-                      <Select
-                        allowClear
-                        showSearch
-                        placeholder="Elige o escribe"
-                        options={couriers.map((c) => ({ value: c, label: c }))}
-                      />
-                    </Form.Item>
-                    <Form.Item name="tracking_code" label="Número de guía">
-                      <Input placeholder="OLV-889231" />
-                    </Form.Item>
-                  </div>
-                  <Form.Item name="tracking_url" label="Enlace de seguimiento">
-                    <Input placeholder="https://www.olvacourier.com/rastrea" />
-                  </Form.Item>
-                  <Button htmlType="submit" loading={guardando} size="small">
-                    Guardar envío
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="eyebrow">Envío y seguimiento</p>
+                  <Button size="small" icon={<TbPrinter />} onClick={etiqueta}>
+                    Imprimir etiqueta
                   </Button>
-                </Form>
-
-                {(pedido.shippedAt || pedido.deliveredAt) && (
+                </div>
+                <ShipmentPanel
+                  orderId={pedido.id}
+                  editable={!["cancelado", "devuelto"].includes(pedido.status)}
+                  onEnvios={setEnvios}
+                />
+                {pedido.trackingCode && (
                   <p className="mt-2 text-[12px] text-muted">
-                    {pedido.shippedAt && `Enviado el ${fecha(pedido.shippedAt)}`}
-                    {pedido.deliveredAt && ` · Entregado el ${fecha(pedido.deliveredAt)}`}
+                    Registro anterior: {pedido.courier} · {pedido.trackingCode}
                   </p>
                 )}
               </section>
