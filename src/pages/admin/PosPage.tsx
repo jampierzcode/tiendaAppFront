@@ -90,6 +90,8 @@ export default function PosPage() {
   const [categoria, setCategoria] = useState<number | null>(null);
   const [subcategoria, setSubcategoria] = useState<number | null>(null);
   const [soloPromo, setSoloPromo] = useState(false);
+  const [promoId, setPromoId] = useState<number | null>(null);
+  const [promociones, setPromociones] = useState<{ id: number; name: string; label: string }[]>([]);
   const [pagina, setPagina] = useState(1);
   const [totalCatalogo, setTotalCatalogo] = useState(0);
   const [eligiendo, setEligiendo] = useState<ProductoPos | null>(null);
@@ -112,6 +114,7 @@ export default function PosPage() {
             categoryId: categoria ?? undefined,
             subcategoryId: subcategoria ?? undefined,
             promo: soloPromo ? 1 : undefined,
+            promoId: promoId ?? undefined,
             page: pag,
             perPage: POR_PAGINA,
           },
@@ -119,6 +122,7 @@ export default function PosPage() {
         const lista: ProductoPos[] = r.data.data ?? [];
         setResultados((actual) => (pag === 1 ? lista : [...actual, ...lista]));
         setTotalCatalogo(Number(r.data.meta?.total ?? lista.length));
+        setPromociones(r.data.meta?.promociones ?? []);
         setPagina(pag);
       } catch {
         message.error("No se pudo cargar el catálogo");
@@ -126,7 +130,7 @@ export default function PosPage() {
         setBuscando(false);
       }
     },
-    [categoria, subcategoria, soloPromo]
+    [categoria, subcategoria, soloPromo, promoId]
   );
 
   useEffect(() => {
@@ -300,15 +304,39 @@ export default function PosPage() {
                   {c.name}
                 </button>
               ))}
-              <button
-                onClick={() => setSoloPromo((v) => !v)}
-                className={`ml-auto inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[12px] font-semibold transition ${
-                  soloPromo ? "border-danger bg-danger text-white" : "border-danger/40 text-danger hover:bg-danger-bg"
-                }`}
-              >
-                <TbDiscount /> En promoción
-              </button>
             </div>
+            {promociones.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-danger">
+                  <TbDiscount /> Promociones:
+                </span>
+                <button
+                  onClick={() => {
+                    setSoloPromo((v) => !v);
+                    setPromoId(null);
+                  }}
+                  className={`rounded-full border px-3 py-1 text-[12px] font-semibold transition ${
+                    soloPromo && !promoId ? "border-danger bg-danger text-white" : "border-danger/40 text-danger hover:bg-danger-bg"
+                  }`}
+                >
+                  Todas ({promociones.length})
+                </button>
+                {promociones.map((pr) => (
+                  <button
+                    key={pr.id}
+                    onClick={() => {
+                      setPromoId(promoId === pr.id ? null : pr.id);
+                      setSoloPromo(false);
+                    }}
+                    className={`rounded-full border px-3 py-1 text-[12px] font-medium transition ${
+                      promoId === pr.id ? "border-danger bg-danger text-white" : "border-danger/30 text-ink-soft hover:bg-danger-bg"
+                    }`}
+                  >
+                    {pr.name} <b className={promoId === pr.id ? "" : "text-danger"}>{pr.label}</b>
+                  </button>
+                ))}
+              </div>
+            )}
             {subcategorias.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {subcategorias.map((sc) => (
@@ -335,7 +363,7 @@ export default function PosPage() {
               <Empty
                 className="py-16"
                 description={
-                  termino || categoria || soloPromo
+                  termino || categoria || soloPromo || promoId
                     ? "Nada con ese filtro, o está agotado"
                     : "No hay productos con stock para vender"
                 }

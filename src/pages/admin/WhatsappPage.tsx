@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePolling } from "../../hooks/usePolling";
-import { Alert, Button, Input, Modal, Spin, Switch, Tag, message } from "antd";
+import { Alert, Button, Input, Modal, Spin, Tag, message } from "antd";
 import { useNavigate } from "react-router-dom";
 import { useBusiness } from "../../context/BusinessContext";
 import QRCode from "qrcode";
@@ -58,8 +58,6 @@ export default function WhatsappPage() {
   const [editado, setEditado] = useState(false);
   // Segundos desde que empezó a conectar: solo para mostrar progreso honesto.
   const [segundos, setSegundos] = useState(0);
-  const [instrucciones, setInstrucciones] = useState<string | null>(null);
-  const [guardandoAgente, setGuardandoAgente] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
@@ -67,7 +65,6 @@ export default function WhatsappPage() {
       const d = r.data.data as Estado;
       setEstado(d);
       setPlantillas((actual) => (Object.keys(actual).length ? actual : d.templates));
-      setInstrucciones((actual) => (actual === null ? d.agent?.instructions ?? "" : actual));
     } catch {
       message.error({ content: "No se pudo consultar WhatsApp", key: "wa-estado" });
     }
@@ -121,24 +118,7 @@ export default function WhatsappPage() {
     }
   };
 
-  const guardarAgente = async (cambios: { enabled?: boolean; instructions?: string }) => {
-    setGuardandoAgente(true);
-    try {
-      await apiTienda.put("/whatsapp/agent", cambios);
-      message.success(
-        cambios.enabled === undefined
-          ? "Indicaciones guardadas"
-          : cambios.enabled
-            ? "Asistente encendido"
-            : "Asistente apagado"
-      );
-      refrescar();
-    } catch {
-      message.error("No se pudo guardar");
-    } finally {
-      setGuardandoAgente(false);
-    }
-  };
+
 
   if (!estado) {
     return (
@@ -336,76 +316,23 @@ export default function WhatsappPage() {
           </div>
         </section>
       </div>
-      <section className="card mt-5 p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="eyebrow">Asistente de ventas con IA</p>
-            <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-ink-soft">
-              Responde por ti en WhatsApp con naturalidad: busca en tu catálogo, manda fotos, cotiza
-              con tus precios y promociones, toma el pedido (queda en <b>Pedidos</b> como pendiente) y
-              dice el estado de pedidos anteriores. Si respondes tú a un cliente, el asistente se aparta
-              con él por {estado.agent.pauseMinutes} minutos.
-            </p>
-          </div>
+      {/* El vendedor IA se configura en su propia sección; aquí solo el estado y el acceso. */}
+      <section className="card mt-5 flex flex-wrap items-center justify-between gap-3 p-5">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-semibold text-ink">
-              {estado.agent.enabled ? "Encendido" : "Apagado"}
-            </span>
-            <Switch
-              checked={estado.agent.enabled}
-              loading={guardandoAgente}
-              onChange={(v) => guardarAgente({ enabled: v })}
-            />
+            <p className="eyebrow">Vendedor IA</p>
+            <Tag color={estado.agent.enabled && estado.agent.available ? "green" : "default"}>
+              {!estado.agent.available ? "No activado en el servidor" : estado.agent.enabled ? "Encendido" : "Apagado"}
+            </Tag>
           </div>
-        </div>
-
-        {!estado.agent.available && (
-          <Alert
-            className="mt-4"
-            type="info"
-            showIcon
-            message="El asistente con IA aún no está activado en el servidor"
-            description="Mientras tanto, el bot solo responde «menú» y «mi pedido». Pide a soporte que lo active."
-          />
-        )}
-
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-brand-50 px-4 py-3">
-          <p className="text-[13px] text-ink-soft">
-            Personalidad, saludo, <b>zonas de envío</b>, preguntas frecuentes y conversación de ejemplo.
+          <p className="mt-1 max-w-2xl text-[13px] text-ink-soft">
+            Responde por ti en este WhatsApp: vende, toma pedidos y recibe comprobantes. Su personalidad, saludo,
+            envíos, sedes de agencias y preguntas frecuentes se configuran en <b>Vendedor IA</b>.
           </p>
-          <Button type="primary" onClick={() => navigate(`/b/${business?.uuid}/vendedor-ia`)}>
-            Configurar vendedor IA
-          </Button>
         </div>
-
-        <div className="mt-4">
-          <label className="text-[13px] font-semibold text-ink">
-            Lo que el asistente debe saber de tu negocio
-          </label>
-          <p className="mb-2 text-[12px] text-muted">
-            Ya conoce tu catálogo, precios, horario, dirección, envío y forma de pago. Aquí agrega lo
-            demás: zonas de reparto, tiempos de entrega, cambios y devoluciones, preguntas frecuentes,
-            cómo quieres que hable…
-          </p>
-          <Input.TextArea
-            rows={5}
-            maxLength={4000}
-            showCount
-            value={instrucciones ?? ""}
-            placeholder={"Ej.: Repartimos solo en Trujillo y Víctor Larco (30-45 min).\nLos cambios de talla se aceptan hasta 7 días con boleta.\nTrata a los clientes de tú y ofrece siempre el combo del día."}
-            onChange={(e) => setInstrucciones(e.target.value)}
-          />
-          <div className="mt-2 flex justify-end">
-            <Button
-              type="primary"
-              loading={guardandoAgente}
-              disabled={(instrucciones ?? "") === (estado.agent.instructions ?? "")}
-              onClick={() => guardarAgente({ instructions: instrucciones ?? "" })}
-            >
-              Guardar indicaciones
-            </Button>
-          </div>
-        </div>
+        <Button type="primary" onClick={() => navigate(`/b/${business?.uuid}/vendedor-ia`)}>
+          Ir a Vendedor IA
+        </Button>
       </section>
       <Modal
         open={guia}
