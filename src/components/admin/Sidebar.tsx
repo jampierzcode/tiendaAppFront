@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, useNavigate, useParams } from "react-router-dom";
+import { NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import { Tooltip } from "antd";
 import {
@@ -13,6 +13,7 @@ import {
   TbTag,
   TbCashRegister,
   TbBrandWhatsapp,
+  TbChevronDown,
   TbChartHistogram,
   TbChefHat,
   TbLogout,
@@ -61,6 +62,22 @@ export default function Sidebar({
 
   const [negocios, setNegocios] = useState<Negocio[]>([]);
   const [selectorAbierto, setSelectorAbierto] = useState(false);
+  const { pathname } = useLocation();
+
+  // Secciones plegables: se recuerda lo que el usuario abrió o cerró. Sin
+  // preferencia guardada, solo se abre la sección de la pantalla actual.
+  const [plegadas, setPlegadas] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("sidebar_secciones") ?? "{}");
+    } catch {
+      return {};
+    }
+  });
+  const alternar = (titulo: string, abierta: boolean) => {
+    const nuevo = { ...plegadas, [titulo]: abierta };
+    setPlegadas(nuevo);
+    localStorage.setItem("sidebar_secciones", JSON.stringify(nuevo));
+  };
 
   useEffect(() => {
     if (!auth.user?.id) return;
@@ -257,19 +274,45 @@ export default function Sidebar({
       )}
 
       {/* Navegación */}
-      <nav className="scroll-fino mt-5 flex-1 space-y-5 overflow-y-auto px-3 pb-4">
-        {secciones.map((seccion, i) => (
+      <nav className="scroll-fino mt-5 flex-1 space-y-3 overflow-y-auto px-3 pb-4">
+        {secciones.map((seccion, i) => {
+          const activa = seccion.items.some((it) => pathname.startsWith(it.url));
+          // Con el menú angosto (solo íconos) no se pliega nada.
+          const abierta =
+            !open || !seccion.titulo || activa || (plegadas[seccion.titulo] ?? false);
+          const avisos = seccion.items.reduce(
+            (t, it) => t + ("badge" in it ? Number(it.badge) || 0 : 0),
+            0
+          );
+          return (
           <div key={i}>
             {seccion.titulo && open && (
-              <p className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.11em] text-white/40">
-                {seccion.titulo}
-              </p>
+              <button
+                type="button"
+                onClick={() => !activa && alternar(seccion.titulo!, !abierta)}
+                className={`flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-[0.11em] transition ${
+                  activa ? "cursor-default text-white/60" : "text-white/40 hover:bg-white/5 hover:text-white/70"
+                }`}
+              >
+                <span className="flex-1">{seccion.titulo}</span>
+                {!abierta && avisos > 0 && (
+                  <span className="rounded-full bg-danger px-1.5 text-[10px] font-bold normal-case leading-4 tracking-normal text-white">
+                    {avisos}
+                  </span>
+                )}
+                {!activa && (
+                  <TbChevronDown
+                    className={`shrink-0 text-[13px] transition-transform ${abierta ? "rotate-180" : ""}`}
+                  />
+                )}
+              </button>
             )}
             {seccion.titulo && !open && i > 0 && (
               <div className="mx-3 mb-2 h-px bg-white/10" />
             )}
 
-            <ul className="space-y-0.5">
+            {abierta && (
+            <ul className="mt-0.5 space-y-0.5">
               {seccion.items.map((item) => (
                 <li key={item.url}>
                   <Tooltip
@@ -304,8 +347,10 @@ export default function Sidebar({
                 </li>
               ))}
             </ul>
+            )}
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* Usuario y salida */}
