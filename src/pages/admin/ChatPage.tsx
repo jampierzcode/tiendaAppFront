@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Empty, Spin, message } from "antd";
+import { Button, Empty, Spin, Tag, message } from "antd";
 import { useNavigate } from "react-router-dom";
 import { useBusiness } from "../../context/BusinessContext";
 import dayjs from "dayjs";
@@ -16,6 +16,8 @@ interface Conversacion {
   lastDirection: "in" | "out";
   lastAt: string;
   unread: number;
+  /** El dueño tomó la conversación: el asistente de IA no responde por ahora. */
+  agentPaused?: boolean;
 }
 
 /** Bandeja de conversaciones por WhatsApp: lo que escribe el cliente llega aquí. */
@@ -25,6 +27,8 @@ export default function ChatPage() {
   const [activa, setActiva] = useState<Conversacion | null>(null);
   const navigate = useNavigate();
   const { business } = useBusiness();
+  // ¿Responde el asistente de IA en este negocio? (encendido y con clave en el servidor)
+  const [asistente, setAsistente] = useState(false);
 
   // Sin WhatsApp conectado esta bandeja no sirve: se manda a conectarlo.
   useEffect(() => {
@@ -32,6 +36,8 @@ export default function ChatPage() {
     apiTienda
       .get("/whatsapp")
       .then((r) => {
+        const agente = r.data?.data?.agent;
+        setAsistente(Boolean(agente?.enabled && agente?.available));
         if (r.data?.data?.status !== "connected") {
           message.info("Conecta tu WhatsApp para recibir y responder mensajes");
           navigate(`/b/${business.uuid}/whatsapp`, { replace: true });
@@ -52,6 +58,19 @@ export default function ChatPage() {
   }, []);
 
   usePolling(cargar, 8000);
+
+  // La conversación abierta con sus datos frescos (la pausa cambia sola).
+  const actual = activa ? lista.find((c) => c.contact === activa.contact) ?? activa : null;
+
+  const devolverAlAsistente = async (contact: string) => {
+    try {
+      await apiTienda.post(`/whatsapp/conversations/${contact}/resume-agent`);
+      message.success("El asistente vuelve a responder a este cliente");
+      cargar();
+    } catch {
+      message.error("No se pudo reactivar el asistente");
+    }
+  };
 
   return (
     <>
@@ -78,7 +97,14 @@ export default function ChatPage() {
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-[13px] font-bold text-ink">{c.name ?? `+${c.phone}`}</span>
+                  <span className="truncate text-[13px] font-bold text-ink">
+                    {c.name ?? `+${c.phone}`}
+                    {c.agentPaused && (
+                      <span className="ml-1.5 rounded bg-warn-bg px-1 text-[10px] font-semibold text-warn">
+                        Tú atiendes
+                      </span>
+                    )}
+                  </span>
                   <span className="shrink-0 text-[11px] text-muted">{dayjs(c.lastAt).format("HH:mm")}</span>
                 </div>
                 <div className="flex items-center justify-between gap-2">
@@ -98,14 +124,26 @@ export default function ChatPage() {
         </div>
 
         <div className="min-h-0">
-          {activa ? (
+          {actual ? (
             <div className="flex h-full flex-col">
-              <div className="border-b border-line-soft px-4 py-3">
-                <p className="text-[14px] font-bold text-ink">{activa.name ?? `+${activa.phone}`}</p>
-                <p className="text-[11px] text-muted">+{activa.phone}</p>
+              <div className="flex items-center justify-between gap-3 border-b border-line-soft px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-[14px] font-bold text-ink">{actual.name ?? `+${actual.phone}`}</p>
+                  <p className="text-[11px] text-muted">+{actual.phone}</p>
+                </div>
+                {!asistente ? null : actual.agentPaused ? (
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Tag color="warning" className="m-0">Asistente en pausa</Tag>
+                    <Button size="small" onClick={() => devolverAlAsistente(actual.contact)}>
+                      Devolver al asistente
+                    </Button>
+                  </div>
+                ) : (
+                  <Tag color="success" className="m-0 shrink-0">Asistente activo</Tag>
+                )}
               </div>
               <div className="min-h-0 flex-1">
-                <ChatThread key={activa.contact} contact={activa.contact} phone={activa.phone} onLeido={cargar} />
+                <ChatThread key={actual.contact} contact={actual.contact} phone={actual.phone} onLeido={cargar} />
               </div>
             </div>
           ) : (
