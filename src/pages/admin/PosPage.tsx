@@ -55,6 +55,10 @@ interface LineaCaja {
   nombre: string;
   etiqueta: string;
   precio: number;
+  /** Precio sin promoción (null si no tiene). */
+  precioRegular: number | null;
+  /** Etiqueta de la promoción, p. ej. «−20%». */
+  promo: string | null;
   stock: number;
   cantidad: number;
 }
@@ -171,6 +175,8 @@ export default function PosPage() {
           nombre: p.name,
           etiqueta: v.label,
           precio: v.price,
+          precioRegular: v.originalPrice,
+          promo: v.originalPrice !== null ? (p.promoLabels[0] ?? "Promo") : null,
           stock: v.stock,
           cantidad: 1,
         },
@@ -190,11 +196,14 @@ export default function PosPage() {
         .filter((l) => l.cantidad > 0)
     );
 
-  const { subtotal, rebaja, total } = useMemo(() => {
+  const { subtotal, rebaja, total, regular, ahorroPromos } = useMemo(() => {
     const sub = carrito.reduce((t, l) => t + l.precio * l.cantidad, 0);
+    const reg = carrito.reduce((t, l) => t + (l.precioRegular ?? l.precio) * l.cantidad, 0);
     const r = (sub * descuento) / 100;
     return {
       subtotal: sub,
+      regular: reg,
+      ahorroPromos: Math.round((reg - sub + Number.EPSILON) * 100) / 100,
       rebaja: r,
       total: Math.round((sub - r + Number.EPSILON) * 100) / 100,
     };
@@ -483,11 +492,27 @@ export default function PosPage() {
                               +
                             </button>
                           </div>
-                          <span className="text-[11px] text-muted">× {soles(l.precio)}</span>
+                          <span className="text-[11px] text-muted">
+                            ×{" "}
+                            {l.precioRegular !== null && (
+                              <span className="mr-1 line-through">{soles(l.precioRegular)}</span>
+                            )}
+                            <span className={l.precioRegular !== null ? "font-semibold text-brand-700" : ""}>
+                              {soles(l.precio)}
+                            </span>
+                          </span>
+                          {l.promo && (
+                            <span className="rounded bg-danger px-1 text-[10px] font-bold text-white">{l.promo}</span>
+                          )}
                         </div>
                       </div>
 
                       <div className="flex shrink-0 flex-col items-end gap-1">
+                        {l.precioRegular !== null && (
+                          <span className="text-[11px] text-muted line-through">
+                            {soles(l.precioRegular * l.cantidad)}
+                          </span>
+                        )}
                         <span className="text-[13px] font-semibold">
                           {soles(l.precio * l.cantidad)}
                         </span>
@@ -525,13 +550,25 @@ export default function PosPage() {
               </div>
 
               <dl className="mb-3 space-y-1 text-[13px]">
+                {ahorroPromos > 0.009 && (
+                  <>
+                    <div className="flex justify-between text-ink-soft">
+                      <dt>Precio regular</dt>
+                      <dd className="tabular">{soles(regular)}</dd>
+                    </div>
+                    <div className="flex justify-between text-ok">
+                      <dt>Ahorro por promociones</dt>
+                      <dd className="tabular">− {soles(ahorroPromos)}</dd>
+                    </div>
+                  </>
+                )}
                 <div className="flex justify-between text-ink-soft">
                   <dt>Subtotal</dt>
                   <dd className="tabular">{soles(subtotal)}</dd>
                 </div>
                 {rebaja > 0 && (
                   <div className="flex justify-between text-ok">
-                    <dt>Descuento</dt>
+                    <dt>Descuento adicional ({descuento}%)</dt>
                     <dd className="tabular">− {soles(rebaja)}</dd>
                   </div>
                 )}
