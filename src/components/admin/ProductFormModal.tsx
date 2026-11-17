@@ -127,9 +127,19 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
   );
   const yaTieneVariaciones = productoTieneVariaciones(editData);
   // Las variaciones reales (la oculta del producto simple no cuenta).
-  const variacionesReales = (editData?.variations ?? []).filter((v: any) => !v.isDefault);
-  const clavesExistentes = variacionesReales.map((v: any) =>
-    claveCombo((v.attributes ?? []).map((a: any) => a.attributeValueId ?? a.value?.id).filter(Boolean))
+  const variacionesReales = useMemo(
+    () => (editData?.variations ?? []).filter((v: any) => !v.isDefault),
+    [editData]
+  );
+  // Memorizado: VariationGenerator recalcula sus combinaciones cuando cambia
+  // esta lista y se las devuelve al padre; si fuera un arreglo nuevo en cada
+  // render, cualquier re-render entraría en bucle (pantalla en blanco).
+  const clavesExistentes = useMemo(
+    () =>
+      variacionesReales.map((v: any) =>
+        claveCombo((v.attributes ?? []).map((a: any) => a.attributeValueId ?? a.value?.id).filter(Boolean))
+      ),
+    [variacionesReales]
   );
 
   useEffect(() => {

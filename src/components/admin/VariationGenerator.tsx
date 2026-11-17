@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Input, InputNumber, Select, Table } from "antd";
 import { apiTienda } from "../../api/apiTienda";
 
+/** Siempre el mismo arreglo vacío: así «sin combinaciones» no avisa al padre en cada render. */
+const SIN_COMBOS: ComboNueva[] = [];
+
 interface Atributo {
   id: number;
   name: string;
@@ -55,7 +58,7 @@ export default function VariationGenerator({ existentes = [], skuProducto, conSt
 
   const combos: ComboNueva[] = useMemo(() => {
     const usados = atributos.filter((a) => (elegidos[a.id] ?? []).length > 0);
-    if (!usados.length) return [];
+    if (!usados.length) return SIN_COMBOS;
     let acc: { ids: number[]; textos: string[] }[] = [{ ids: [], textos: [] }];
     for (const a of usados) {
       const sig: typeof acc = [];
