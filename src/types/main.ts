@@ -94,6 +94,10 @@ export type Suscripcion = {
   interval: "trial" | "month" | "year";
   quantity: number;
   unitPrice: number;
+  subtotal?: number;
+  discountType?: "percent" | "amount" | null;
+  discountValue?: number | null;
+  discountAmount?: number;
   total: number;
   currency: string;
   startsAt: string;

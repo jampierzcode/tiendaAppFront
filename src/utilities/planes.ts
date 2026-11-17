@@ -37,7 +37,10 @@ export const NOMBRE_FUNCION: Record<string, string> = {
   insumos: "Insumos y recetas",
 };
 
-export const INTERVALO: Record<string, { uno: string; varios: string; corto: string }> = {
+export const INTERVALO: Record<
+  string,
+  { uno: string; varios: string; corto: string }
+> = {
   month: { uno: "mes", varios: "meses", corto: "/mes" },
   year: { uno: "año", varios: "años", corto: "/año" },
   trial: { uno: "día de prueba", varios: "días de prueba", corto: "" },
@@ -46,7 +49,10 @@ export const INTERVALO: Record<string, { uno: string; varios: string; corto: str
 export const soles = (n: number | string | null | undefined) =>
   `S/ ${Number(n ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-export const ESTADO_SUSCRIPCION: Record<string, { texto: string; color: string }> = {
+export const ESTADO_SUSCRIPCION: Record<
+  string,
+  { texto: string; color: string }
+> = {
   vigente: { texto: "Vigente", color: "green" },
   programada: { texto: "Programada", color: "blue" },
   vencida: { texto: "Vencida", color: "default" },
@@ -65,3 +71,15 @@ export const METODOS_PAGO = [
 /** ¿La función aplica a este tipo de negocio? (cocina solo restaurante, compras solo tienda…) */
 export const aplicaA = (f: { rubro?: string | null }, tipo?: string | null) =>
   !f.rubro || !tipo || f.rubro === tipo;
+
+/** "−10 % (S/ 11.97)" o "−S/ 20.00"; vacío si no hubo descuento. */
+export const textoDescuento = (s: {
+  discountType?: string | null;
+  discountValue?: number | null;
+  discountAmount?: number;
+}) =>
+  s.discountAmount && s.discountAmount > 0
+    ? s.discountType === "percent"
+      ? `−${Number(s.discountValue)} % (${soles(s.discountAmount)})`
+      : `−${soles(s.discountAmount)}`
+    : "";
