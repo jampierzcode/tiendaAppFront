@@ -64,9 +64,12 @@ export default function TopNavigation({ abrirMovil }: Props) {
         <div className="ml-auto flex min-w-0 items-center gap-2">
           <NotificationBell />
           {diasPrueba !== null && (
-            <span className="pill shrink-0 whitespace-nowrap bg-brand-50 text-brand-700">
+            <Link
+              to={`/b/${uuid_business}/plan`}
+              className="pill shrink-0 whitespace-nowrap bg-brand-50 text-brand-700 hover:bg-brand-100"
+            >
               Prueba gratis: {diasPrueba} {diasPrueba === 1 ? "día" : "días"}
-            </span>
+            </Link>
           )}
           {!esSuperadmin && (
           <Link

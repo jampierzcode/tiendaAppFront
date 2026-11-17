@@ -7,7 +7,6 @@ import {
   Card,
   Dropdown,
   Input,
-  InputNumber,
   Modal,
   message,
   Segmented,
@@ -21,6 +20,7 @@ import { useNavigate } from "react-router-dom";
 import type { AxiosError } from "axios";
 import type { ColumnsType } from "antd/es/table";
 import { BusinessFormModal } from "../../components/superAdmin/BusinessFormModal";
+import SuscripcionDrawer from "../../components/superAdmin/SuscripcionDrawer";
 
 export function BusinessesPage(): React.ReactElement {
   const navigate = useNavigate();
@@ -33,33 +33,30 @@ export function BusinessesPage(): React.ReactElement {
     "todos"
   );
 
-  // Activar plan: el superadmin cobra fuera del sistema y aquí lo registra.
+  // Plan y pagos: el superadmin cobra fuera del sistema y aquí lo registra.
   const [planTarget, setPlanTarget] = useState<Business | null>(null);
-  const [planNombre, setPlanNombre] = useState("Mensual");
-  const [planMeses, setPlanMeses] = useState(1);
-  const [savingPlan, setSavingPlan] = useState(false);
 
-  const operar = async (row: Business, body: Record<string, unknown>, ok: string) => {
+  const darPrueba = async (row: Business) => {
     try {
-      await apiTienda.put(`/businesses/${row.id}/subscription`, body);
-      message.success(ok);
+      await apiTienda.post(`/businesses/${row.id}/trial`, { days: 7 });
+      message.success("Se agregaron 7 días de prueba");
       fetchList();
     } catch (err) {
       const ax: any = err as AxiosError;
-      message.error(ax.response?.data?.message ?? "No se pudo actualizar la suscripción");
+      message.error(ax.response?.data?.message ?? "No se pudo dar la prueba");
     }
   };
 
-  const confirmarPlan = async () => {
-    if (!planTarget) return;
-    setSavingPlan(true);
-    await operar(
-      planTarget,
-      { action: "activate", plan: planNombre, months: planMeses },
-      `Plan activado por ${planMeses} ${planMeses === 1 ? "mes" : "meses"}`
-    );
-    setSavingPlan(false);
-    setPlanTarget(null);
+  /** Suspender o reactivar el negocio (independiente del plan). */
+  const cambiarEstado = async (row: Business, status: "activo" | "inactivo") => {
+    try {
+      await apiTienda.put(`/businesses/${row.id}`, { status });
+      message.success(status === "activo" ? "Negocio reactivado" : "Negocio suspendido");
+      fetchList();
+    } catch (err) {
+      const ax: any = err as AxiosError;
+      message.error(ax.response?.data?.message ?? "No se pudo cambiar el estado");
+    }
   };
 
   const [openModal, setOpenModal] = useState(false);
@@ -224,17 +221,19 @@ export function BusinessesPage(): React.ReactElement {
           ),
       },
       {
-        title: "Suscripción",
+        title: "Plan",
         key: "subscription",
-        width: 220,
+        width: 240,
         render: (_, b) => {
           const e = estado(b);
           const dias = b.subscriptionDaysLeft;
           const fin = e === "trial" ? b.trialEndsAt : b.paidUntil;
           return (
             <div>
+              <div style={{ fontWeight: 600 }}>{b.planLabel ?? "Sin plan · acceso completo"}</div>
               {e === "trial" && <Tag color="blue">En prueba</Tag>}
-              {e === "active" && <Tag color="green">Activo{b.plan ? ` · ${b.plan}` : ""}</Tag>}
+              {e === "active" && <Tag color="green">Activo</Tag>}
+              {b.status && b.status !== "activo" && <Tag color="default">Suspendido</Tag>}
               {e === "expired" && <Tag color="red">Vencido</Tag>}
               <div
                 style={{
@@ -270,13 +269,9 @@ export function BusinessesPage(): React.ReactElement {
             <Button
               size="small"
               type="primary"
-              onClick={() => {
-                setPlanTarget(row);
-                setPlanNombre(row.plan || "Mensual");
-                setPlanMeses(1);
-              }}
+              onClick={() => setPlanTarget(row)}
             >
-              Activar plan
+              Plan y pagos
             </Button>
             {row.whatsappPhone && (
               <Button
@@ -293,23 +288,25 @@ export function BusinessesPage(): React.ReactElement {
               menu={{
                 items: [
                   { key: "extend", label: "Regalar +7 días de prueba" },
-                  { key: "expire", label: "Suspender ahora", danger: true },
+                  row.status === "activo"
+                    ? { key: "suspend", label: "Suspender negocio", danger: true }
+                    : { key: "reactivate", label: "Reactivar negocio" },
                   { type: "divider" },
                   { key: "clone", label: "Copiar catálogo" },
                   { key: "edit", label: "Editar" },
                   { key: "delete", label: "Eliminar", danger: true },
                 ],
                 onClick: ({ key }) => {
-                  if (key === "extend")
-                    operar(row, { action: "extend", days: 7 }, "Se agregaron 7 días de prueba");
-                  else if (key === "expire")
+                  if (key === "extend") darPrueba(row);
+                  else if (key === "reactivate") cambiarEstado(row, "activo");
+                  else if (key === "suspend")
                     Modal.confirm({
                       title: `¿Suspender «${row.name}»?`,
-                      content: "Su panel quedará en solo lectura y su tienda dejará de recibir pedidos.",
+                      content: "El dueño no podrá entrar a su panel y su tienda deja de estar disponible. Su plan e historial no cambian.",
                       okText: "Suspender",
                       cancelText: "Cancelar",
                       okButtonProps: { danger: true },
-                      onOk: () => operar(row, { action: "expire" }, "Negocio suspendido"),
+                      onOk: () => cambiarEstado(row, "inactivo"),
                     });
                   else if (key === "clone") openClone(row);
                   else if (key === "edit") openEdit(row);
@@ -373,7 +370,7 @@ export function BusinessesPage(): React.ReactElement {
       </div>
 
     <Card
-      title="Negocios y suscripciones"
+      title="Negocios"
       extra={
         <Space wrap>
           <Segmented
@@ -416,36 +413,11 @@ export function BusinessesPage(): React.ReactElement {
         }}
       />
 
-      <Modal
-        open={!!planTarget}
-        title={`Activar plan · ${planTarget?.name ?? ""}`}
-        okText="Activar"
-        cancelText="Cancelar"
-        okButtonProps={{ loading: savingPlan }}
-        onOk={confirmarPlan}
-        onCancel={() => setPlanTarget(null)}
-      >
-        <p>
-          Registra el pago que cobraste. Si el plan sigue vigente, los meses se suman al
-          vencimiento actual; si ya venció, cuentan desde hoy.
-        </p>
-        <Space direction="vertical" style={{ width: "100%" }}>
-          <Input
-            addonBefore="Plan"
-            value={planNombre}
-            onChange={(e) => setPlanNombre(e.target.value)}
-            placeholder="Mensual, Anual…"
-          />
-          <InputNumber
-            addonBefore="Meses"
-            min={1}
-            max={36}
-            value={planMeses}
-            onChange={(v) => setPlanMeses(Number(v) || 1)}
-            style={{ width: "100%" }}
-          />
-        </Space>
-      </Modal>
+      <SuscripcionDrawer
+        business={planTarget ? (data.find((b) => b.id === planTarget.id) ?? planTarget) : null}
+        onClose={() => setPlanTarget(null)}
+        onChanged={fetchList}
+      />
 
       <Modal
         open={!!cloneTarget}

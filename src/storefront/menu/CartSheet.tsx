@@ -80,15 +80,62 @@ export default function CartSheet({ abierto, onClose }: Props) {
         : tienda.shippingCost;
   const total = neto + envio;
 
+  const mensajeWhatsapp = () => {
+    const tel = (tienda.whatsappPhone ?? "").replace(/\D/g, "");
+    if (!tel) return null;
+    const lineasTexto = lineas.map((l) => {
+      const extras = l.options.map((o) => (o.quantity > 1 ? `${o.name} x${o.quantity}` : o.name)).join(", ");
+      return [
+        `• ${l.quantity} x ${l.name} — ${precio(precioUnitario(l) * l.quantity)}`,
+        extras ? `   ${extras}` : "",
+        l.note ? `   Nota: ${l.note}` : "",
+      ]
+        .filter(Boolean)
+        .join("\n");
+    });
+    const texto = [
+      `Hola ${tienda.name}, quiero hacer este pedido:`,
+      "",
+      ...lineasTexto,
+      "",
+      descuento > 0 ? `Descuento: -${precio(descuento)}` : "",
+      metodo === "envio" ? `Delivery: ${envio === 0 ? "Gratis" : precio(envio)}` : "",
+      `*Total: ${precio(total)}*`,
+      "",
+      `Nombre: ${nombre}`,
+      metodo === "envio" ? `Entrega a: ${direccion}` : "Recojo en el local",
+      nota.trim() ? `Nota: ${nota.trim()}` : "",
+    ]
+      .filter((x, i, a) => x !== "" || (a[i - 1] ?? "") !== "")
+      .join("\n");
+    return `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`;
+  };
+
   const enviar = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
 
     if (!lineas.length) return;
     if (metodo === "envio" && !direccion.trim()) return setError("Falta la dirección de entrega");
+    // Por WhatsApp el teléfono ya viaja con el mensaje: solo se valida si lo escribió.
     const falloTel = errorTelefono(dialActual, telefono);
-    if (falloTel) return setError(falloTel);
+    if (falloTel && (tienda.pedidosEnLinea !== false || telefono.trim())) return setError(falloTel);
     if (correo.trim() && !correoValido(correo)) return setError("El correo no parece válido. Revísalo o déjalo vacío.");
+
+    // Plan Carta: sin pedidos en línea. Se arma el mensaje y se abre WhatsApp.
+    if (tienda.pedidosEnLinea === false) {
+      const url = mensajeWhatsapp();
+      if (!url) return setError("Esta tienda aún no tiene WhatsApp configurado.");
+      try {
+        localStorage.setItem(claveContacto, JSON.stringify({ nombre, telefono, dial: dialActual }));
+      } catch {
+        // no pasa nada
+      }
+      vaciar();
+      onClose();
+      window.location.href = url;
+      return;
+    }
 
     setEnviando(true);
     try {
@@ -359,7 +406,11 @@ export default function CartSheet({ abierto, onClose }: Props) {
                 className="h-12 w-full rounded-full text-sm font-extrabold text-white disabled:opacity-50"
                 style={{ backgroundColor: "var(--tienda-primario)" }}
               >
-                {enviando ? "Enviando…" : "Confirmar pedido"}
+                {enviando
+                  ? "Enviando…"
+                  : tienda.pedidosEnLinea === false
+                    ? "Enviar pedido por WhatsApp"
+                    : "Confirmar pedido"}
               </button>
             </div>
           </motion.form>

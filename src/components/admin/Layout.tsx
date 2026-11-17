@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
-import { useBusiness } from "../../context/BusinessContext";
+import { useBusiness, useFunciones } from "../../context/BusinessContext";
 import Sidebar from "./Sidebar";
 import TopNavigation from "./TopNavigation";
 import AvisosBanner from "./AvisosBanner";
@@ -24,7 +24,9 @@ export default function AdminLayout() {
   });
   const [movilAbierto, setMovilAbierto] = useState(false);
   const location = useLocation();
-  const sinLeer = useMensajesSinLeer(true);
+  const { tiene } = useFunciones();
+  // Solo se sondea lo que el plan incluye: lo demás respondería 403 cada 15 s.
+  const sinLeer = useMensajesSinLeer(tiene("whatsapp"));
   const { auth } = useAuth();
   const [pedidosSinLeer, setPedidosSinLeer] = useState(0);
   const refrescarPedidos = usePolling(async () => {
@@ -34,7 +36,7 @@ export default function AdminLayout() {
     } catch {
       // se reintenta en el siguiente ciclo
     }
-  }, 15000);
+  }, 15000, tiene("pedidos_online"));
   // Un aviso push que llega con la pestaña a la vista refresca el globito al instante.
   useEffect(() => escucharServiceWorker(refrescarPedidos), [refrescarPedidos]);
   const { business } = useBusiness();

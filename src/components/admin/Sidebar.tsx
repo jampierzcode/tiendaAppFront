@@ -17,6 +17,8 @@ import {
   TbChartHistogram,
   TbChefHat,
   TbLogout,
+  TbLock,
+  TbCrown,
   TbMessageCircle,
   TbPhoto,
   TbRobot,
@@ -29,7 +31,8 @@ import { HiOutlineChevronLeft } from "react-icons/hi2";
 
 import { useAuth } from "../../context/AuthContext";
 import { apiTienda } from "../../api/apiTienda";
-import { useBusiness } from "../../context/BusinessContext";
+import { useBusiness, useFunciones } from "../../context/BusinessContext";
+import { FUNCION_DE_PANTALLA } from "../../utilities/planes";
 
 interface SidebarProps {
   open: boolean;
@@ -94,6 +97,12 @@ export default function Sidebar({
     (business as Negocio | null) ?? negocios.find((n) => n.uuid === uuid_business);
   const esRestaurante =
     ((negocioActual as any)?.businessType ?? (negocioActual as any)?.business_type) === "restaurant";
+  const { tiene } = useFunciones();
+  /** ¿La pantalla del item está fuera del plan? Se muestra con candado y lleva a «Mi plan». */
+  const bloqueada = (url: string) => {
+    const f = FUNCION_DE_PANTALLA[url.split("/").pop() ?? ""];
+    return Boolean(f && !tiene(f));
+  };
 
   const secciones = [
     {
@@ -211,6 +220,10 @@ export default function Sidebar({
         },
       ],
     },
+    {
+      titulo: "Cuenta",
+      items: [{ titulo: "Mi plan", url: `/b/${uuid_business}/plan`, icono: <TbCrown /> }],
+    },
   ];
 
   const contenido = (open: boolean) => (
@@ -321,11 +334,11 @@ export default function Sidebar({
                     mouseEnterDelay={0.3}
                   >
                     <NavLink
-                      to={item.url}
+                      to={bloqueada(item.url) ? `/b/${uuid_business}/plan` : item.url}
                       onClick={cerrarMovil}
                       className={({ isActive }) =>
                         `group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] font-medium transition ${
-                          isActive
+                          isActive && !bloqueada(item.url)
                             ? "bg-white text-brand-700 shadow-sm"
                             : "text-white/75 hover:bg-white/10 hover:text-white"
                         } ${!open ? "justify-center px-0" : ""}`
@@ -333,7 +346,10 @@ export default function Sidebar({
                     >
                       <span className="shrink-0 text-lg">{item.icono}</span>
                       {open && <span className="truncate">{item.titulo}</span>}
-                      {"badge" in item && Number(item.badge) > 0 && (
+                      {bloqueada(item.url) && open && (
+                        <TbLock className="ml-auto shrink-0 text-[13px] opacity-60" aria-label="No incluido en tu plan" />
+                      )}
+                      {!bloqueada(item.url) && "badge" in item && Number(item.badge) > 0 && (
                         <span
                           className={`rounded-full bg-danger px-1.5 text-[10px] font-bold leading-4 text-white ${
                             open ? "ml-auto" : "absolute right-1.5 top-1.5"

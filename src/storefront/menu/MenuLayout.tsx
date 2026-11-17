@@ -54,6 +54,7 @@ function Contenido() {
             className="absolute inset-0 h-full w-full object-cover opacity-30"
           />
         )}
+        {tienda.cuentasCliente !== false && (
         <Link
           to={`/t/${tienda.slug}/cuenta`}
           className="absolute right-4 top-4 z-10 rounded-full bg-black/20 px-3 py-1.5 text-xs font-bold backdrop-blur"
@@ -61,6 +62,7 @@ function Contenido() {
         >
           Mi cuenta
         </Link>
+        )}
         <div className="relative mx-auto flex max-w-2xl items-center gap-4 px-5 py-6">
           {tienda.logoUrl ? (
             <img

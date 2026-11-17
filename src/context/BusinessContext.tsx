@@ -18,6 +18,11 @@ interface Business {
   slug?: string;
   country?: string;
   whatsappPhone?: string | null;
+  planId?: number | null;
+  planLabel?: string | null;
+  funciones?: string[];
+  effectiveSubscriptionStatus?: "trial" | "active" | "expired";
+  subscriptionDaysLeft?: number | null;
 }
 
 interface BusinessContextType {
@@ -71,4 +76,15 @@ export const useBusiness = () => useContext(BusinessContext);
 export const useEsRestaurante = () => {
   const { business } = useBusiness();
   return (business?.businessType ?? business?.business_type) === "restaurant";
+};
+
+/**
+ * Funciones del plan del negocio abierto. Mientras carga se asume que tiene
+ * todo, para no pintar candados que desaparecen al segundo.
+ */
+export const useFunciones = () => {
+  const { business, loading } = useBusiness();
+  const lista = business?.funciones;
+  const tiene = (f: string) => loading || !business || !lista || lista.includes(f);
+  return { tiene, funciones: lista ?? [], planLabel: business?.planLabel ?? null };
 };

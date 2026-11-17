@@ -28,6 +28,9 @@ const RUTAS_DE_CUENTA = [
   "/roles",
   // Consumo de OpenAI de todas las tiendas (superadmin).
   "/ai-usage",
+  // Planes y cobros (superadmin). Ojo: "/plan" (singular) sí es de la tienda.
+  "/plans",
+  "/subscriptions",
   // La tienda pública ya trae su propio slug en la URL.
   "/store",
 ];

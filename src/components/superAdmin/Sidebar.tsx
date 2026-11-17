@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { Tooltip } from "antd";
 import { FaBuilding } from "react-icons/fa";
 import { RiUserSettingsLine } from "react-icons/ri";
-import { TbLogout, TbRobot } from "react-icons/tb";
+import { TbCrown, TbLogout, TbReceipt2, TbRobot } from "react-icons/tb";
 import { HiOutlineChevronLeft } from "react-icons/hi2";
 import { useAuth } from "../../context/AuthContext";
 
@@ -20,6 +20,8 @@ export default function Sidebar({ open, setOpen, movilAbierto, cerrarMovil }: Pr
 
   const items = [
     { titulo: "Negocios", url: "/businesses", icono: <FaBuilding /> },
+    { titulo: "Cobros", url: "/cobros", icono: <TbReceipt2 /> },
+    { titulo: "Planes", url: "/plans", icono: <TbCrown /> },
     { titulo: "Usuarios", url: "/users", icono: <RiUserSettingsLine /> },
     { titulo: "Consumo IA", url: "/ai-usage", icono: <TbRobot /> },
   ];

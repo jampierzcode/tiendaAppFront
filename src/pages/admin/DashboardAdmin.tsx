@@ -1,4 +1,4 @@
-import { useEsRestaurante } from "../../context/BusinessContext";
+import { useEsRestaurante, useFunciones } from "../../context/BusinessContext";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Empty, Spin } from "antd";
@@ -47,6 +47,7 @@ export default function DashboardAdmin() {
   const { uuid_business } = useParams();
   const { auth } = useAuth();
   const esRestaurante = useEsRestaurante();
+  const { tiene, planLabel } = useFunciones();
 
   const [resumen, setResumen] = useState<any>(null);
   const [ultimos, setUltimos] = useState<PedidoResumen[]>([]);
@@ -56,14 +57,17 @@ export default function DashboardAdmin() {
   const [cargando, setCargando] = useState(true);
 
   useEffect(() => {
+    // Cada bloque por su lado: si el plan no incluye pedidos o insumos (403),
+    // el resto del resumen se pinta igual.
+    const datos = (p: Promise<any>) => p.then((r) => r.data.data).catch(() => null);
     Promise.all([
-      apiTienda.get("/orders/summary").then((r) => r.data.data),
-      apiTienda.get("/orders", { params: { perPage: 6 } }).then((r) => r.data.data),
+      datos(apiTienda.get("/orders/summary")),
+      datos(apiTienda.get("/orders", { params: { perPage: 6 } })),
       // En restaurantes lo que se acaba son los insumos, no los platos.
       esRestaurante
-        ? apiTienda.get("/ingredients").then((r) => r.data.data)
-        : apiTienda.get("/inventory/low-stock").then((r) => r.data.data),
-      apiTienda.get("/products").then((r) => r.data.data),
+        ? datos(apiTienda.get("/ingredients"))
+        : datos(apiTienda.get("/inventory/low-stock")),
+      datos(apiTienda.get("/products")),
     ])
       .then(([s, o, l, p]) => {
         setResumen(s);
@@ -97,6 +101,25 @@ export default function DashboardAdmin() {
         titulo={`Hola, ${auth.user?.name?.split(" ")[0] ?? ""}`}
         descripcion={esRestaurante ? "Así va tu restaurante hoy." : "Así va tu tienda hoy."}
       />
+
+      {!tiene("pedidos_online") && (
+        <div className="card mb-5 flex flex-wrap items-center justify-between gap-3 border-brand-200 bg-brand-50/60 p-4">
+          <div>
+            <p className="text-[14px] font-bold text-ink">
+              Tu plan {planLabel ? `«${planLabel}» ` : ""}recibe los pedidos por WhatsApp
+            </p>
+            <p className="text-[12.5px] text-muted">
+              Con el plan Pedidos llegan a este panel, pasan a cocina y tu cliente sigue su pedido en vivo.
+            </p>
+          </div>
+          <Link
+            to={`/b/${uuid_business}/plan`}
+            className="rounded-lg bg-brand-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-brand-700"
+          >
+            Ver planes
+          </Link>
+        </div>
+      )}
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard

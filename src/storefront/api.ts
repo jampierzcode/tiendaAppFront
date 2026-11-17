@@ -28,6 +28,9 @@ export interface Tienda {
   shippingCost: number;
   freeShippingFrom: number | null;
   aceptaPedidos: boolean;
+  /** Plan Carta: false → el pedido se manda por WhatsApp, sin pasar por el panel. */
+  pedidosEnLinea?: boolean;
+  cuentasCliente?: boolean;
   paymentPolicy: "none" | "on_confirm" | "on_delivery";
   paymentInstructions: string | null;
   phone: string | null;

@@ -11,6 +11,8 @@ import Subscribe from "./pages/Subscribe";
 import { UsersPage } from "./pages/superadmin/Users";
 import { BusinessesPage } from "./pages/superadmin/Business";
 import AiUsagePage from "./pages/superadmin/AiUsage";
+import PlansPage from "./pages/superadmin/Plans";
+import SubscriptionsPage from "./pages/superadmin/Subscriptions";
 import Notfound from "./pages/Notfound";
 import PrivateRoute from "./layouts/PrivateRoute";
 import SuperAdminLayout from "./components/superAdmin/Layout";
@@ -21,6 +23,8 @@ import ProductAttributesPage from "./pages/admin/ProductAttributesPage";
 import TagsPage from "./pages/admin/TagsPage";
 import ProductsPage from "./pages/admin/ProductsPage";
 import DashboardAdmin from "./pages/admin/DashboardAdmin";
+import MiPlanPage from "./pages/admin/MiPlanPage";
+import ConFuncion from "./components/admin/ConFuncion";
 import OrdersPage from "./pages/admin/OrdersPage";
 import CustomersPage from "./pages/admin/CustomersPage";
 import PosPage from "./pages/admin/PosPage";
@@ -122,6 +126,26 @@ export default function App() {
             }
           />
           <Route
+            path="/plans"
+            element={
+              <PrivateRoute roles={["superadmin"]}>
+                <SuperAdminLayout>
+                  <PlansPage />
+                </SuperAdminLayout>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/cobros"
+            element={
+              <PrivateRoute roles={["superadmin"]}>
+                <SuperAdminLayout>
+                  <SubscriptionsPage />
+                </SuperAdminLayout>
+              </PrivateRoute>
+            }
+          />
+          <Route
             path="/businesses"
             element={
               <PrivateRoute roles={["superadmin"]}>
@@ -144,17 +168,18 @@ export default function App() {
           >
             <Route index element={<DashboardAdmin />} />
             <Route path="dashboard" element={<DashboardAdmin />} />
-            <Route path="orders" element={<OrdersPage />} />
-            <Route path="customers" element={<CustomersPage />} />
-            <Route path="pos" element={<PosPage />} />
+            <Route path="plan" element={<MiPlanPage />} />
+            <Route path="orders" element={<ConFuncion f="pedidos_online"><OrdersPage /></ConFuncion>} />
+            <Route path="customers" element={<ConFuncion f="pedidos_online"><CustomersPage /></ConFuncion>} />
+            <Route path="pos" element={<ConFuncion f="pos"><PosPage /></ConFuncion>} />
             <Route path="purchases" element={<PurchasesPage />} />
-            <Route path="reports" element={<ReportsPage />} />
+            <Route path="reports" element={<ConFuncion f="reportes"><ReportsPage /></ConFuncion>} />
             <Route path="modifiers" element={<ModifiersPage />} />
-            <Route path="kitchen" element={<KitchenPage />} />
-            <Route path="chat" element={<ChatPage />} />
-            <Route path="whatsapp" element={<WhatsappPage />} />
-            <Route path="vendedor-ia" element={<SellerAgentPage />} />
-            <Route path="ingredients" element={<IngredientsPage />} />
+            <Route path="kitchen" element={<ConFuncion f="cocina"><KitchenPage /></ConFuncion>} />
+            <Route path="chat" element={<ConFuncion f="whatsapp"><ChatPage /></ConFuncion>} />
+            <Route path="whatsapp" element={<ConFuncion f="whatsapp"><WhatsappPage /></ConFuncion>} />
+            <Route path="vendedor-ia" element={<ConFuncion f="vendedor_ia"><SellerAgentPage /></ConFuncion>} />
+            <Route path="ingredients" element={<ConFuncion f="insumos"><IngredientsPage /></ConFuncion>} />
             {/* Subruta desconocida dentro del panel: al inicio, que para un
                 usuario con sesión es su propio tablero. Pintar aquí la pantalla
                 completa de 404 la metería dentro del layout. */}
@@ -162,7 +187,7 @@ export default function App() {
             <Route path="store" element={<StoreSettingsPage />} />
             <Route path="gallery" element={<GalleryPage />} />
             <Route path="inventory" element={<InventoryPage />} />
-            <Route path="discounts" element={<DiscountsPage />} />
+            <Route path="discounts" element={<ConFuncion f="promociones"><DiscountsPage /></ConFuncion>} />
             <Route path="products" element={<ProductsPage />} />
             <Route path="categories" element={<CategoriesPage />} />
             <Route path="attributes" element={<ProductAttributesPage />} />
