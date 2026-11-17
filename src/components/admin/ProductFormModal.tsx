@@ -20,7 +20,7 @@ import SkuField from "./SkuField";
 import MovementModal from "./MovementModal";
 import CostoReferencia from "./CostoReferencia";
 import VariationGenerator, { claveCombo, type ComboNueva } from "./VariationGenerator";
-import { PlusOutlined } from "@ant-design/icons";
+import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import { apiTienda } from "../../api/apiTienda";
 import { useBusiness, useEsRestaurante } from "../../context/BusinessContext";
 import { impuestoDe } from "../../utilities/paises";
@@ -119,6 +119,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const costoWatch = Form.useWatch("cost", form) as number | undefined;
   const precioWatch = Form.useWatch("price", form) as number | undefined;
   const ilimitado = Boolean(Form.useWatch("unlimitedStock", form));
+  const faqsWatch = Form.useWatch("aiFaqs", form) as { pregunta?: string; respuesta?: string }[] | undefined;
 
   const variacionPorDefecto = useMemo(
     () => editData?.variations?.find((v: any) => v.isDefault),
@@ -152,6 +153,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         taxRate: Number(editData.taxRate ?? 18),
         lowStockThreshold: editData.lowStockThreshold ?? 5,
         unlimitedStock: Boolean(editData.unlimitedStock),
+        aiFaqs: Array.isArray(editData.aiFaqs) ? editData.aiFaqs : [],
         active: editData.status !== "inactivo",
         categoryKeys: (editData.categoryLinks ?? []).map((l: any) =>
           keyOf(l.categoryId, l.subcategoryId)
@@ -184,6 +186,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         taxRate: 18,
         lowStockThreshold: 5,
         unlimitedStock: false,
+        aiFaqs: [],
         stock: 0,
       });
       setHasVariations(false);
@@ -248,6 +251,10 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         sku: values.sku?.trim() ? values.sku.trim() : undefined,
         low_stock_threshold: values.lowStockThreshold ?? 5,
         unlimited_stock: Boolean(values.unlimitedStock),
+        // Preguntas frecuentes del producto: el vendedor IA las usa al responder.
+        ai_faqs: (values.aiFaqs ?? [])
+          .map((f: any) => ({ pregunta: String(f?.pregunta ?? "").trim(), respuesta: String(f?.respuesta ?? "").trim() }))
+          .filter((f: any) => f.pregunta && f.respuesta),
         status: values.active ? "activo" : "inactivo",
         business_image_id: selectedImage?.id || null,
         category_links,
@@ -571,6 +578,48 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
               />
             </div>
           )}
+
+          <Collapse
+            ghost
+            items={[
+              {
+                key: "faqs",
+                label: `Preguntas frecuentes para el vendedor IA${faqsWatch?.length ? ` (${faqsWatch.length})` : ""}`,
+                children: (
+                  <div>
+                    <Text type="secondary" className="mb-3 block text-[12px]">
+                      Lo que suelen preguntar de este {esRestaurante ? "plato" : "producto"} (medidas, material, garantía,
+                      compatibilidad, cómo se usa…). El vendedor IA de WhatsApp responde con esto en vez de decir que no sabe.
+                    </Text>
+                    <Form.List name="aiFaqs">
+                      {(fields, { add, remove }) => (
+                        <>
+                          {fields.map((f) => (
+                            <div key={f.key} className="mb-3 flex gap-2 rounded border border-line-soft p-2">
+                              <div className="flex-1">
+                                <Form.Item name={[f.name, "pregunta"]} className="mb-2" rules={[{ max: 300 }]}>
+                                  <Input placeholder="Pregunta, p. ej. ¿Tiene garantía?" maxLength={300} />
+                                </Form.Item>
+                                <Form.Item name={[f.name, "respuesta"]} className="mb-0" rules={[{ max: 1000 }]}>
+                                  <Input.TextArea rows={2} placeholder="Respuesta, p. ej. Sí, 6 meses por defectos de fábrica." maxLength={1000} />
+                                </Form.Item>
+                              </div>
+                              <Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(f.name)} />
+                            </div>
+                          ))}
+                          {fields.length < 20 && (
+                            <Button icon={<PlusOutlined />} onClick={() => add({ pregunta: "", respuesta: "" })}>
+                              Agregar pregunta
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </Form.List>
+                  </div>
+                ),
+              },
+            ]}
+          />
 
           {!esRestaurante && (
           <Collapse

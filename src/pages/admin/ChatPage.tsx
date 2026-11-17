@@ -18,6 +18,9 @@ interface Conversacion {
   unread: number;
   /** El dueño tomó la conversación: el asistente de IA no responde por ahora. */
   agentPaused?: boolean;
+  /** Por qué se pausó (respondiste a mano, el asistente derivó, etc.). */
+  agentPauseReason?: string | null;
+  agentPausedUntil?: string | null;
 }
 
 /** Bandeja de conversaciones por WhatsApp: lo que escribe el cliente llega aquí. */
@@ -100,7 +103,10 @@ export default function ChatPage() {
                   <span className="truncate text-[13px] font-bold text-ink">
                     {c.name ?? `+${c.phone}`}
                     {c.agentPaused && (
-                      <span className="ml-1.5 rounded bg-warn-bg px-1 text-[10px] font-semibold text-warn">
+                      <span
+                        className="ml-1.5 rounded bg-warn-bg px-1 text-[10px] font-semibold text-warn"
+                        title={c.agentPauseReason ?? undefined}
+                      >
                         Tú atiendes
                       </span>
                     )}
@@ -133,7 +139,18 @@ export default function ChatPage() {
                 </div>
                 {!asistente ? null : actual.agentPaused ? (
                   <div className="flex shrink-0 items-center gap-2">
-                    <Tag color="warning" className="m-0">Asistente en pausa</Tag>
+                    <Tag
+                      color="warning"
+                      className="m-0"
+                      title={[
+                        actual.agentPauseReason,
+                        actual.agentPausedUntil ? `Vuelve solo a las ${dayjs(actual.agentPausedUntil).format("HH:mm")}` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    >
+                      Asistente en pausa
+                    </Tag>
                     <Button size="small" onClick={() => devolverAlAsistente(actual.contact)}>
                       Devolver al asistente
                     </Button>
