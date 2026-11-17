@@ -16,10 +16,15 @@ export const FUNCION_DE_PANTALLA: Record<string, string> = {
   "vendedor-ia": "vendedor_ia",
   ingredients: "insumos",
   discounts: "promociones",
+  inventory: "inventario",
+  purchases: "compras",
 };
 
 export const NOMBRE_FUNCION: Record<string, string> = {
-  carta: "Carta digital",
+  carta: "Carta o catálogo digital",
+  inventario: "Inventario y stock",
+  envios: "Envíos y delivery",
+  compras: "Compras y proveedores",
   qr: "QR y link propio",
   promociones: "Promociones y cupones",
   pedidos_online: "Pedidos en línea",
@@ -56,3 +61,7 @@ export const METODOS_PAGO = [
   { value: "tarjeta", label: "Tarjeta" },
   { value: "otro", label: "Otro" },
 ];
+
+/** ¿La función aplica a este tipo de negocio? (cocina solo restaurante, compras solo tienda…) */
+export const aplicaA = (f: { rubro?: string | null }, tipo?: string | null) =>
+  !f.rubro || !tipo || f.rubro === tipo;

@@ -7,7 +7,7 @@ import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
 import { useBusiness } from "../../context/BusinessContext";
 import type { FuncionCatalogo, Plan, Suscripcion } from "../../types/main";
-import { ESTADO_SUSCRIPCION, INTERVALO, soles } from "../../utilities/planes";
+import { ESTADO_SUSCRIPCION, INTERVALO, aplicaA, soles } from "../../utilities/planes";
 
 interface Datos {
   plan: Plan | null;
@@ -60,6 +60,7 @@ export default function MiPlanPage() {
       : null;
 
   const fin = d?.subscriptionStatus === "trial" ? d.trialEndsAt : d?.paidUntil;
+  const tipo = business?.businessType ?? business?.business_type ?? null;
   const estado = d ? ESTADO_NEGOCIO[d.subscriptionStatus] : null;
 
   const columnas = useMemo(
@@ -146,7 +147,7 @@ export default function MiPlanPage() {
       <div className="card mb-5 p-5">
         <h3 className="mb-3 text-[15px] font-bold text-ink">Lo que incluye tu plan</h3>
         <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {d.features.map((f) => {
+          {d.features.filter((f) => aplicaA(f, tipo)).map((f) => {
             const incluida = d.funciones.includes(f.key);
             return (
               <li
@@ -210,7 +211,7 @@ export default function MiPlanPage() {
                     <p className="text-[12px] font-semibold text-ok">Ahorras {soles(ahorro)} al año</p>
                   )}
                   <ul className="mt-4 flex-1 space-y-1.5">
-                    {d.features.map((f) => {
+                    {d.features.filter((f) => aplicaA(f, tipo)).map((f) => {
                       const si = p.features.includes(f.key);
                       return (
                         <li

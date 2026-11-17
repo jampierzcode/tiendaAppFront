@@ -43,6 +43,8 @@ export default function SuscripcionDrawer({ business, onClose, onChanged }: Prop
   const [intervalo, setIntervalo] = useState<"month" | "year">("month");
   const [cantidad, setCantidad] = useState(1);
   const [cortesia, setCortesia] = useState(false);
+  /** Precio pactado por mes/año; null = el de lista. */
+  const [especial, setEspecial] = useState<number | null>(null);
   const [metodo, setMetodo] = useState<string | null>("yape");
   const [referencia, setReferencia] = useState("");
   const [notas, setNotas] = useState("");
@@ -79,6 +81,7 @@ export default function SuscripcionDrawer({ business, onClose, onChanged }: Prop
     setPlanPrueba(null);
     setCantidad(1);
     setCortesia(false);
+    setEspecial(null);
     setReferencia("");
     setNotas("");
     if (business) cargar();
@@ -87,7 +90,8 @@ export default function SuscripcionDrawer({ business, onClose, onChanged }: Prop
   const plan = planes.find((p) => p.id === planId);
   const precio = plan?.prices?.find((x) => x.interval === intervalo && x.isActive);
   const maximo = intervalo === "year" ? 5 : 36;
-  const total = cortesia ? 0 : (precio?.price ?? 0) * cantidad;
+  const unitario = cortesia ? 0 : (especial ?? precio?.price ?? 0);
+  const total = Math.round(unitario * cantidad * 100) / 100;
 
   // Vista previa del período, con la misma regla del backend.
   const periodo = useMemo(() => {
@@ -108,6 +112,7 @@ export default function SuscripcionDrawer({ business, onClose, onChanged }: Prop
         planPriceId: precio.id,
         quantity: cantidad,
         courtesy: cortesia,
+        unitPrice: !cortesia && especial !== null ? especial : null,
         paymentMethod: cortesia ? null : metodo,
         paymentReference: referencia.trim() || null,
         notes: notas.trim() || null,
@@ -116,6 +121,7 @@ export default function SuscripcionDrawer({ business, onClose, onChanged }: Prop
       setReferencia("");
       setNotas("");
       setCantidad(1);
+      setEspecial(null);
       await cargar();
       onChanged();
     } catch (e) {
@@ -239,7 +245,8 @@ export default function SuscripcionDrawer({ business, onClose, onChanged }: Prop
               <div>
                 <div style={{ fontSize: 13, color: "#7c7a9c" }}>
                   {cantidad} {cantidad === 1 ? INTERVALO[intervalo].uno : INTERVALO[intervalo].varios} ×{" "}
-                  {soles(cortesia ? 0 : (precio?.price ?? 0))}
+                  {soles(unitario)}
+                  {especial !== null && !cortesia && precio && ` (lista ${soles(precio.price)})`}
                 </div>
                 <div style={{ fontSize: 13 }}>
                   {periodo.renovacion ? "Renovación: " : "Desde hoy: "}
@@ -254,6 +261,18 @@ export default function SuscripcionDrawer({ business, onClose, onChanged }: Prop
               <div style={{ fontSize: 24, fontWeight: 800 }}>{soles(total)}</div>
             </div>
 
+            {!cortesia && (
+              <InputNumber
+                min={0}
+                precision={2}
+                value={especial ?? undefined}
+                placeholder={precio ? String(precio.price) : ""}
+                onChange={(v) => setEspecial(v === null || v === undefined ? null : Number(v))}
+                addonBefore={`Precio especial por ${INTERVALO[intervalo].uno}`}
+                addonAfter="S/"
+                style={{ width: 330 }}
+              />
+            )}
             {!cortesia && (
               <Space wrap style={{ width: "100%" }}>
                 <Select

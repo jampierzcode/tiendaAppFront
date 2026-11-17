@@ -78,7 +78,13 @@ export type Plan = {
   businessesCount?: number;
 };
 
-export type FuncionCatalogo = { key: string; label: string; detalle: string };
+export type FuncionCatalogo = {
+  key: string;
+  label: string;
+  detalle: string;
+  /** restaurant | retail | null (aplica a los dos). */
+  rubro?: "restaurant" | "retail" | null;
+};
 
 export type Suscripcion = {
   id: number;

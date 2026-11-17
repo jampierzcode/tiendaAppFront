@@ -121,7 +121,8 @@ export default function CartDrawer({ abierto, onCerrar }: Props) {
 
     const telefono = telefonoCompleto(dialActual, form.customerPhone);
     const falloTel = errorTelefono(dialActual, form.customerPhone);
-    if (falloTel) {
+    // Plan Catálogo (sin pedidos en línea): el teléfono viaja con el mensaje de WhatsApp.
+    if (falloTel && (tienda?.pedidosEnLinea !== false || form.customerPhone.trim())) {
       setError(falloTel);
       return;
     }
@@ -135,6 +136,39 @@ export default function CartDrawer({ abierto, onCerrar }: Props) {
     }
     if (form.deliveryMethod === "envio" && !form.deliveryAddress.trim()) {
       setError("Escribe la dirección donde quieres recibir el pedido.");
+      return;
+    }
+
+    // Plan Catálogo: no se registra en el panel; se arma el mensaje y se abre WhatsApp.
+    if (tienda?.pedidosEnLinea === false) {
+      const tel = (tienda.whatsappPhone ?? "").replace(/\D/g, "");
+      if (!tel) {
+        setError("Esta tienda aún no tiene WhatsApp configurado.");
+        return;
+      }
+      const texto = [
+        `Hola ${tienda.name}, quiero hacer este pedido:`,
+        "",
+        ...carrito.map(
+          (l) =>
+            `• ${l.quantity} x ${l.productName}${l.variationLabel ? ` (${l.variationLabel})` : ""} — ${precio(l.price * l.quantity)}`
+        ),
+        "",
+        descuento > 0 ? `Descuento: -${precio(descuento)}` : "",
+        form.deliveryMethod === "envio" ? `Envío: ${envio === 0 ? "Gratis" : precio(envio)}` : "",
+        `*Total: ${precio(subtotal - descuento + (form.deliveryMethod === "envio" ? envio : 0))}*`,
+        "",
+        `Nombre: ${form.customerName.trim()}`,
+        form.deliveryMethod === "envio"
+          ? `Enviar a: ${form.deliveryAddress.trim()}${form.deliveryCity.trim() ? `, ${form.deliveryCity.trim()}` : ""}`
+          : "Recojo en tienda",
+        form.note.trim() ? `Nota: ${form.note.trim()}` : "",
+      ]
+        .filter((x, i, a) => x !== "" || (a[i - 1] ?? "") !== "")
+        .join("\n");
+      vaciar();
+      onCerrar();
+      window.location.href = `https://wa.me/${tel}?text=${encodeURIComponent(texto)}`;
       return;
     }
 
