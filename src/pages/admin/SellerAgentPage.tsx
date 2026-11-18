@@ -24,6 +24,7 @@ import PageHeader from "../../components/ui/PageHeader";
 import ShippingZonesEditor from "../../components/admin/seller/ShippingZonesEditor";
 import SedesEditor from "../../components/admin/seller/SedesEditor";
 import HorarioEditor from "../../components/admin/seller/HorarioEditor";
+import SaludoAdjuntos from "../../components/admin/seller/SaludoAdjuntos";
 import {
   nuevoId,
   type ConfigVendedor,
@@ -331,6 +332,12 @@ export default function SellerAgentPage() {
               ]}
             />
           </Campo>
+          <SaludoAdjuntos
+            saludo={config.saludo}
+            onChange={(saludo) => set({ saludo })}
+            simbolo={s}
+            disabled={!config.saludo.activo}
+          />
         </section>
 
         <section className="card space-y-3 p-5">

@@ -90,6 +90,8 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const impuesto = impuestoDe((business as any)?.country);
   const [loading, setLoading] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  /** Índice de la pregunta frecuente a la que se le está eligiendo foto. */
+  const [fotoFaq, setFotoFaq] = useState<number | null>(null);
   const [fotosExtra, setFotosExtra] = useState<Foto[]>([]);
   const [fotosCargadas, setFotosCargadas] = useState<Foto[]>([]);
   const [selectedImage, setSelectedImage] = useState<{
@@ -119,7 +121,9 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
   const costoWatch = Form.useWatch("cost", form) as number | undefined;
   const precioWatch = Form.useWatch("price", form) as number | undefined;
   const ilimitado = Boolean(Form.useWatch("unlimitedStock", form));
-  const faqsWatch = Form.useWatch("aiFaqs", form) as { pregunta?: string; respuesta?: string }[] | undefined;
+  const faqsWatch = Form.useWatch("aiFaqs", form) as
+    | { pregunta?: string; respuesta?: string; imagenId?: number | null; imagenUrl?: string | null }[]
+    | undefined;
 
   const variacionPorDefecto = useMemo(
     () => editData?.variations?.find((v: any) => v.isDefault),
@@ -263,7 +267,11 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         unlimited_stock: Boolean(values.unlimitedStock),
         // Preguntas frecuentes del producto: el vendedor IA las usa al responder.
         ai_faqs: (values.aiFaqs ?? [])
-          .map((f: any) => ({ pregunta: String(f?.pregunta ?? "").trim(), respuesta: String(f?.respuesta ?? "").trim() }))
+          .map((f: any) => ({
+            pregunta: String(f?.pregunta ?? "").trim(),
+            respuesta: String(f?.respuesta ?? "").trim(),
+            imagenId: f?.imagenId || null,
+          }))
           .filter((f: any) => f.pregunta && f.respuesta),
         status: values.active ? "activo" : "inactivo",
         business_image_id: selectedImage?.id || null,
@@ -600,6 +608,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
                     <Text type="secondary" className="mb-3 block text-[12px]">
                       Lo que suelen preguntar de este {esRestaurante ? "plato" : "producto"} (medidas, material, garantía,
                       compatibilidad, cómo se usa…). El vendedor IA de WhatsApp responde con esto en vez de decir que no sabe.
+                      Si le pones foto (una medida, cómo se ve puesto, la etiqueta…), la manda junto con la respuesta.
                     </Text>
                     <Form.List name="aiFaqs">
                       {(fields, { add, remove }) => (
@@ -610,15 +619,49 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
                                 <Form.Item name={[f.name, "pregunta"]} className="mb-2" rules={[{ max: 300 }]}>
                                   <Input placeholder="Pregunta, p. ej. ¿Tiene garantía?" maxLength={300} />
                                 </Form.Item>
-                                <Form.Item name={[f.name, "respuesta"]} className="mb-0" rules={[{ max: 1000 }]}>
+                                <Form.Item name={[f.name, "respuesta"]} className="mb-2" rules={[{ max: 1000 }]}>
                                   <Input.TextArea rows={2} placeholder="Respuesta, p. ej. Sí, 6 meses por defectos de fábrica." maxLength={1000} />
                                 </Form.Item>
+                                <Form.Item name={[f.name, "imagenId"]} hidden>
+                                  <Input />
+                                </Form.Item>
+                                <Form.Item name={[f.name, "imagenUrl"]} hidden>
+                                  <Input />
+                                </Form.Item>
+                                {/* Foto opcional: el vendedor IA la manda al responder esta pregunta. */}
+                                {faqsWatch?.[f.name]?.imagenUrl ? (
+                                  <div className="flex items-center gap-2">
+                                    <img
+                                      src={faqsWatch[f.name].imagenUrl!}
+                                      alt=""
+                                      className="h-12 w-12 rounded border object-cover"
+                                    />
+                                    <Button size="small" onClick={() => setFotoFaq(f.name)}>
+                                      Cambiar foto
+                                    </Button>
+                                    <Button
+                                      size="small"
+                                      type="text"
+                                      danger
+                                      onClick={() => {
+                                        form.setFieldValue(["aiFaqs", f.name, "imagenId"], null);
+                                        form.setFieldValue(["aiFaqs", f.name, "imagenUrl"], null);
+                                      }}
+                                    >
+                                      Quitar
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Button size="small" icon={<PlusOutlined />} onClick={() => setFotoFaq(f.name)}>
+                                    Foto (opcional)
+                                  </Button>
+                                )}
                               </div>
                               <Button type="text" danger icon={<DeleteOutlined />} onClick={() => remove(f.name)} />
                             </div>
                           ))}
                           {fields.length < 20 && (
-                            <Button icon={<PlusOutlined />} onClick={() => add({ pregunta: "", respuesta: "" })}>
+                            <Button icon={<PlusOutlined />} onClick={() => add({ pregunta: "", respuesta: "", imagenId: null, imagenUrl: null })}>
                               Agregar pregunta
                             </Button>
                           )}
@@ -755,6 +798,17 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         onClose={() => setGalleryOpen(false)}
         onSelect={(img) => setSelectedImage(img)}
       />
+      {fotoFaq !== null && (
+      <GalleryModal
+        open
+        onClose={() => setFotoFaq(null)}
+        onSelect={(img) => {
+          if (fotoFaq === null) return;
+          form.setFieldValue(["aiFaqs", fotoFaq, "imagenId"], img.id);
+          form.setFieldValue(["aiFaqs", fotoFaq, "imagenUrl"], img.url);
+        }}
+      />
+      )}
     </>
   );
 };

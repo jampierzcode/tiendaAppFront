@@ -65,6 +65,26 @@ export interface ConfigRestaurante {
   reservas: { activo: boolean; instrucciones: string };
 }
 
+/** Archivo que acompaña al saludo (catálogo en PDF…). La URL es relativa: /media/… */
+export interface DocumentoSaludo {
+  url: string;
+  nombre: string;
+  /** Enlace público (lo completa el servidor al guardar). */
+  enlace?: string;
+}
+
+export interface Saludo {
+  activo: boolean;
+  modo: "exacto" | "exacto_responde" | "adaptado";
+  texto: string;
+  documento: DocumentoSaludo | null;
+  documentoComo: "archivo" | "enlace";
+  /** Productos cuya foto sale con el saludo (máximo 5). */
+  productos: number[];
+}
+
+export const MAX_PRODUCTOS_SALUDO = 5;
+
 export interface ConfigVendedor {
   nombre: string;
   publico: string;
@@ -74,7 +94,7 @@ export interface ConfigVendedor {
   emojis: "ninguno" | "pocos" | "muchos";
   palabrasEvitar: string;
   fotos: "siempre" | "cuando_ayude" | "nunca";
-  saludo: { activo: boolean; modo: "exacto" | "exacto_responde" | "adaptado"; texto: string };
+  saludo: Saludo;
   faqs: PreguntaFrecuente[];
   ejemplo: string;
   derivarCuando: string[];
