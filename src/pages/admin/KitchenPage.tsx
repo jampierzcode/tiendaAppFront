@@ -58,6 +58,7 @@ const donde = (p: Pedido) =>
  * automático y un pitido cuando entra un pedido nuevo.
  */
 export default function KitchenPage() {
+  const [avisoCerrado, setAvisoCerrado] = useState(() => localStorage.getItem("aviso_notif_cerrado") === "1");
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [cargando, setCargando] = useState(true);
   const [moviendo, setMoviendo] = useState<number | null>(null);
@@ -155,10 +156,24 @@ export default function KitchenPage() {
           </Button>
         </div>
       )}
-      {permiso === "denied" && (
-        <p className="mb-4 rounded-xl bg-warn-bg px-4 py-2 text-[12px] text-warn">
-          Las notificaciones están bloqueadas en este navegador; solo sonará el pitido.
-        </p>
+      {permiso === "denied" && !avisoCerrado && (
+        <div className="mb-4 flex items-start gap-3 rounded-xl bg-warn-bg px-4 py-2 text-[12.5px] text-warn">
+          <span className="flex-1">
+            Este navegador tiene bloqueados los avisos de esta página, así que cuando entra un pedido solo suena el pitido (no
+            aparece la notificación del sistema). Para activarlos: toca el candado o el ícono de la izquierda de la barra de
+            direcciones → <b>Notificaciones</b> → <b>Permitir</b>, y recarga.
+          </span>
+          <Button
+            size="small"
+            type="text"
+            onClick={() => {
+              localStorage.setItem("aviso_notif_cerrado", "1");
+              setAvisoCerrado(true);
+            }}
+          >
+            Entendido
+          </Button>
+        </div>
       )}
 
       <div className="grid gap-4 lg:grid-cols-4">

@@ -29,8 +29,15 @@ export default function PdvPersonal() {
   const [token, setToken] = useState(() => tokenPersonal());
   const [validando, setValidando] = useState(Boolean(equipoGuardado()));
 
+  // Instalable como app (Chrome → «Instalar»): en la PC o el celular queda con
+  // su propio ícono y ventana, sin barra del navegador.
   useEffect(() => {
     document.title = "PDV";
+    const link = document.createElement("link");
+    link.rel = "manifest";
+    link.href = "/pdv.webmanifest";
+    document.head.appendChild(link);
+    return () => link.remove();
   }, []);
 
   // El equipo puede haber sido revocado por el dueño.

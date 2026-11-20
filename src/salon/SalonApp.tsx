@@ -159,6 +159,7 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
   const [nuevoDelivery, setNuevoDelivery] = useState(false);
   const [abrirMesaDe, setAbrirMesaDe] = useState<Mesa | null>(null);
   const [abrirSinMesa, setAbrirSinMesa] = useState(false);
+  const [historial, setHistorial] = useState(false);
   /** Cuenta que se cobra al toque (para llevar "Enviar y cobrar"). */
   const [cobrarAhora, setCobrarAhora] = useState<number | null>(null);
   const [nombres, setNombres] = useState<Record<string, string>>({});
@@ -200,7 +201,7 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
       .then(({ data }) => {
         setYo(data.data);
         onYo?.(data.data);
-        if (!data.data.servicios.comedor) setVista({ tipo: data.data.servicios.para_llevar ? "para_llevar" : "cuentas" });
+        if (!data.data.servicios.comedor) setVista({ tipo: data.data.servicios.para_llevar ? "para_llevar" : "delivery" });
       })
       .catch((e) => message.error(mensajeError(e)));
     void cargarCarta();
@@ -372,6 +373,11 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
             {yo.caja ? ` · ${yo.caja.name}` : ""} · {yo.negocio.name}
           </div>
         </div>
+        {enRaiz && (
+          <Button icon={<TbList />} onClick={() => setHistorial(true)}>
+            Todas las cuentas
+          </Button>
+        )}
         {verCaja && enRaiz && (
           <Button icon={<TbCash />} onClick={() => setVista({ tipo: "caja" })}>
             Caja
@@ -414,7 +420,6 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
               ...(yo.servicios.delivery
                 ? [{ value: "delivery", label: <Pestana icono={<TbBike />} texto="Delivery" n={enCurso.delivery.length} /> }]
                 : []),
-              { value: "cuentas", label: <Pestana icono={<TbList />} texto="Cuentas" n={cuentasAbiertas.length} /> },
             ]}
           />
         </div>
@@ -465,15 +470,18 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
         />
       )}
 
-      {vista.tipo === "cuentas" && (
+      <Drawer open={historial} width={720} title="Todas las cuentas" onClose={() => setHistorial(false)}>
         <ListaCuentas
           api={api}
           abiertas={cuentasAbiertas}
           dinero={dinero}
-          onAbrir={(id) => setVista({ tipo: "cuenta", orderId: id })}
+          onAbrir={(id) => {
+            setHistorial(false);
+            setVista({ tipo: "cuenta", orderId: id });
+          }}
           accion={accion}
         />
-      )}
+      </Drawer>
 
       {vista.tipo === "caja" && <CajaPanel api={api} simbolo={s} esDueno={yo.role === "dueno"} />}
 
@@ -812,7 +820,7 @@ function ListaCuentas({
         />
       </div>
       {!lista.length && <Empty description={modo === "abiertas" ? "No hay cuentas abiertas" : "Nada todavía"} />}
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid gap-2">
         {lista.map((c) => (
           <button
             key={c.id}

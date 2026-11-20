@@ -24,8 +24,22 @@ export default function PedidosOnlinePage() {
           value={vista}
           onChange={(v) => setParams(v === "lista" ? { vista: "lista" } : {}, { replace: true })}
           options={[
-            { value: "tablero", label: "Tablero", icon: <TbLayoutKanban /> },
-            { value: "lista", label: "Lista e historial", icon: <TbList /> },
+            {
+              value: "tablero",
+              label: (
+                <span className="flex items-center gap-1.5 px-1">
+                  <TbLayoutKanban /> Tablero
+                </span>
+              ),
+            },
+            {
+              value: "lista",
+              label: (
+                <span className="flex items-center gap-1.5 px-1">
+                  <TbList /> Lista e historial
+                </span>
+              ),
+            },
           ]}
         />
       )}
