@@ -21,6 +21,7 @@ export const FUNCION_DE_PANTALLA: Record<string, string> = {
   salon: "salon",
   "salon-config": "salon",
   impresion: "salon",
+  caja: "salon",
 };
 
 export const NOMBRE_FUNCION: Record<string, string> = {

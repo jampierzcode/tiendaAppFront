@@ -27,6 +27,7 @@ import {
   type Plato,
   type Yo,
 } from "./api";
+import CajaPanel from "./CajaPanel";
 import { descartar, encolarComanda, enviarPendientes, leerPendientes, nuevoId, type ComandaPendiente } from "./outbox";
 
 interface Props {
@@ -36,7 +37,11 @@ interface Props {
   onSalir?: () => void;
 }
 
-type Vista = { tipo: "mesas" } | { tipo: "mesa"; mesaId: number } | { tipo: "comandar"; mesaId: number };
+type Vista =
+  | { tipo: "mesas" }
+  | { tipo: "caja" }
+  | { tipo: "mesa"; mesaId: number }
+  | { tipo: "comandar"; mesaId: number };
 
 const METODOS = [
   { value: "efectivo", label: "Efectivo" },
@@ -118,7 +123,7 @@ export default function SalonApp({ api, uuid, onSalir }: Props) {
     };
   }, [uuid, vaciarCola]);
 
-  const mesaActual = vista.tipo !== "mesas" ? mesas?.find((m) => m.id === vista.mesaId) ?? null : null;
+  const mesaActual = vista.tipo === "mesa" || vista.tipo === "comandar" ? mesas?.find((m) => m.id === vista.mesaId) ?? null : null;
 
   const enviarComanda = async (mesa: Mesa) => {
     const items = carritos[mesa.id] ?? [];
@@ -161,12 +166,17 @@ export default function SalonApp({ api, uuid, onSalir }: Props) {
         )}
         <div className="min-w-0 flex-1">
           <div className="truncate text-[18px] font-bold text-ink">
-            {vista.tipo === "mesas" ? "Mesas" : `Mesa ${mesaActual?.name ?? ""}`}
+            {vista.tipo === "mesas" ? "Mesas" : vista.tipo === "caja" ? "Caja" : `Mesa ${mesaActual?.name ?? ""}`}
           </div>
           <div className="truncate text-[12px] text-muted">
             {yo.name} · {yo.negocio.name}
           </div>
         </div>
+        {yo.puedeCobrar && vista.tipo === "mesas" && (
+          <Button icon={<TbCash />} onClick={() => setVista({ tipo: "caja" })}>
+            Caja
+          </Button>
+        )}
         <Button icon={<TbRefresh />} onClick={() => { refrescar(); void cargarCarta(); }} />
         {onSalir && <Button icon={<TbLogout />} onClick={onSalir}>Salir</Button>}
       </div>
@@ -187,6 +197,10 @@ export default function SalonApp({ api, uuid, onSalir }: Props) {
           dinero={dinero}
           onElegir={(m) => setVista(m.cuenta ? { tipo: "mesa", mesaId: m.id } : { tipo: "comandar", mesaId: m.id })}
         />
+      )}
+
+      {vista.tipo === "caja" && (
+        <CajaPanel api={api} simbolo={s} esDueno={yo.role === "dueno"} />
       )}
 
       {vista.tipo === "mesa" && mesaActual && (

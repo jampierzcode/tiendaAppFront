@@ -13,7 +13,7 @@ const GS = 0x1d;
 
 export interface TrabajoImpresion {
   id: number;
-  kind: "comanda" | "anulacion" | "precuenta" | "nota_venta" | "prueba";
+  kind: "comanda" | "anulacion" | "precuenta" | "nota_venta" | "prueba" | "corte_x" | "corte_z" | "corte_global";
   printerId: number | null;
   payload: Record<string, any>;
 }
@@ -131,6 +131,9 @@ export function ticketEscPos(job: TrabajoImpresion, papelMm: number): Uint8Array
     return t.cortar().build();
   }
 
+  if (job.kind === "corte_x" || job.kind === "corte_z") return corteCaja(t, job.kind, p);
+  if (job.kind === "corte_global") return corteGlobal(t, p);
+
   // precuenta y nota de venta
   const s = p.simbolo ?? "S/";
   const esNota = job.kind === "nota_venta";
@@ -154,5 +157,66 @@ export function ticketEscPos(job: TrabajoImpresion, papelMm: number): Uint8Array
     t.linea().centro().linea("Documento no valido como comprobante");
   }
   t.centro().linea().linea("Gracias por su visita");
+  return t.cortar().build();
+}
+
+const nombreMetodo = (m: string) => METODO[m] ?? m;
+
+function corteCaja(t: Ticket, kind: "corte_x" | "corte_z", p: Record<string, any>) {
+  const s = p.simbolo ?? "S/";
+  const z = kind === "corte_z";
+  t.centro().negrita(true).tamano(1).linea(z ? `CORTE Z #${p.z ?? ""}` : "CORTE X").tamano(0).negrita(false);
+  t.linea(p.negocio ?? "").linea(z ? "Cierre de caja" : "Corte parcial (caja sigue abierta)");
+  t.izquierda().separador();
+  t.linea(`Caja: ${p.caja ?? ""}`).linea(`Cajero: ${p.usuario ?? ""}`);
+  t.linea(`Apertura: ${p.apertura ?? ""}`).linea(z ? `Cierre: ${p.cierre ?? ""}` : `Hora: ${p.hora ?? ""}`);
+  t.separador().negrita(true).linea("VENTAS POR METODO").negrita(false);
+  for (const m of p.porMetodo ?? []) t.dosColumnas(nombreMetodo(m.metodo), dinero(s, m.monto));
+  t.dosColumnas(`Total (${p.ventas ?? 0} ventas)`, dinero(s, p.totalVentas));
+  t.separador().negrita(true).linea("EFECTIVO").negrita(false);
+  t.dosColumnas("Fondo inicial", dinero(s, p.fondo));
+  t.dosColumnas("Ventas en efectivo", dinero(s, (p.porMetodo ?? []).find((m: any) => m.metodo === "efectivo")?.monto ?? 0));
+  t.dosColumnas("Ingresos", dinero(s, p.ingresos));
+  t.dosColumnas("Retiros", `-${dinero(s, p.retiros)}`);
+  t.negrita(true).dosColumnas("Esperado en caja", dinero(s, p.efectivoEsperado)).negrita(false);
+  if (z) {
+    t.separador().negrita(true).linea("DECLARADO").negrita(false);
+    for (const l of p.lineas ?? []) {
+      t.linea(nombreMetodo(l.metodo));
+      t.dosColumnas("  Esperado", dinero(s, l.esperado));
+      t.dosColumnas("  Declarado", dinero(s, l.declarado));
+      t.dosColumnas("  Diferencia", dinero(s, l.diferencia));
+    }
+    t.separador().negrita(true).tamano(1).dosColumnas(Number(p.diferencia) < 0 ? "FALTANTE" : Number(p.diferencia) > 0 ? "SOBRANTE" : "CUADRA", dinero(s, p.diferencia)).tamano(0).negrita(false);
+    if (p.nota) t.linea(`Nota: ${p.nota}`);
+    t.linea().linea().linea("Firma: ____________________");
+  }
+  return t.cortar().build();
+}
+
+function corteGlobal(t: Ticket, p: Record<string, any>) {
+  const s = p.simbolo ?? "S/";
+  t.centro().negrita(true).tamano(1).linea(`CORTE GLOBAL`).tamano(0).linea(`Turno #${p.turno ?? ""}`).negrita(false);
+  t.linea(p.negocio ?? "").izquierda().separador();
+  t.linea(`Apertura: ${p.apertura ?? ""}`).linea(`Cierre: ${p.cierre ?? ""}`).linea(`Cerro: ${p.cerradoPor ?? ""}`);
+  t.separador().negrita(true).linea("CAJAS").negrita(false);
+  for (const c of p.sesiones ?? []) {
+    t.linea(`Z#${c.z ?? "-"} ${c.caja} - ${c.usuario ?? ""}`);
+    t.dosColumnas("  Esperado / declarado", `${Number(c.esperado).toFixed(2)} / ${Number(c.declarado).toFixed(2)}`);
+    t.dosColumnas("  Diferencia", dinero(s, c.diferencia));
+  }
+  t.separador().negrita(true).linea("VENTAS POR METODO").negrita(false);
+  for (const m of p.porMetodo ?? []) t.dosColumnas(nombreMetodo(m.metodo), dinero(s, m.monto));
+  t.negrita(true).tamano(1).dosColumnas("TOTAL", dinero(s, p.total)).tamano(0).negrita(false);
+  t.dosColumnas("Ventas", String(p.ventas ?? 0));
+  t.dosColumnas("Ticket promedio", dinero(s, p.ticketPromedio));
+  t.dosColumnas("Descuentos", dinero(s, p.descuentos));
+  t.dosColumnas(`Anulaciones (${p.anulaciones?.cantidad ?? 0})`, dinero(s, p.anulaciones?.monto ?? 0));
+  t.dosColumnas("Cuentas canceladas", String(p.cuentasCanceladas ?? 0));
+  t.negrita(true).dosColumnas("Diferencia de cajas", dinero(s, p.diferencia)).negrita(false);
+  if ((p.top ?? []).length) {
+    t.separador().negrita(true).linea("MAS VENDIDOS").negrita(false);
+    for (const x of p.top) t.dosColumnas(`${x.cantidad} ${x.nombre}`, dinero(s, x.total));
+  }
   return t.cortar().build();
 }

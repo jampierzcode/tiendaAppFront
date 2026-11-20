@@ -17,6 +17,7 @@ import {
   TbChartHistogram,
   TbChefHat,
   TbArmchair,
+  TbCash,
   TbPrinter,
   TbSettings,
   TbLogout,
@@ -207,6 +208,11 @@ export default function Sidebar({
           {
             titulo: "Salón",
             items: [
+              {
+                titulo: "Caja y cortes",
+                url: `/b/${uuid_business}/caja`,
+                icono: <TbCash />,
+              },
               {
                 titulo: "Configurar salón",
                 url: `/b/${uuid_business}/salon-config`,

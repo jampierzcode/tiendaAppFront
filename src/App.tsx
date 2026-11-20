@@ -54,6 +54,7 @@ import SalonPanel from "./salon/SalonPanel";
 import SalonConfig from "./salon/SalonConfig";
 import CentralImpresion from "./salon/CentralImpresion";
 import PdvPersonal from "./salon/PdvPersonal";
+import CajaPage from "./salon/CajaPage";
 
 /**
  * Es una SPA: cambiar de página no reinicia el scroll. Al entrar a otra ruta
@@ -189,6 +190,7 @@ export default function App() {
             <Route path="salon" element={<ConFuncion f="salon"><SalonPanel /></ConFuncion>} />
             <Route path="salon-config" element={<ConFuncion f="salon"><SalonConfig /></ConFuncion>} />
             <Route path="impresion" element={<ConFuncion f="salon"><CentralImpresion /></ConFuncion>} />
+            <Route path="caja" element={<ConFuncion f="salon"><CajaPage /></ConFuncion>} />
             {/* Subruta desconocida dentro del panel: al inicio, que para un
                 usuario con sesión es su propio tablero. Pintar aquí la pantalla
                 completa de 404 la metería dentro del layout. */}
