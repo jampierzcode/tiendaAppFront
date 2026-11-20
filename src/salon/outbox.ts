@@ -11,7 +11,7 @@ export interface ComandaPendiente {
   /** Destino: una mesa, una cuenta abierta, o una cuenta nueva sin mesa. */
   tableId?: number | null;
   orderId?: number | null;
-  service?: "para_llevar" | "delivery" | null;
+  service?: "comedor" | "para_llevar" | "delivery" | null;
   alias?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;

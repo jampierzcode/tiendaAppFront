@@ -77,6 +77,9 @@ export interface ResumenCuenta {
   mesero: string | null;
   service: Servicio;
   etiqueta: string;
+  /** Cliente asignado (o nombre escrito al abrir), aparte del nombre de la cuenta. */
+  cliente: string | null;
+  telefono: string | null;
   accountStatus: "abierta" | "impresa" | "reabierta" | null;
   folio: string | null;
   total: number | null;
@@ -86,6 +89,7 @@ export interface ResumenCuenta {
   listos: number;
   abiertaDesde: string;
   mesa: string | null;
+  mesaId: number | null;
   status?: string;
 }
 
@@ -144,6 +148,9 @@ export interface Cuenta {
   accountStatus: "abierta" | "impresa" | "reabierta" | null;
   service: Servicio;
   etiqueta: string;
+  accountName: string | null;
+  cliente: string | null;
+  customerId: number | null;
   customerName: string;
   customerPhone: string | null;
   deliveryAddress: string | null;

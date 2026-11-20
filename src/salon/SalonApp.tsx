@@ -21,6 +21,7 @@ import {
   TbRefresh,
   TbSearch,
   TbTrash,
+  TbUser,
   TbX,
 } from "react-icons/tb";
 import dayjs from "dayjs";
@@ -60,7 +61,7 @@ type Destino =
   | {
       tipo: "nueva";
       key: string;
-      service: "para_llevar" | "delivery";
+      service: "comedor" | "para_llevar" | "delivery";
       nombre: string;
       alias?: string;
       customerName?: string;
@@ -112,6 +113,13 @@ const METODOS = [
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
+/** Para buscar sin importar tildes ni mayúsculas: "perez" encuentra "Pérez". */
+const plano = (t: string | null | undefined) =>
+  String(t ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
 const ESTILO_MESA: Record<Mesa["estado"], { caja: string; texto: string }> = {
   libre: { caja: "border-line bg-white text-ink", texto: "Libre" },
   ocupada: { caja: "border-brand-500 bg-brand-500 text-white shadow-md", texto: "Ocupada" },
@@ -150,6 +158,7 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
   const [comensales, setComensales] = useState<Record<string, number | null>>({});
   const [nuevoDelivery, setNuevoDelivery] = useState(false);
   const [abrirMesaDe, setAbrirMesaDe] = useState<Mesa | null>(null);
+  const [abrirSinMesa, setAbrirSinMesa] = useState(false);
   /** Cuenta que se cobra al toque (para llevar "Enviar y cobrar"). */
   const [cobrarAhora, setCobrarAhora] = useState<number | null>(null);
   const [nombres, setNombres] = useState<Record<string, string>>({});
@@ -289,7 +298,7 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
     }
     await cargar();
     if (destino.tipo === "cuenta") setVista({ tipo: "cuenta", orderId: destino.orderId });
-    else setVista({ tipo: destino.tipo === "mesa" ? "mesas" : destino.service });
+    else setVista({ tipo: destino.tipo === "mesa" || destino.service === "comedor" ? "mesas" : destino.service });
   };
 
   const abrirMesa = (m: Mesa) => {
@@ -349,7 +358,7 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
               setVista(
                 vista.tipo === "comandar" && vista.destino.tipo === "cuenta"
                   ? { tipo: "cuenta", orderId: vista.destino.orderId }
-                  : vista.tipo === "comandar" && vista.destino.tipo === "nueva"
+                  : vista.tipo === "comandar" && vista.destino.tipo === "nueva" && vista.destino.service !== "comedor"
                     ? { tipo: vista.destino.service }
                     : { tipo: "mesas" }
               )
@@ -444,7 +453,17 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
         />
       )}
 
-      {vista.tipo === "mesas" && <GrillaMesas mesas={mesas} pendientes={pendientes} dinero={dinero} onElegir={abrirMesa} />}
+      {vista.tipo === "mesas" && (
+        <VistaComedor
+          mesas={mesas}
+          sinMesa={cuentasAbiertas.filter((c) => c.service === "comedor" && !c.mesaId)}
+          pendientes={pendientes}
+          dinero={dinero}
+          onElegir={abrirMesa}
+          onAbrirCuenta={(id) => setVista({ tipo: "cuenta", orderId: id })}
+          onNuevaSinMesa={() => setAbrirSinMesa(true)}
+        />
+      )}
 
       {vista.tipo === "cuentas" && (
         <ListaCuentas
@@ -500,11 +519,18 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
       />
 
       <AbrirMesaModal
-        mesa={abrirMesaDe}
-        onClose={() => setAbrirMesaDe(null)}
-        onAbrir={(m, personas) => {
+        abierto={Boolean(abrirMesaDe) || abrirSinMesa}
+        titulo={abrirMesaDe ? `Abrir mesa ${abrirMesaDe.name}` : "Nueva cuenta sin mesa"}
+        onClose={() => {
           setAbrirMesaDe(null);
-          const destino: Destino = { tipo: "mesa", mesaId: m.id, nombre: `Mesa ${m.name}` };
+          setAbrirSinMesa(false);
+        }}
+        onAbrir={(personas) => {
+          const destino: Destino = abrirMesaDe
+            ? { tipo: "mesa", mesaId: abrirMesaDe.id, nombre: `Mesa ${abrirMesaDe.name}` }
+            : { tipo: "nueva", key: `n${Date.now()}`, service: "comedor", nombre: "Cuenta sin mesa (M…)" };
+          setAbrirMesaDe(null);
+          setAbrirSinMesa(false);
           setComensales((c) => ({ ...c, [claveDestino(destino)]: personas }));
           setVista({ tipo: "comandar", destino });
         }}
@@ -520,7 +546,8 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
           onClose={() => {
             setCobrarAhora(null);
             refrescar();
-            if (vista.tipo === "comandar" && vista.destino.tipo === "nueva") setVista({ tipo: vista.destino.service });
+            if (vista.tipo === "comandar" && vista.destino.tipo === "nueva")
+              setVista({ tipo: vista.destino.service === "comedor" ? "mesas" : vista.destino.service });
           }}
         />
       )}
@@ -578,6 +605,81 @@ function BannerPendientes({
 
 // ---------------------------------------------------------------------- mesas
 
+/** Comedor: buscador, filtro por zona (piso, terraza…), mesas y cuentas sin mesa. */
+function VistaComedor({
+  mesas,
+  sinMesa,
+  pendientes,
+  dinero,
+  onElegir,
+  onAbrirCuenta,
+  onNuevaSinMesa,
+}: {
+  mesas: Mesa[];
+  sinMesa: ResumenCuenta[];
+  pendientes: ComandaPendiente[];
+  dinero: (n: number) => string;
+  onElegir: (m: Mesa) => void;
+  onAbrirCuenta: (id: number) => void;
+  onNuevaSinMesa: () => void;
+}) {
+  const [q, setQ] = useState("");
+  const [zona, setZona] = useState<string>(() => localStorage.getItem("pdv_zona") ?? "");
+  const zonas = [...new Set(mesas.map((m) => m.zone ?? "").filter(Boolean))];
+  const texto = plano(q.trim());
+  const coincide = (...campos: (string | null | undefined)[]) => !texto || campos.some((c) => plano(c).includes(texto));
+  const filtradas = mesas.filter(
+    (m) =>
+      (!zona || (m.zone ?? "") === zona) &&
+      coincide(m.name, `mesa ${m.name}`, m.cuenta?.etiqueta, m.cuenta?.cliente, m.cuenta?.mesero, m.cuenta?.folio)
+  );
+  const cuentas = sinMesa.filter((c) => coincide(c.etiqueta, c.cliente, c.mesero, c.folio));
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Input allowClear className="max-w-xs" prefix={<TbSearch />} placeholder="Mesa, cuenta o cliente" value={q} onChange={(e) => setQ(e.target.value)} />
+        {zonas.length > 0 && (
+          <Segmented
+            value={zona}
+            onChange={(v) => {
+              setZona(String(v));
+              localStorage.setItem("pdv_zona", String(v));
+            }}
+            options={[{ value: "", label: "Todas" }, ...zonas.map((z) => ({ value: z, label: z }))]}
+          />
+        )}
+        <Button className="ml-auto" icon={<TbPlus />} onClick={onNuevaSinMesa}>
+          Cuenta sin mesa
+        </Button>
+      </div>
+      <GrillaMesas mesas={filtradas} pendientes={pendientes} dinero={dinero} onElegir={onElegir} />
+      {cuentas.length > 0 && (
+        <div className="mt-5">
+          <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">Cuentas sin mesa</div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {cuentas.map((c) => (
+              <button key={c.id} onClick={() => onAbrirCuenta(c.id)} className="card flex items-center gap-3 p-3 text-left active:scale-[0.99]">
+                <span className="min-w-0 flex-1">
+                  <span className="block font-bold text-ink">{c.etiqueta}</span>
+                  <span className="block truncate text-[12px] text-muted">
+                    {c.cliente ? `${c.cliente} · ` : ""}
+                    {c.guests ? `${c.guests} pers. · ` : ""}
+                    {c.mesero ?? ""} · {dayjs(c.abiertaDesde).format("HH:mm")}
+                  </span>
+                </span>
+                <span className="text-right">
+                  <span className="block font-mono font-semibold">{c.total !== null ? dinero(c.total) : "—"}</span>
+                  {Boolean(c.listos) && <span className="pill bg-ok-bg text-ok">🔔 {c.listos}</span>}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GrillaMesas({
   mesas,
   pendientes,
@@ -589,7 +691,7 @@ function GrillaMesas({
   dinero: (n: number) => string;
   onElegir: (m: Mesa) => void;
 }) {
-  if (!mesas.length) return <Empty description="Aún no hay mesas. El dueño las crea en Infraestructura → Mesas." />;
+  if (!mesas.length) return <Empty description="No hay mesas que coincidan. El dueño las crea en Infraestructura → Mesas." />;
   const zonas = [...new Set(mesas.map((m) => m.zone ?? ""))];
   return (
     <div className="space-y-5">
@@ -602,7 +704,9 @@ function GrillaMesas({
       </div>
       {zonas.map((z) => (
         <div key={z}>
-          {z && <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">{z}</div>}
+          {(z || zonas.length > 1) && (
+            <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">{z || "Salón"}</div>
+          )}
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 lg:grid-cols-6">
             {mesas
               .filter((m) => (m.zone ?? "") === z)
@@ -633,6 +737,7 @@ function GrillaMesas({
                           {dayjs(m.cuenta.abiertaDesde).format("HH:mm")}
                           {m.cuenta.mesero ? ` · ${m.cuenta.mesero}` : ""}
                         </span>
+                        {m.cuenta.cliente && <span className="max-w-full truncate text-[11px] font-semibold">{m.cuenta.cliente}</span>}
                       </>
                     ) : (
                       <span className="mt-1 text-[11px]">{ESTILO_MESA[m.estado].texto}</span>
@@ -729,6 +834,7 @@ function ListaCuentas({
               <span className="block truncate font-semibold text-ink">{c.etiqueta}</span>
               <span className="block truncate text-[12px] text-muted">
                 {NOMBRE_SERVICIO[c.service]}
+                {c.cliente ? ` · ${c.cliente}` : ""}
                 {c.folio ? ` · ${c.folio}` : ""}
                 {c.mesero ? ` · ${c.mesero}` : ""} · {dayjs(c.abiertaDesde).format("HH:mm")}
               </span>
@@ -766,6 +872,11 @@ function ListaEnCurso({
   onSalio?: (id: number) => void;
 }) {
   const delivery = servicio === "delivery";
+  const [q, setQ] = useState("");
+  const texto = plano(q.trim());
+  const visibles = lista.filter(
+    (p) => !texto || [p.etiqueta, p.cliente, p.telefono, p.folio, p.direccion].some((c) => plano(c).includes(texto))
+  );
   const COCINA: Record<EnCurso["cocina"], { t: string; c: string }> = {
     sin_cocina: { t: "Sin cocina", c: "bg-line-soft text-muted" },
     en_cocina: { t: "En cocina", c: "bg-warn-bg text-warn" },
@@ -780,13 +891,26 @@ function ListaEnCurso({
       >
         <TbPlus className="text-[20px]" /> {delivery ? "Nuevo delivery" : "Nuevo para llevar"}
       </button>
-      {!lista.length && <Empty description={delivery ? "No hay deliveries en curso" : "No hay pedidos para llevar en curso"} />}
+      {lista.length > 0 && (
+        <Input
+          allowClear
+          className="mb-3 max-w-xs"
+          prefix={<TbSearch />}
+          placeholder={delivery ? "Cuenta, cliente, teléfono o dirección" : "Cuenta o cliente"}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
+      )}
+      {!visibles.length && <Empty description={delivery ? "No hay deliveries en curso" : "No hay pedidos para llevar en curso"} />}
       <div className="grid gap-2 sm:grid-cols-2">
-        {lista.map((p) => (
+        {visibles.map((p) => (
           <div key={p.id} className="card p-3">
             <button className="w-full text-left" onClick={() => onAbrir(p.id)} disabled={p.pagado}>
               <div className="flex items-center gap-2">
-                <span className="flex-1 truncate text-[15px] font-bold text-ink">{p.etiqueta}</span>
+                <span className="flex-1 truncate text-[15px] font-bold text-ink">
+                  {p.etiqueta}
+                  {p.cliente && <span className="font-normal text-ink-soft"> · {p.cliente}</span>}
+                </span>
                 <span className="font-mono font-semibold">{dinero(p.total)}</span>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[12px] text-muted">
@@ -912,30 +1036,32 @@ function NuevoDeliveryModal({
 }
 
 function AbrirMesaModal({
-  mesa,
+  abierto,
+  titulo,
   onClose,
   onAbrir,
 }: {
-  mesa: Mesa | null;
+  abierto: boolean;
+  titulo: string;
   onClose: () => void;
-  onAbrir: (m: Mesa, personas: number) => void;
+  onAbrir: (personas: number) => void;
 }) {
   const [otro, setOtro] = useState<number | null>(null);
-  useEffect(() => setOtro(null), [mesa]);
-  if (!mesa) return null;
+  useEffect(() => setOtro(null), [abierto]);
+  if (!abierto) return null;
   return (
-    <Modal open title={`Abrir mesa ${mesa.name}`} footer={null} onCancel={onClose} width={360}>
+    <Modal open title={titulo} footer={null} onCancel={onClose} width={360}>
       <p className="mb-3 text-[13px] text-muted">¿Cuántas personas?</p>
       <div className="grid grid-cols-4 gap-2">
         {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-          <Button key={n} size="large" onClick={() => onAbrir(mesa, n)}>
+          <Button key={n} size="large" onClick={() => onAbrir(n)}>
             {n}
           </Button>
         ))}
       </div>
       <div className="mt-3 flex gap-2">
         <InputNumber className="flex-1" min={1} max={99} placeholder="Más" value={otro} onChange={(v) => setOtro(v ? Number(v) : null)} />
-        <Button type="primary" disabled={!otro} onClick={() => otro && onAbrir(mesa, otro)}>
+        <Button type="primary" disabled={!otro} onClick={() => otro && onAbrir(otro)}>
           Abrir
         </Button>
       </div>
@@ -1002,6 +1128,7 @@ function VistaCuenta({
   const [cobrar, setCobrar] = useState(false);
   const [mover, setMover] = useState(false);
   const [cancelar, setCancelar] = useState(false);
+  const [asignar, setAsignar] = useState(false);
 
   const cargar = useCallback(async () => {
     try {
@@ -1038,6 +1165,7 @@ function VistaCuenta({
   const rondas = cuenta.rondas.map((r) => ({ ...r, items: cuenta.items.filter((i) => i.roundId === r.id) }));
 
   const menuMas = [
+    { key: "cliente", icon: <TbUser />, label: cuenta.cliente ? "Cambiar cliente" : "Asignar cliente" },
     { key: "mover", icon: <TbArrowsExchange />, label: cuenta.mesa.id ? "Cambiar de mesa" : "Asignar mesa" },
     ...(cuenta.mesa.id && impresa ? [{ key: "liberar", icon: <TbLockOpen />, label: "Liberar mesa (paga en caja)" }] : []),
     { key: "cancelar", icon: <TbX />, label: "Cancelar cuenta", danger: true },
@@ -1048,6 +1176,7 @@ function VistaCuenta({
       <div className="card mb-4 p-4">
         <div className="flex flex-wrap items-baseline gap-2">
           <span className="text-[16px] font-bold text-ink">{cuenta.etiqueta}</span>
+          {cuenta.cliente && <span className="text-[14px] text-ink-soft">· {cuenta.cliente}</span>}
           <span className="pill bg-brand-50 text-brand-600">{NOMBRE_SERVICIO[cuenta.service]}</span>
           {impresa && <span className="pill bg-warn-bg text-warn">Cuenta impresa · {cuenta.folio}</span>}
           {cuenta.accountStatus === "reabierta" && <span className="pill bg-info-bg text-info">Reabierta · {cuenta.folio}</span>}
@@ -1176,6 +1305,7 @@ function VistaCuenta({
               items: menuMas,
               onClick: ({ key }) => {
                 if (key === "mover") setMover(true);
+                if (key === "cliente") setAsignar(true);
                 if (key === "cancelar") setCancelar(true);
                 if (key === "liberar" && cuenta.mesa.id) {
                   void accion(
@@ -1265,6 +1395,19 @@ function VistaCuenta({
         </div>
       </Modal>
 
+      <AsignarClienteModal
+        api={api}
+        abierto={asignar}
+        onClose={() => setAsignar(false)}
+        onGuardar={async (datos) => {
+          const r = await accion(() => api.post(`/accounts/${cuenta.id}/customer`, datos), "Cliente asignado");
+          if (r !== null) {
+            setAsignar(false);
+            void cargar();
+          }
+        }}
+      />
+
       <MotivoModal
         abierto={cancelar}
         item={null}
@@ -1295,6 +1438,71 @@ const COCINA: Record<string, { texto: string; clase: string }> = {
 function EstadoCocina({ estado }: { estado: string }) {
   const e = COCINA[estado];
   return e ? <span className={`pill mt-0.5 inline-block text-[10.5px] ${e.clase}`}>{e.texto}</span> : null;
+}
+
+function AsignarClienteModal({
+  api,
+  abierto,
+  onClose,
+  onGuardar,
+}: {
+  api: AxiosInstance;
+  abierto: boolean;
+  onClose: () => void;
+  onGuardar: (d: { customerId?: number; name?: string; phone?: string }) => Promise<void>;
+}) {
+  const [q, setQ] = useState("");
+  const [nombre, setNombre] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [sugeridos, setSugeridos] = useState<{ id: number; name: string; phone: string }[]>([]);
+  useEffect(() => {
+    setQ("");
+    setNombre("");
+    setTelefono("");
+    setSugeridos([]);
+  }, [abierto]);
+  useEffect(() => {
+    if (q.trim().length < 3) return setSugeridos([]);
+    const t = setTimeout(() => {
+      api
+        .get("/customers", { params: { q } })
+        .then(({ data }) => setSugeridos(data.data))
+        .catch(() => setSugeridos([]));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [api, q]);
+  return (
+    <Modal
+      open={abierto}
+      title="Cliente de la cuenta"
+      okText="Guardar nuevo"
+      okButtonProps={{ disabled: !nombre.trim() }}
+      onCancel={onClose}
+      onOk={() => onGuardar({ name: nombre.trim(), phone: telefono.trim() || undefined })}
+    >
+      <Input allowClear prefix={<TbSearch />} placeholder="Buscar por nombre o teléfono" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="mt-2 space-y-1">
+        {sugeridos.map((c) => (
+          <button
+            key={c.id}
+            onClick={() => onGuardar({ customerId: c.id })}
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-brand-50"
+          >
+            <TbUser className="text-muted" />
+            <span className="flex-1">{c.name}</span>
+            <span className="font-mono text-[12px] text-muted">{c.phone}</span>
+          </button>
+        ))}
+      </div>
+      <div className="mt-4 border-t border-line pt-3">
+        <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">O uno nuevo</div>
+        <div className="flex gap-2">
+          <Input placeholder="Nombre" value={nombre} onChange={(e) => setNombre(e.target.value)} />
+          <Input inputMode="tel" placeholder="Teléfono (opcional)" value={telefono} onChange={(e) => setTelefono(e.target.value)} />
+        </div>
+      </div>
+    </Modal>
+  );
 }
 
 function MotivoModal({
@@ -1493,8 +1701,8 @@ function Comandar({
   const [verCarrito, setVerCarrito] = useState(false);
 
   const platos = useMemo(() => {
-    const q = buscar.trim().toLowerCase();
-    return (carta?.platos ?? []).filter((p) => (!cat || p.categoryIds.includes(cat)) && (!q || p.name.toLowerCase().includes(q)));
+    const q = plano(buscar.trim());
+    return (carta?.platos ?? []).filter((p) => (!cat || p.categoryIds.includes(cat)) && (!q || plano(p.name).includes(q)));
   }, [carta, cat, buscar]);
 
   if (!carta) return <Spin />;
@@ -1509,7 +1717,7 @@ function Comandar({
   const precioLinea = (l: LineaCarrito) => (l.price + l.options.reduce((s, o) => s + o.priceDelta * o.quantity, 0)) * l.quantity;
   const totalCarrito = carrito.reduce((t, l) => t + precioLinea(l), 0);
   const unidades = carrito.reduce((t, l) => t + l.quantity, 0);
-  const sinMesa = destino.tipo === "nueva";
+  const sinMesa = destino.tipo === "nueva" && destino.service !== "comedor";
   const envio = destino.tipo === "nueva" ? Number(destino.shippingCost ?? 0) : 0;
 
   /** Líneas del ticket con +/− y nota: se usa en el panel de la derecha (PC) y en el cajón (celular). */
@@ -1565,7 +1773,7 @@ function Comandar({
   return (
     <div className="lg:grid lg:grid-cols-[1fr_340px] lg:gap-4">
       <div>
-        {destino.tipo === "mesa" && (
+        {(destino.tipo === "mesa" || (destino.tipo === "nueva" && destino.service === "comedor")) && (
           <div className="mb-3 flex items-center gap-2 text-[13px]">
             <span>Personas</span>
             <InputNumber min={1} max={99} value={comensales} onChange={(v) => setComensales(v ? Number(v) : null)} />
