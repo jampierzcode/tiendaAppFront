@@ -255,6 +255,7 @@ function armar(job: TrabajoImpresion, papelMm: number): Ticket {
     t.dosColumnas("Subtotal", dinero(s, p.subtotal));
     t.dosColumnas("Descuento", `-${dinero(s, p.descuento)}`);
   }
+  if (Number(p.envio) > 0) t.dosColumnas("Envio", dinero(s, p.envio));
   t.estilo(e.total).dosColumnas("TOTAL", dinero(s, p.total)).normal();
   if (esNota) {
     if (e.ver("pagos")) for (const pg of p.pagos ?? []) t.dosColumnas(nombreMetodo(pg.method), dinero(s, pg.amount));

@@ -8,6 +8,7 @@ import { usePolling } from "../hooks/usePolling";
 import { crearApiSalon, mensajeError } from "./api";
 import { conectada, emparejar, hayBluetooth, imprimir, nombreEquipo, olvidar, reconectar } from "./bluetooth";
 import { copiasDe, ticketEscPos, type TrabajoImpresion } from "./escpos";
+import { imprimirSistema } from "./impresionSistema";
 
 interface Impresora {
   id: number;
@@ -37,6 +38,11 @@ const ETIQUETA: Record<string, string> = {
 };
 
 const clave = (id: number) => `printer-${id}`;
+
+/** Cómo imprime esta central a cada impresora (se guarda en este equipo). */
+type Conexion = "bluetooth" | "sistema";
+const conexionDe = (id: number): Conexion =>
+  (localStorage.getItem(`pdv_con_${id}`) as Conexion) || (hayBluetooth() ? "bluetooth" : "sistema");
 
 /**
  * Central de impresión: el celular Android del local que recibe las
@@ -106,13 +112,18 @@ export default function CentralImpresion() {
       for (const job of data.data.jobs as Job[]) {
         const destino = job.printerId ?? caja ?? (lista.length === 1 ? lista[0].id : null);
         const imp = lista.find((p) => p.id === destino);
-        if (!imp || !(await reconectar(clave(imp.id)))) {
+        const porSistema = imp ? conexionDe(imp.id) === "sistema" : false;
+        if (!imp || (!porSistema && !(await reconectar(clave(imp.id))))) {
           sinImpresora.push(job);
           continue;
         }
         try {
-          const bytes = ticketEscPos(job, imp.paperWidth);
-          for (let c = 0; c < copiasDe(job); c++) await imprimir(clave(imp.id), bytes);
+          if (porSistema) {
+            for (let c = 0; c < copiasDe(job); c++) await imprimirSistema(job, imp.paperWidth);
+          } else {
+            const bytes = ticketEscPos(job, imp.paperWidth);
+            for (let c = 0; c < copiasDe(job); c++) await imprimir(clave(imp.id), bytes);
+          }
           await api.post(`/print-jobs/${job.id}/result`, { ok: true });
         } catch (e) {
           await api.post(`/print-jobs/${job.id}/result`, { ok: false, error: (e as Error).message }).catch(() => {});
@@ -170,18 +181,29 @@ export default function CentralImpresion() {
     <div className="mx-auto max-w-3xl">
       <PageHeader
         titulo="Central de impresión"
-        descripcion="Deja esta pantalla abierta en el celular o tablet Android que está junto a las impresoras. Las comandas de todas las meseras llegan por internet y salen aquí por Bluetooth."
+        descripcion="Deja esta pantalla abierta en el equipo que está junto a las impresoras: un celular o tablet Android (Bluetooth) o la PC de caja (impresora USB o de red). Todo lo que se comanda o cobra en el local sale por aquí."
       />
 
-      {!hayBluetooth() && (
-        <Alert
-          className="mb-4"
-          type="warning"
-          showIcon
-          message="Este navegador no puede usar Bluetooth"
-          description="Abre esta página en Chrome desde un celular o tablet Android. En iPhone no funciona la impresión Bluetooth desde el navegador."
-        />
-      )}
+      <Alert
+        className="mb-4"
+        type="info"
+        showIcon
+        message="¿Cómo imprime tu local?"
+        description={
+          <ul className="list-disc pl-4 text-[12.5px]">
+            <li>
+              <b>Celular o tablet Android + impresora Bluetooth:</b> abre esta página en Chrome del Android, elige «Bluetooth» y toca Conectar.
+            </li>
+            <li>
+              <b>PC de caja con impresora USB o de red:</b> instala la impresora en Windows como predeterminada, elige «Esta PC». Para que imprima sin
+              preguntar, abre Chrome con un acceso directo que termine en <code>--kiosk-printing</code>.
+            </li>
+            <li>
+              <b>Sin impresora:</b> usa el Monitor de producción en cocina; las cuentas y notas se ven en pantalla.
+            </li>
+          </ul>
+        }
+      />
 
       <div className="card mb-4 flex items-center gap-3 p-4">
         <Switch checked={activa} onChange={setActiva} />
@@ -207,7 +229,8 @@ export default function CentralImpresion() {
       <div className="card mb-4 p-4">
         <div className="mb-3 font-semibold text-ink">Impresoras</div>
         {impresoras.map((p) => {
-          const ok = conectada(clave(p.id));
+          const con = conexionDe(p.id);
+          const ok = con === "sistema" || conectada(clave(p.id));
           return (
             <div key={p.id} className="flex flex-wrap items-center gap-2 border-t border-line-soft py-3 first:border-0">
               <TbPrinter className="text-[20px] text-brand-600" />
@@ -216,12 +239,33 @@ export default function CentralImpresion() {
                   {p.name} <span className="text-[12px] font-normal text-muted">{p.paperWidth} mm</span>
                 </div>
                 <div className={`text-[12px] ${ok ? "text-ok" : "text-muted"}`}>
-                  {ok ? `● Conectada (${nombreEquipo(clave(p.id))})` : nombreEquipo(clave(p.id)) ? `○ Desconectada (${nombreEquipo(clave(p.id))})` : "○ Sin emparejar"}
+                  {con === "sistema"
+                    ? "● Impresora de esta PC (la predeterminada)"
+                    : ok
+                      ? `● Conectada (${nombreEquipo(clave(p.id))})`
+                      : nombreEquipo(clave(p.id))
+                        ? `○ Desconectada (${nombreEquipo(clave(p.id))})`
+                        : "○ Sin emparejar"}
                 </div>
               </div>
-              <Button icon={<TbBluetooth />} onClick={() => conectar(p)}>
-                {ok ? "Cambiar" : "Conectar"}
-              </Button>
+              <Radio.Group
+                size="small"
+                value={con}
+                onChange={(e) => {
+                  localStorage.setItem(`pdv_con_${p.id}`, e.target.value);
+                  repintar();
+                }}
+              >
+                <Radio.Button value="bluetooth" disabled={!hayBluetooth()}>
+                  Bluetooth
+                </Radio.Button>
+                <Radio.Button value="sistema">Esta PC</Radio.Button>
+              </Radio.Group>
+              {con === "bluetooth" && (
+                <Button icon={<TbBluetooth />} onClick={() => conectar(p)}>
+                  {ok ? "Cambiar" : "Conectar"}
+                </Button>
+              )}
               <Button onClick={() => probar(p)}>Probar</Button>
               {nombreEquipo(clave(p.id)) && (
                 <Button

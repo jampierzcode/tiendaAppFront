@@ -109,7 +109,61 @@ export default function Sidebar({
     return Boolean(f && !tiene(f));
   };
 
-  const secciones = [
+  /**
+   * Restaurante: el menú se ordena por lo que se hace en el día. Operación
+   * arriba (vender, cocina, caja), luego catálogo, reportes y configuración.
+   */
+  const seccionesRestaurante = [
+    {
+      items: [{ titulo: "Resumen", url: `/b/${uuid_business}/dashboard`, icono: <IoSpeedometerOutline /> }],
+    },
+    {
+      titulo: "Operación",
+      items: [
+        { titulo: "Punto de venta", url: `/b/${uuid_business}/salon`, icono: <TbCashRegister /> },
+        { titulo: "Pedidos online", url: `/b/${uuid_business}/orders`, icono: <IoReceiptOutline />, badge: pedidosSinLeer },
+        { titulo: "Monitor de producción", url: `/b/${uuid_business}/monitor`, icono: <TbFlame /> },
+        { titulo: "Caja y cortes", url: `/b/${uuid_business}/caja`, icono: <TbCash /> },
+      ],
+    },
+    {
+      titulo: "Catálogo",
+      items: [
+        { titulo: "Platos", url: `/b/${uuid_business}/products`, icono: <BiPackage /> },
+        { titulo: "Categorías", url: `/b/${uuid_business}/categories`, icono: <BiCategoryAlt /> },
+        { titulo: "Modificadores", url: `/b/${uuid_business}/modifiers`, icono: <BiSliderAlt /> },
+        { titulo: "Insumos", url: `/b/${uuid_business}/ingredients`, icono: <TbBox /> },
+        { titulo: "Promociones", url: `/b/${uuid_business}/discounts`, icono: <MdOutlineDiscount /> },
+        { titulo: "Galería", url: `/b/${uuid_business}/gallery`, icono: <TbPhoto /> },
+      ],
+    },
+    {
+      titulo: "Reportes",
+      items: [
+        { titulo: "Ventas", url: `/b/${uuid_business}/reports`, icono: <TbChartHistogram /> },
+        { titulo: "Clientes", url: `/b/${uuid_business}/customers`, icono: <TbUsers /> },
+      ],
+    },
+    {
+      titulo: "Configuración",
+      items: [
+        { titulo: "Infraestructura", url: `/b/${uuid_business}/infraestructura`, icono: <TbSettings /> },
+        { titulo: "Central de impresión", url: `/b/${uuid_business}/impresion`, icono: <TbPrinter /> },
+        { titulo: "Mi plan", url: `/b/${uuid_business}/plan`, icono: <TbCrown /> },
+      ],
+    },
+    {
+      titulo: "Tienda online",
+      items: [
+        { titulo: "Mi tienda", url: `/b/${uuid_business}/store`, icono: <IoStorefrontOutline /> },
+        { titulo: "Mensajes", url: `/b/${uuid_business}/chat`, icono: <TbMessageCircle />, badge: sinLeer },
+        { titulo: "WhatsApp", url: `/b/${uuid_business}/whatsapp`, icono: <TbBrandWhatsapp /> },
+        { titulo: "Vendedor IA", url: `/b/${uuid_business}/vendedor-ia`, icono: <TbRobot /> },
+      ],
+    },
+  ];
+
+  const seccionesTienda = [
     {
       items: [
         {
@@ -264,6 +318,8 @@ export default function Sidebar({
       items: [{ titulo: "Mi plan", url: `/b/${uuid_business}/plan`, icono: <TbCrown /> }],
     },
   ];
+
+  const secciones = esRestaurante ? seccionesRestaurante : seccionesTienda;
 
   const contenido = (open: boolean) => (
     <div className="flex h-full flex-col">

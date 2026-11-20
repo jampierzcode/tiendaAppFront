@@ -45,7 +45,8 @@ import PerfilCuenta from "./storefront/cuenta/PerfilCuenta";
 import DetallePedidoCuenta from "./storefront/cuenta/DetallePedidoCuenta";
 import MisPedidosRedirect from "./storefront/MisPedidosRedirect";
 import ModifiersPage from "./pages/admin/ModifiersPage";
-import KitchenPage from "./pages/admin/KitchenPage";
+import PedidosOnlinePage from "./pages/admin/PedidosOnlinePage";
+import { useEsRestaurante } from "./context/BusinessContext";
 import ChatPage from "./pages/admin/ChatPage";
 import WhatsappPage from "./pages/admin/WhatsappPage";
 import SellerAgentPage from "./pages/admin/SellerAgentPage";
@@ -67,6 +68,11 @@ function ScrollAlInicio() {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
   }, [pathname]);
   return null;
+}
+
+/** Restaurante: pedidos online con tablero; tienda: la lista de siempre. */
+function PedidosSegunRubro() {
+  return useEsRestaurante() ? <PedidosOnlinePage /> : <OrdersPage />;
 }
 
 export default function App() {
@@ -178,13 +184,13 @@ export default function App() {
             <Route index element={<DashboardAdmin />} />
             <Route path="dashboard" element={<DashboardAdmin />} />
             <Route path="plan" element={<MiPlanPage />} />
-            <Route path="orders" element={<ConFuncion f="pedidos_online"><OrdersPage /></ConFuncion>} />
+            <Route path="orders" element={<ConFuncion f="pedidos_online"><PedidosSegunRubro /></ConFuncion>} />
             <Route path="customers" element={<ConFuncion f="pedidos_online"><CustomersPage /></ConFuncion>} />
             <Route path="pos" element={<ConFuncion f="pos"><PosPage /></ConFuncion>} />
             <Route path="purchases" element={<PurchasesPage />} />
             <Route path="reports" element={<ConFuncion f="reportes"><ReportsPage /></ConFuncion>} />
             <Route path="modifiers" element={<ModifiersPage />} />
-            <Route path="kitchen" element={<ConFuncion f="cocina"><KitchenPage /></ConFuncion>} />
+            <Route path="kitchen" element={<Navigate to="../orders" replace />} />
             <Route path="chat" element={<ConFuncion f="whatsapp"><ChatPage /></ConFuncion>} />
             <Route path="whatsapp" element={<ConFuncion f="whatsapp"><WhatsappPage /></ConFuncion>} />
             <Route path="vendedor-ia" element={<ConFuncion f="vendedor_ia"><SellerAgentPage /></ConFuncion>} />

@@ -143,8 +143,8 @@ export default function KitchenPage() {
   return (
     <>
       <PageHeader
-        titulo="Cocina"
-        descripcion="Se actualiza solo cada pocos segundos. Cada cambio avisa al cliente por WhatsApp si el bot está conectado."
+        titulo="Pedidos online"
+        descripcion="Pedidos de tu tienda y WhatsApp. Al aceptarlos salen las comandas a cocina y al monitor de producción; cuando cocina termina pasan solos a «Listos». Cada cambio avisa al cliente por WhatsApp si el bot está conectado."
       />
 
       {permiso === "default" && (

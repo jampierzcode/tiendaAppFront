@@ -16,6 +16,7 @@ export interface ComandaPendiente {
   customerName?: string | null;
   customerPhone?: string | null;
   deliveryAddress?: string | null;
+  shippingCost?: number | null;
   /** Para mostrar: "Mesa 4", "Juan (delivery)"… */
   tableName: string;
   guests: number | null;
@@ -64,23 +65,7 @@ export async function enviarPendientes(uuid: string, api: AxiosInstance): Promis
     for (const c of leerPendientes(uuid)) {
       if (c.error) continue;
       try {
-        await api.post("/command", {
-          tableId: c.tableId ?? null,
-          orderId: c.orderId ?? null,
-          service: c.service ?? null,
-          alias: c.alias ?? null,
-          customerName: c.customerName ?? null,
-          customerPhone: c.customerPhone ?? null,
-          deliveryAddress: c.deliveryAddress ?? null,
-          clientRequestId: c.clientRequestId,
-          guests: c.guests,
-          items: c.items.map((l) => ({
-            productId: l.productId,
-            quantity: l.quantity,
-            note: l.note || null,
-            options: l.options.map((o) => ({ optionId: o.optionId, quantity: o.quantity })),
-          })),
-        });
+        await api.post("/command", aCuerpo(c));
         descartar(uuid, c.clientRequestId);
         enviadas++;
       } catch (e) {
@@ -104,4 +89,26 @@ export async function enviarPendientes(uuid: string, api: AxiosInstance): Promis
     enviando = false;
   }
   return enviadas;
+}
+
+/** Cuerpo de POST /command a partir de una comanda guardada. */
+export function aCuerpo(c: ComandaPendiente) {
+  return {
+    tableId: c.tableId ?? null,
+    orderId: c.orderId ?? null,
+    service: c.service ?? null,
+    alias: c.alias ?? null,
+    customerName: c.customerName ?? null,
+    customerPhone: c.customerPhone ?? null,
+    deliveryAddress: c.deliveryAddress ?? null,
+    shippingCost: c.shippingCost ?? null,
+    clientRequestId: c.clientRequestId,
+    guests: c.guests,
+    items: c.items.map((l) => ({
+      productId: l.productId,
+      quantity: l.quantity,
+      note: l.note || null,
+      options: l.options.map((o) => ({ optionId: o.optionId, quantity: o.quantity })),
+    })),
+  };
 }

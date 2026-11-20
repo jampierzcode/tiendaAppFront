@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AxiosInstance } from "axios";
-import { Button, Drawer, Dropdown, Empty, Input, InputNumber, Modal, Segmented, Select, Spin, message } from "antd";
+import { AutoComplete, Button, Drawer, Dropdown, Empty, Input, InputNumber, Modal, Segmented, Select, Spin, message } from "antd";
 import {
+  TbArmchair,
   TbArrowLeft,
+  TbList,
   TbArrowsExchange,
   TbBike,
   TbCash,
@@ -40,7 +42,7 @@ import {
 import { AutorizacionProvider } from "./autorizacion";
 import { conPin, fueCancelado, useConAutorizacion } from "./autorizacionCtx";
 import CajaPanel from "./CajaPanel";
-import { descartar, encolarComanda, enviarPendientes, leerPendientes, nuevoId, type ComandaPendiente } from "./outbox";
+import { aCuerpo, descartar, encolarComanda, enviarPendientes, leerPendientes, nuevoId, type ComandaPendiente } from "./outbox";
 
 interface Props {
   api: AxiosInstance;
@@ -64,14 +66,37 @@ type Destino =
       customerName?: string;
       customerPhone?: string;
       deliveryAddress?: string;
+      shippingCost?: number;
     };
+
+type Raiz = "mesas" | "para_llevar" | "delivery" | "cuentas";
 
 type Vista =
   | { tipo: "mesas" }
+  | { tipo: "para_llevar" }
+  | { tipo: "delivery" }
   | { tipo: "cuentas" }
   | { tipo: "caja" }
   | { tipo: "cuenta"; orderId: number }
   | { tipo: "comandar"; destino: Destino };
+
+/** Pedido para llevar o delivery en curso (abierto, o cobrado y sin entregar). */
+interface EnCurso {
+  id: number;
+  etiqueta: string;
+  cliente: string;
+  telefono: string | null;
+  direccion: string | null;
+  total: number;
+  pagado: boolean;
+  folio: string | null;
+  cocina: "sin_cocina" | "en_cocina" | "parcial" | "listo";
+  platos: number;
+  listos: number;
+  courier: string | null;
+  salioEn: string | null;
+  desde: string;
+}
 
 type Accion = <T>(fn: (pin: string | null) => Promise<T>, ok?: string) => Promise<T | null>;
 
@@ -123,7 +148,12 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
   const [sinRed, setSinRed] = useState(false);
   const [carritos, setCarritos] = useState<Record<string, LineaCarrito[]>>({});
   const [comensales, setComensales] = useState<Record<string, number | null>>({});
-  const [nueva, setNueva] = useState<"para_llevar" | "delivery" | null>(null);
+  const [nuevoDelivery, setNuevoDelivery] = useState(false);
+  const [abrirMesaDe, setAbrirMesaDe] = useState<Mesa | null>(null);
+  /** Cuenta que se cobra al toque (para llevar "Enviar y cobrar"). */
+  const [cobrarAhora, setCobrarAhora] = useState<number | null>(null);
+  const [nombres, setNombres] = useState<Record<string, string>>({});
+  const [enCurso, setEnCurso] = useState<{ para_llevar: EnCurso[]; delivery: EnCurso[] }>({ para_llevar: [], delivery: [] });
   const conAut = useConAutorizacion();
 
   const s = yo?.negocio.simbolo ?? "S/";
@@ -131,9 +161,15 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
 
   const cargar = useCallback(async () => {
     try {
-      const [m, c] = await Promise.all([api.get("/tables"), api.get("/accounts")]);
+      const [m, c, pl, dl] = await Promise.all([
+        api.get("/tables"),
+        api.get("/accounts"),
+        api.get("/in-progress", { params: { service: "para_llevar" } }),
+        api.get("/in-progress", { params: { service: "delivery" } }),
+      ]);
       setMesas(m.data.data);
       setCuentasAbiertas(c.data.data);
+      setEnCurso({ para_llevar: pl.data.data, delivery: dl.data.data });
       setSinRed(false);
     } catch (e) {
       if (!(e as { response?: unknown }).response) setSinRed(true);
@@ -155,7 +191,7 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
       .then(({ data }) => {
         setYo(data.data);
         onYo?.(data.data);
-        if (!data.data.servicios.comedor) setVista({ tipo: "cuentas" });
+        if (!data.data.servicios.comedor) setVista({ tipo: data.data.servicios.para_llevar ? "para_llevar" : "cuentas" });
       })
       .catch((e) => message.error(mensajeError(e)));
     void cargarCarta();
@@ -205,24 +241,46 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
     refrescar();
   }, [refrescar]);
 
-  const enviarComanda = async (destino: Destino) => {
+  const enviarComanda = async (destino: Destino, cobrar = false) => {
     const k = claveDestino(destino);
     const items = carritos[k] ?? [];
     if (!items.length) return;
-    encolarComanda(uuid, {
+    const alias = destino.tipo === "nueva" ? nombres[k]?.trim() || destino.alias : null;
+    const comanda: ComandaPendiente = {
       clientRequestId: nuevoId(),
       tableId: destino.tipo === "mesa" ? destino.mesaId : null,
       orderId: destino.tipo === "cuenta" ? destino.orderId : null,
       service: destino.tipo === "nueva" ? destino.service : null,
-      alias: destino.tipo === "nueva" ? destino.alias : null,
-      customerName: destino.tipo === "nueva" ? destino.customerName : null,
+      alias,
+      customerName: destino.tipo === "nueva" ? destino.customerName || alias : null,
       customerPhone: destino.tipo === "nueva" ? destino.customerPhone : null,
       deliveryAddress: destino.tipo === "nueva" ? destino.deliveryAddress : null,
+      shippingCost: destino.tipo === "nueva" ? destino.shippingCost : null,
       tableName: destino.nombre,
       guests: comensales[k] ?? null,
       items,
       createdAt: Date.now(),
-    });
+    };
+
+    if (cobrar) {
+      // "Enviar y cobrar": necesita señal; si no hay, queda en cola y se cobra después.
+      try {
+        const { data } = await api.post("/command", aCuerpo(comanda));
+        setCarritos((c) => ({ ...c, [k]: [] }));
+        message.success("Comanda enviada a cocina");
+        setCobrarAhora(data.data.orderId);
+        void cargar();
+        return;
+      } catch (e) {
+        if ((e as { response?: unknown }).response) {
+          message.error(mensajeError(e));
+          return;
+        }
+        message.warning("Sin señal: la comanda queda en cola y la cobras cuando vuelva la conexión");
+      }
+    }
+
+    encolarComanda(uuid, comanda);
     setCarritos((c) => ({ ...c, [k]: [] }));
     const n = await enviarPendientes(uuid, api);
     if (n > 0) message.success("Comanda enviada");
@@ -231,7 +289,7 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
     }
     await cargar();
     if (destino.tipo === "cuenta") setVista({ tipo: "cuenta", orderId: destino.orderId });
-    else setVista({ tipo: destino.tipo === "mesa" ? "mesas" : "cuentas" });
+    else setVista({ tipo: destino.tipo === "mesa" ? "mesas" : destino.service });
   };
 
   const abrirMesa = (m: Mesa) => {
@@ -252,8 +310,14 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
       setVista({ tipo: "cuenta", orderId: m.cuenta.id });
       return;
     }
-    setVista({ tipo: "comandar", destino: { tipo: "mesa", mesaId: m.id, nombre: `Mesa ${m.name}` } });
+    setAbrirMesaDe(m);
   };
+
+  const nuevoParaLlevar = () =>
+    setVista({
+      tipo: "comandar",
+      destino: { tipo: "nueva", key: `n${Date.now()}`, service: "para_llevar", nombre: "Nuevo para llevar" },
+    });
 
   if (!yo || !mesas) {
     return (
@@ -264,20 +328,18 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
   }
 
   const verCaja = ["caja.operar", "caja.corte_x", "caja.cerrar_otras", "caja.corte_global"].some((p) => puede(yo, p));
-  const enRaiz = vista.tipo === "mesas" || vista.tipo === "cuentas";
+  const enRaiz = ["mesas", "para_llevar", "delivery", "cuentas"].includes(vista.tipo);
   const titulo =
-    vista.tipo === "mesas"
-      ? "Mesas"
-      : vista.tipo === "cuentas"
-        ? "Cuentas"
-        : vista.tipo === "caja"
+    enRaiz
+      ? "Punto de venta"
+      : vista.tipo === "caja"
           ? "Caja"
           : vista.tipo === "comandar"
             ? vista.destino.nombre
             : "Cuenta";
 
   return (
-    <div className="mx-auto max-w-5xl pb-4">
+    <div className="mx-auto max-w-6xl pb-4">
       {/* Barra superior */}
       <div className="mb-3 flex items-center gap-2">
         {!enRaiz && (
@@ -288,7 +350,7 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
                 vista.tipo === "comandar" && vista.destino.tipo === "cuenta"
                   ? { tipo: "cuenta", orderId: vista.destino.orderId }
                   : vista.tipo === "comandar" && vista.destino.tipo === "nueva"
-                    ? { tipo: "cuentas" }
+                    ? { tipo: vista.destino.service }
                     : { tipo: "mesas" }
               )
             }
@@ -332,26 +394,54 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
       {enRaiz && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <Segmented
+            size="large"
             value={vista.tipo}
-            onChange={(v) => setVista({ tipo: v as "mesas" | "cuentas" })}
+            onChange={(v) => setVista({ tipo: v as Raiz })}
             options={[
-              ...(yo.servicios.comedor ? [{ value: "mesas", label: "Mesas" }] : []),
-              { value: "cuentas", label: `Cuentas (${cuentasAbiertas.length})` },
+              ...(yo.servicios.comedor ? [{ value: "mesas", label: <Pestana icono={<TbArmchair />} texto="Comedor" /> }] : []),
+              ...(yo.servicios.para_llevar
+                ? [{ value: "para_llevar", label: <Pestana icono={<TbPaperBag />} texto="Para llevar" n={enCurso.para_llevar.length} /> }]
+                : []),
+              ...(yo.servicios.delivery
+                ? [{ value: "delivery", label: <Pestana icono={<TbBike />} texto="Delivery" n={enCurso.delivery.length} /> }]
+                : []),
+              { value: "cuentas", label: <Pestana icono={<TbList />} texto="Cuentas" n={cuentasAbiertas.length} /> },
             ]}
           />
-          <div className="ml-auto flex gap-2">
-            {yo.servicios.para_llevar && (
-              <Button icon={<TbPaperBag />} onClick={() => setNueva("para_llevar")}>
-                Para llevar
-              </Button>
-            )}
-            {yo.servicios.delivery && (
-              <Button icon={<TbBike />} onClick={() => setNueva("delivery")}>
-                Delivery
-              </Button>
-            )}
-          </div>
         </div>
+      )}
+
+      {vista.tipo === "para_llevar" && (
+        <ListaEnCurso
+          servicio="para_llevar"
+          lista={enCurso.para_llevar}
+          dinero={dinero}
+          onNuevo={nuevoParaLlevar}
+          onAbrir={(id) => setVista({ tipo: "cuenta", orderId: id })}
+          onCobrar={(id) => setCobrarAhora(id)}
+          onEntregar={(id) => accion(() => api.post(`/accounts/${id}/deliver`), "Entregado")}
+        />
+      )}
+
+      {vista.tipo === "delivery" && (
+        <ListaEnCurso
+          servicio="delivery"
+          lista={enCurso.delivery}
+          dinero={dinero}
+          onNuevo={() => setNuevoDelivery(true)}
+          onAbrir={(id) => setVista({ tipo: "cuenta", orderId: id })}
+          onCobrar={(id) => setCobrarAhora(id)}
+          onEntregar={(id) => accion(() => api.post(`/accounts/${id}/deliver`), "Entregado")}
+          onSalio={(id) => {
+            let repartidor = "";
+            Modal.confirm({
+              title: "Salió a reparto",
+              content: <Input placeholder="Repartidor (opcional): Moto Jorge, Rappi…" onChange={(e) => (repartidor = e.target.value)} />,
+              okText: "Salió",
+              onOk: () => accion(() => api.post(`/accounts/${id}/dispatch`, { courier: repartidor }), "En camino"),
+            });
+          }}
+        />
       )}
 
       {vista.tipo === "mesas" && <GrillaMesas mesas={mesas} pendientes={pendientes} dinero={dinero} onElegir={abrirMesa} />}
@@ -392,19 +482,59 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
           setCarrito={(l) => setCarritos((c) => ({ ...c, [claveDestino(vista.destino)]: l }))}
           comensales={comensales[claveDestino(vista.destino)] ?? null}
           setComensales={(n) => setComensales((c) => ({ ...c, [claveDestino(vista.destino)]: n }))}
-          onEnviar={() => enviarComanda(vista.destino)}
+          nombre={nombres[claveDestino(vista.destino)] ?? ""}
+          setNombre={(t) => setNombres((n) => ({ ...n, [claveDestino(vista.destino)]: t }))}
+          onEnviar={(cobrar) => enviarComanda(vista.destino, cobrar)}
         />
       )}
 
-      <NuevaCuentaModal
-        servicio={nueva}
-        onClose={() => setNueva(null)}
+      <NuevoDeliveryModal
+        api={api}
+        abierto={nuevoDelivery}
+        simbolo={s}
+        onClose={() => setNuevoDelivery(false)}
         onListo={(d) => {
-          setNueva(null);
+          setNuevoDelivery(false);
           setVista({ tipo: "comandar", destino: d });
         }}
       />
+
+      <AbrirMesaModal
+        mesa={abrirMesaDe}
+        onClose={() => setAbrirMesaDe(null)}
+        onAbrir={(m, personas) => {
+          setAbrirMesaDe(null);
+          const destino: Destino = { tipo: "mesa", mesaId: m.id, nombre: `Mesa ${m.name}` };
+          setComensales((c) => ({ ...c, [claveDestino(destino)]: personas }));
+          setVista({ tipo: "comandar", destino });
+        }}
+      />
+
+      {cobrarAhora && (
+        <CobroDirecto
+          api={api}
+          orderId={cobrarAhora}
+          dinero={dinero}
+          accion={accion}
+          descuentoMax={Number(yo.permisos["cobro.descuento"] ?? 0)}
+          onClose={() => {
+            setCobrarAhora(null);
+            refrescar();
+            if (vista.tipo === "comandar" && vista.destino.tipo === "nueva") setVista({ tipo: vista.destino.service });
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function Pestana({ icono, texto, n }: { icono: React.ReactNode; texto: string; n?: number }) {
+  return (
+    <span className="flex items-center gap-1.5 px-1">
+      {icono}
+      {texto}
+      {Boolean(n) && <span className="self-center rounded-full bg-brand-500 px-1.5 text-[11px] font-bold leading-[18px] text-white">{n}</span>}
+    </span>
   );
 }
 
@@ -616,61 +746,231 @@ function ListaCuentas({
   );
 }
 
-function NuevaCuentaModal({
+function ListaEnCurso({
   servicio,
+  lista,
+  dinero,
+  onNuevo,
+  onAbrir,
+  onCobrar,
+  onEntregar,
+  onSalio,
+}: {
+  servicio: "para_llevar" | "delivery";
+  lista: EnCurso[];
+  dinero: (n: number) => string;
+  onNuevo: () => void;
+  onAbrir: (id: number) => void;
+  onCobrar: (id: number) => void;
+  onEntregar: (id: number) => void;
+  onSalio?: (id: number) => void;
+}) {
+  const delivery = servicio === "delivery";
+  const COCINA: Record<EnCurso["cocina"], { t: string; c: string }> = {
+    sin_cocina: { t: "Sin cocina", c: "bg-line-soft text-muted" },
+    en_cocina: { t: "En cocina", c: "bg-warn-bg text-warn" },
+    parcial: { t: "Parcial", c: "bg-info-bg text-info" },
+    listo: { t: "🔔 Listo", c: "bg-ok-bg text-ok" },
+  };
+  return (
+    <div>
+      <button
+        onClick={onNuevo}
+        className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-brand-300 bg-brand-50 py-5 text-[16px] font-bold text-brand-700 active:scale-[0.99]"
+      >
+        <TbPlus className="text-[20px]" /> {delivery ? "Nuevo delivery" : "Nuevo para llevar"}
+      </button>
+      {!lista.length && <Empty description={delivery ? "No hay deliveries en curso" : "No hay pedidos para llevar en curso"} />}
+      <div className="grid gap-2 sm:grid-cols-2">
+        {lista.map((p) => (
+          <div key={p.id} className="card p-3">
+            <button className="w-full text-left" onClick={() => onAbrir(p.id)} disabled={p.pagado}>
+              <div className="flex items-center gap-2">
+                <span className="flex-1 truncate text-[15px] font-bold text-ink">{p.etiqueta}</span>
+                <span className="font-mono font-semibold">{dinero(p.total)}</span>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[12px] text-muted">
+                <span className={`pill ${COCINA[p.cocina].c}`}>{COCINA[p.cocina].t}</span>
+                {p.pagado ? <span className="pill bg-ok-bg text-ok">Cobrado {p.folio}</span> : <span className="pill bg-danger-bg text-danger">Por cobrar</span>}
+                {p.salioEn && <span className="pill bg-info-bg text-info">En camino{p.courier ? ` · ${p.courier}` : ""}</span>}
+                <span>· {dayjs(p.desde).format("HH:mm")}</span>
+              </div>
+              {delivery && (
+                <div className="mt-1 text-[12px] text-ink-soft">
+                  📍 {p.direccion} · 📞 {p.telefono}
+                </div>
+              )}
+            </button>
+            <div className="mt-2 flex gap-2">
+              {!p.pagado && (
+                <Button type="primary" icon={<TbCash />} onClick={() => onCobrar(p.id)}>
+                  Cobrar
+                </Button>
+              )}
+              {delivery && !p.salioEn && onSalio && (
+                <Button icon={<TbBike />} onClick={() => onSalio(p.id)}>
+                  Salió
+                </Button>
+              )}
+              {p.pagado && (
+                <Button type={p.cocina === "listo" ? "primary" : "default"} onClick={() => onEntregar(p.id)}>
+                  Entregado
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NuevoDeliveryModal({
+  api,
+  abierto,
+  simbolo,
   onClose,
   onListo,
 }: {
-  servicio: "para_llevar" | "delivery" | null;
+  api: AxiosInstance;
+  abierto: boolean;
+  simbolo: string;
   onClose: () => void;
   onListo: (d: Destino) => void;
 }) {
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
   const [direccion, setDireccion] = useState("");
+  const [envio, setEnvio] = useState<number | null>(null);
+  const [sugeridos, setSugeridos] = useState<{ id: number; name: string; phone: string; address: string | null }[]>([]);
   useEffect(() => {
+    if (!abierto) return;
     setNombre("");
     setTelefono("");
     setDireccion("");
-  }, [servicio]);
-  const delivery = servicio === "delivery";
-  const valido = !delivery || Boolean(nombre.trim() && telefono.trim() && direccion.trim());
+    setEnvio(null);
+    setSugeridos([]);
+  }, [abierto]);
+
+  const buscar = async (q: string) => {
+    if (q.replace(/\D/g, "").length < 3 && q.trim().length < 3) return setSugeridos([]);
+    try {
+      const { data } = await api.get("/customers", { params: { q } });
+      setSugeridos(data.data);
+    } catch {
+      setSugeridos([]);
+    }
+  };
+
+  const valido = Boolean(nombre.trim() && telefono.trim() && direccion.trim());
   return (
     <Modal
-      open={Boolean(servicio)}
-      title={delivery ? "Nuevo delivery" : "Nueva cuenta para llevar"}
+      open={abierto}
+      title="Nuevo delivery"
       okText="Tomar pedido"
       okButtonProps={{ disabled: !valido }}
       onCancel={onClose}
       onOk={() =>
-        servicio &&
         onListo({
           tipo: "nueva",
           key: `n${Date.now()}`,
-          service: servicio,
-          nombre: nombre.trim() ? `${nombre.trim()} · ${NOMBRE_SERVICIO[servicio]}` : NOMBRE_SERVICIO[servicio],
-          alias: nombre.trim() || undefined,
-          customerName: nombre.trim() || undefined,
-          customerPhone: telefono.trim() || undefined,
-          deliveryAddress: direccion.trim() || undefined,
+          service: "delivery",
+          nombre: `Delivery · ${nombre.trim()}`,
+          alias: nombre.trim(),
+          customerName: nombre.trim(),
+          customerPhone: telefono.trim(),
+          deliveryAddress: direccion.trim(),
+          shippingCost: envio ?? 0,
         })
       }
     >
       <div className="space-y-3">
-        <Input
-          placeholder={delivery ? "Nombre del cliente" : "Nombre (opcional). Si no, se numera: Orden 1, 2…"}
-          value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
-        />
-        {delivery && (
-          <>
-            <Input inputMode="tel" placeholder="Teléfono" value={telefono} onChange={(e) => setTelefono(e.target.value)} />
-            <Input.TextArea rows={2} placeholder="Dirección y referencia" value={direccion} onChange={(e) => setDireccion(e.target.value)} />
-          </>
-        )}
+        <AutoComplete
+          className="w-full"
+          value={telefono}
+          options={sugeridos.map((c) => ({ value: String(c.id), label: `${c.phone} · ${c.name}${c.address ? ` · ${c.address}` : ""}` }))}
+          onSearch={(v) => {
+            setTelefono(v);
+            void buscar(v);
+          }}
+          onSelect={(id) => {
+            const c = sugeridos.find((x) => String(x.id) === id);
+            if (!c) return;
+            setTelefono(c.phone);
+            setNombre(c.name);
+            setDireccion(c.address ?? "");
+          }}
+        >
+          <Input inputMode="tel" placeholder="Teléfono (busca clientes anteriores)" />
+        </AutoComplete>
+        <Input placeholder="Nombre del cliente" value={nombre} onChange={(e) => setNombre(e.target.value)} />
+        <Input.TextArea rows={2} placeholder="Dirección y referencia" value={direccion} onChange={(e) => setDireccion(e.target.value)} />
+        <InputNumber className="w-full" min={0} prefix={simbolo} placeholder="Costo de envío" value={envio} onChange={(v) => setEnvio(v === null ? null : Number(v))} />
       </div>
     </Modal>
   );
+}
+
+function AbrirMesaModal({
+  mesa,
+  onClose,
+  onAbrir,
+}: {
+  mesa: Mesa | null;
+  onClose: () => void;
+  onAbrir: (m: Mesa, personas: number) => void;
+}) {
+  const [otro, setOtro] = useState<number | null>(null);
+  useEffect(() => setOtro(null), [mesa]);
+  if (!mesa) return null;
+  return (
+    <Modal open title={`Abrir mesa ${mesa.name}`} footer={null} onCancel={onClose} width={360}>
+      <p className="mb-3 text-[13px] text-muted">¿Cuántas personas?</p>
+      <div className="grid grid-cols-4 gap-2">
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
+          <Button key={n} size="large" onClick={() => onAbrir(mesa, n)}>
+            {n}
+          </Button>
+        ))}
+      </div>
+      <div className="mt-3 flex gap-2">
+        <InputNumber className="flex-1" min={1} max={99} placeholder="Más" value={otro} onChange={(v) => setOtro(v ? Number(v) : null)} />
+        <Button type="primary" disabled={!otro} onClick={() => otro && onAbrir(mesa, otro)}>
+          Abrir
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+/** Cobro sin entrar a la cuenta (para llevar "Enviar y cobrar", o desde la lista). */
+function CobroDirecto({
+  api,
+  orderId,
+  dinero,
+  accion,
+  descuentoMax,
+  onClose,
+}: {
+  api: AxiosInstance;
+  orderId: number;
+  dinero: (n: number) => string;
+  accion: Accion;
+  descuentoMax: number;
+  onClose: () => void;
+}) {
+  const [cuenta, setCuenta] = useState<Cuenta | null>(null);
+  useEffect(() => {
+    api
+      .get(`/accounts/${orderId}`)
+      .then(({ data }) => setCuenta(data.data))
+      .catch((e) => {
+        message.error(mensajeError(e));
+        onClose();
+      });
+  }, [api, orderId, onClose]);
+  if (!cuenta) return null;
+  return <CobrarModal api={api} cuenta={cuenta} dinero={dinero} accion={accion} descuentoMax={descuentoMax} onClose={onClose} onCobrada={onClose} />;
 }
 
 // --------------------------------------------------------------------- cuenta
@@ -1171,6 +1471,8 @@ function Comandar({
   setCarrito,
   comensales,
   setComensales,
+  nombre,
+  setNombre,
   onEnviar,
 }: {
   carta: Carta | null;
@@ -1180,7 +1482,10 @@ function Comandar({
   setCarrito: (l: LineaCarrito[]) => void;
   comensales: number | null;
   setComensales: (n: number | null) => void;
-  onEnviar: () => void;
+  nombre: string;
+  setNombre: (t: string) => void;
+  /** `cobrar`: manda la comanda y abre el cobro al toque. */
+  onEnviar: (cobrar?: boolean) => void;
 }) {
   const [cat, setCat] = useState<number | null>(null);
   const [buscar, setBuscar] = useState("");
@@ -1201,63 +1506,141 @@ function Comandar({
   };
 
   const cantidadDe = (id: number) => carrito.filter((l) => l.productId === id).reduce((t, l) => t + l.quantity, 0);
-  const totalCarrito = carrito.reduce((t, l) => t + (l.price + l.options.reduce((s, o) => s + o.priceDelta * o.quantity, 0)) * l.quantity, 0);
+  const precioLinea = (l: LineaCarrito) => (l.price + l.options.reduce((s, o) => s + o.priceDelta * o.quantity, 0)) * l.quantity;
+  const totalCarrito = carrito.reduce((t, l) => t + precioLinea(l), 0);
   const unidades = carrito.reduce((t, l) => t + l.quantity, 0);
+  const sinMesa = destino.tipo === "nueva";
+  const envio = destino.tipo === "nueva" ? Number(destino.shippingCost ?? 0) : 0;
+
+  /** Líneas del ticket con +/− y nota: se usa en el panel de la derecha (PC) y en el cajón (celular). */
+  const lineas = (
+    <>
+      {carrito.map((l, i) => (
+        <div key={l.key} className="border-b border-line-soft py-2.5">
+          <div className="flex items-center gap-2">
+            <span className="flex-1 text-[13.5px] font-semibold">{l.name}</span>
+            <span className="font-mono text-[12.5px]">{dinero(precioLinea(l))}</span>
+          </div>
+          {l.options.length > 0 && <div className="text-[12px] text-muted">{l.options.map((o) => o.name).join(", ")}</div>}
+          <div className="mt-1.5 flex items-center gap-2">
+            <Button
+              size="small"
+              icon={<TbMinus />}
+              onClick={() =>
+                setCarrito(l.quantity <= 1 ? carrito.filter((_, j) => j !== i) : carrito.map((x, j) => (j === i ? { ...x, quantity: x.quantity - 1 } : x)))
+              }
+            />
+            <span className="w-6 text-center font-bold">{l.quantity}</span>
+            <Button size="small" icon={<TbPlus />} onClick={() => setCarrito(carrito.map((x, j) => (j === i ? { ...x, quantity: x.quantity + 1 } : x)))} />
+            <Input
+              size="small"
+              className="flex-1"
+              placeholder="Nota para cocina"
+              value={l.note}
+              onChange={(e) => setCarrito(carrito.map((x, j) => (j === i ? { ...x, note: e.target.value } : x)))}
+            />
+          </div>
+        </div>
+      ))}
+      {!carrito.length && <Empty className="my-6" image={Empty.PRESENTED_IMAGE_SIMPLE} description="Toca los platos para agregarlos" />}
+    </>
+  );
+
+  const botones = (bloque: boolean) =>
+    sinMesa ? (
+      <>
+        <Button size="large" block={bloque} className={bloque ? "" : "flex-1"} disabled={!carrito.length} onClick={() => onEnviar(false)}>
+          Solo enviar
+        </Button>
+        <Button size="large" block={bloque} type="primary" className={bloque ? "" : "flex-1"} icon={<TbCash />} disabled={!carrito.length} onClick={() => onEnviar(true)}>
+          Enviar y cobrar
+        </Button>
+      </>
+    ) : (
+      <Button size="large" block={bloque} type="primary" className={bloque ? "" : "flex-1"} disabled={!carrito.length} onClick={() => onEnviar(false)}>
+        Enviar comanda
+      </Button>
+    );
 
   return (
-    <div>
-      {destino.tipo === "mesa" && (
-        <div className="mb-3 flex items-center gap-2 text-[13px]">
-          <span>Personas</span>
-          <InputNumber min={1} max={50} value={comensales} onChange={(v) => setComensales(v ? Number(v) : null)} />
-        </div>
-      )}
-      <Input allowClear size="large" prefix={<TbSearch />} placeholder="Buscar plato" value={buscar} onChange={(e) => setBuscar(e.target.value)} className="mb-3" />
-      <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto pb-1">
-        <Button type={cat === null ? "primary" : "default"} shape="round" onClick={() => setCat(null)}>
-          Todo
-        </Button>
-        {carta.categorias.map((c) => (
-          <Button key={c.id} shape="round" type={cat === c.id ? "primary" : "default"} onClick={() => setCat(c.id)}>
-            {c.name}
+    <div className="lg:grid lg:grid-cols-[1fr_340px] lg:gap-4">
+      <div>
+        {destino.tipo === "mesa" && (
+          <div className="mb-3 flex items-center gap-2 text-[13px]">
+            <span>Personas</span>
+            <InputNumber min={1} max={99} value={comensales} onChange={(v) => setComensales(v ? Number(v) : null)} />
+          </div>
+        )}
+        <Input allowClear size="large" prefix={<TbSearch />} placeholder="Buscar plato" value={buscar} onChange={(e) => setBuscar(e.target.value)} className="mb-3" />
+        <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto pb-1">
+          <Button type={cat === null ? "primary" : "default"} shape="round" onClick={() => setCat(null)}>
+            Todo
           </Button>
-        ))}
-      </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-        {platos.map((p) => {
-          const n = cantidadDe(p.id);
-          return (
-            <button
-              key={p.id}
-              onClick={() => (p.modifierGroups.length ? setElegir(p) : agregarSimple(p))}
-              className={`relative flex min-h-[76px] flex-col justify-between rounded-xl border-2 bg-white p-3 text-left transition active:scale-95 ${
-                n ? "border-brand-500" : "border-line"
-              }`}
-            >
-              {n > 0 && (
-                <span className="absolute -right-2 -top-2 grid h-6 min-w-6 place-items-center rounded-full bg-brand-500 px-1 text-[12px] font-bold text-white">
-                  {n}
+          {carta.categorias.map((c) => (
+            <Button key={c.id} shape="round" type={cat === c.id ? "primary" : "default"} onClick={() => setCat(c.id)}>
+              {c.name}
+            </Button>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+          {platos.map((p) => {
+            const n = cantidadDe(p.id);
+            return (
+              <button
+                key={p.id}
+                onClick={() => (p.modifierGroups.length ? setElegir(p) : agregarSimple(p))}
+                className={`relative flex min-h-[76px] flex-col justify-between rounded-xl border-2 bg-white p-3 text-left transition active:scale-95 ${
+                  n ? "border-brand-500" : "border-line"
+                }`}
+              >
+                {n > 0 && (
+                  <span className="absolute -right-2 -top-2 grid h-6 min-w-6 place-items-center rounded-full bg-brand-500 px-1 text-[12px] font-bold text-white">
+                    {n}
+                  </span>
+                )}
+                <span className="text-[13.5px] font-semibold leading-tight text-ink">{p.name}</span>
+                <span className="mt-1 font-mono text-[12px] text-muted">
+                  {dinero(p.price)}
+                  {p.modifierGroups.length > 0 ? " · opciones" : ""}
                 </span>
-              )}
-              <span className="text-[13.5px] font-semibold leading-tight text-ink">{p.name}</span>
-              <span className="mt-1 font-mono text-[12px] text-muted">
-                {dinero(p.price)}
-                {p.modifierGroups.length > 0 ? " · opciones" : ""}
-              </span>
-            </button>
-          );
-        })}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
+      {/* PC / tablet ancha: el ticket siempre a la vista */}
+      <aside className="hidden lg:block">
+        <div className="card sticky top-4 flex max-h-[calc(100vh-2rem)] flex-col p-4">
+          <div className="mb-1 font-bold text-ink">{destino.nombre}</div>
+          {destino.tipo === "nueva" && destino.service === "para_llevar" && (
+            <Input className="mb-2" placeholder="Nombre del cliente (opcional)" value={nombre} onChange={(e) => setNombre(e.target.value)} />
+          )}
+          <div className="-mx-1 flex-1 overflow-y-auto px-1">{lineas}</div>
+          <div className="mt-3 border-t border-line pt-3">
+            {envio > 0 && (
+              <div className="flex justify-between text-[13px] text-muted">
+                <span>Envío</span>
+                <span className="font-mono">{dinero(envio)}</span>
+              </div>
+            )}
+            <div className="mb-3 flex items-baseline justify-between">
+              <span className="text-muted">Total</span>
+              <span className="font-mono text-[22px] font-bold">{dinero(totalCarrito + envio)}</span>
+            </div>
+            <div className="grid gap-2">{botones(true)}</div>
+          </div>
+        </div>
+      </aside>
+
+      {/* Celular: barra abajo y el ticket en un cajón */}
       {carrito.length > 0 && (
-        <div className="sticky bottom-0 z-20 -mx-1 mt-4 rounded-t-2xl border-t border-line bg-white/95 p-3 shadow-[0_-4px_16px_rgba(20,18,67,0.06)] backdrop-blur">
+        <div className="sticky bottom-0 z-20 -mx-1 mt-4 rounded-t-2xl border-t border-line bg-white/95 p-3 shadow-[0_-4px_16px_rgba(20,18,67,0.06)] backdrop-blur lg:hidden">
           <div className="mx-auto flex max-w-5xl gap-2">
             <Button size="large" className="flex-1" onClick={() => setVerCarrito(true)}>
-              Ver ({unidades}) · {dinero(totalCarrito)}
+              Ver ({unidades}) · {dinero(totalCarrito + envio)}
             </Button>
-            <Button size="large" type="primary" className="flex-1" onClick={onEnviar}>
-              Enviar comanda
-            </Button>
+            {botones(false)}
           </div>
         </div>
       )}
@@ -1272,52 +1655,11 @@ function Comandar({
         }}
       />
 
-      <Drawer
-        open={verCarrito}
-        placement="bottom"
-        height="75vh"
-        title={`Comanda · ${destino.nombre}`}
-        onClose={() => setVerCarrito(false)}
-        extra={
-          <Button
-            type="primary"
-            disabled={!carrito.length}
-            onClick={() => {
-              setVerCarrito(false);
-              onEnviar();
-            }}
-          >
-            Enviar
-          </Button>
-        }
-      >
-        {carrito.map((l, i) => (
-          <div key={l.key} className="border-b border-line-soft py-3">
-            <div className="flex items-center gap-2">
-              <span className="flex-1 font-semibold">{l.name}</span>
-              <Button
-                size="small"
-                icon={<TbMinus />}
-                onClick={() =>
-                  setCarrito(
-                    l.quantity <= 1 ? carrito.filter((_, j) => j !== i) : carrito.map((x, j) => (j === i ? { ...x, quantity: x.quantity - 1 } : x))
-                  )
-                }
-              />
-              <span className="w-6 text-center font-bold">{l.quantity}</span>
-              <Button size="small" icon={<TbPlus />} onClick={() => setCarrito(carrito.map((x, j) => (j === i ? { ...x, quantity: x.quantity + 1 } : x)))} />
-            </div>
-            {l.options.length > 0 && <div className="text-[12px] text-muted">{l.options.map((o) => o.name).join(", ")}</div>}
-            <Input
-              size="small"
-              className="mt-2"
-              placeholder="Nota para cocina (sin ají, término medio…)"
-              value={l.note}
-              onChange={(e) => setCarrito(carrito.map((x, j) => (j === i ? { ...x, note: e.target.value } : x)))}
-            />
-          </div>
-        ))}
-        {!carrito.length && <Empty description="Vacío" />}
+      <Drawer open={verCarrito} placement="bottom" height="75vh" title={`Comanda · ${destino.nombre}`} onClose={() => setVerCarrito(false)}>
+        {destino.tipo === "nueva" && destino.service === "para_llevar" && (
+          <Input className="mb-2" placeholder="Nombre del cliente (opcional)" value={nombre} onChange={(e) => setNombre(e.target.value)} />
+        )}
+        {lineas}
       </Drawer>
     </div>
   );
