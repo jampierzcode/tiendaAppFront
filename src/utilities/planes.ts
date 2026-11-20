@@ -18,6 +18,9 @@ export const FUNCION_DE_PANTALLA: Record<string, string> = {
   discounts: "promociones",
   inventory: "inventario",
   purchases: "compras",
+  salon: "salon",
+  "salon-config": "salon",
+  impresion: "salon",
 };
 
 export const NOMBRE_FUNCION: Record<string, string> = {
@@ -35,6 +38,7 @@ export const NOMBRE_FUNCION: Record<string, string> = {
   whatsapp: "WhatsApp conectado",
   vendedor_ia: "Vendedor IA 24/7",
   insumos: "Insumos y recetas",
+  salon: "PDV de salón",
 };
 
 export const INTERVALO: Record<

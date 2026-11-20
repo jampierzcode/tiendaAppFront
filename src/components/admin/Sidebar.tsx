@@ -16,6 +16,9 @@ import {
   TbChevronDown,
   TbChartHistogram,
   TbChefHat,
+  TbArmchair,
+  TbPrinter,
+  TbSettings,
   TbLogout,
   TbLock,
   TbCrown,
@@ -130,6 +133,11 @@ export default function Sidebar({
         ...(esRestaurante
           ? [
               {
+                titulo: "Salón",
+                url: `/b/${uuid_business}/salon`,
+                icono: <TbArmchair />,
+              },
+              {
                 titulo: "Cocina",
                 url: `/b/${uuid_business}/kitchen`,
                 icono: <TbChefHat />,
@@ -194,6 +202,25 @@ export default function Sidebar({
             ],
           },
         ]),
+    ...(esRestaurante
+      ? [
+          {
+            titulo: "Salón",
+            items: [
+              {
+                titulo: "Configurar salón",
+                url: `/b/${uuid_business}/salon-config`,
+                icono: <TbSettings />,
+              },
+              {
+                titulo: "Central de impresión",
+                url: `/b/${uuid_business}/impresion`,
+                icono: <TbPrinter />,
+              },
+            ],
+          },
+        ]
+      : []),
     {
       titulo: "Tienda online",
       items: [

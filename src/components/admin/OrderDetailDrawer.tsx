@@ -85,6 +85,7 @@ export interface Pedido {
 }
 
 const transiciones: Record<EstadoPedido, EstadoPedido[]> = {
+  abierta: [],
   pendiente: ["confirmado", "cancelado"],
   confirmado: ["pagado", "preparando", "enviado", "cancelado"],
   pagado: ["preparando", "enviado", "cancelado"],
@@ -100,6 +101,7 @@ const transiciones: Record<EstadoPedido, EstadoPedido[]> = {
 function transicionesRestaurante(estado: EstadoPedido, metodo: string): EstadoPedido[] {
   const conReparto = metodo === "envio";
   const mapa: Record<EstadoPedido, EstadoPedido[]> = {
+    abierta: [],
     pendiente: ["confirmado", "cancelado"],
     confirmado: ["preparando", "cancelado"],
     pagado: ["preparando", "cancelado"],

@@ -1,6 +1,7 @@
 import { useEsRestaurante } from "../../context/BusinessContext";
 
 export type EstadoPedido =
+  | "abierta"
   | "pendiente"
   | "confirmado"
   | "pagado"
@@ -18,6 +19,7 @@ export type EstadoPedido =
  * tiene que poder leer en qué punto está el pedido.
  */
 export const estilosEstado: Record<EstadoPedido, { texto: string; clase: string }> = {
+  abierta: { texto: "Mesa abierta", clase: "bg-info-bg text-info" },
   pendiente: { texto: "Pendiente", clase: "bg-warn-bg text-warn" },
   confirmado: { texto: "Confirmado", clase: "bg-info-bg text-info" },
   pagado: { texto: "Pagado", clase: "bg-brand-50 text-brand-600" },

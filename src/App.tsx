@@ -50,6 +50,10 @@ import ChatPage from "./pages/admin/ChatPage";
 import WhatsappPage from "./pages/admin/WhatsappPage";
 import SellerAgentPage from "./pages/admin/SellerAgentPage";
 import IngredientsPage from "./pages/admin/IngredientsPage";
+import SalonPanel from "./salon/SalonPanel";
+import SalonConfig from "./salon/SalonConfig";
+import CentralImpresion from "./salon/CentralImpresion";
+import PdvPersonal from "./salon/PdvPersonal";
 
 /**
  * Es una SPA: cambiar de página no reinicia el scroll. Al entrar a otra ruta
@@ -74,6 +78,8 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/suscripcion" element={<Subscribe />} />
           <Route path="/mis-pedidos" element={<MisPedidosRedirect />} />
+          {/* Comandero del personal (meseras): entra con nombre y PIN, sin correo */}
+          <Route path="/pdv/:uuid" element={<PdvPersonal />} />
 
           {/* Tienda pública: sin sesión, es lo que abre el cliente del QR */}
           <Route
@@ -180,6 +186,9 @@ export default function App() {
             <Route path="whatsapp" element={<ConFuncion f="whatsapp"><WhatsappPage /></ConFuncion>} />
             <Route path="vendedor-ia" element={<ConFuncion f="vendedor_ia"><SellerAgentPage /></ConFuncion>} />
             <Route path="ingredients" element={<ConFuncion f="insumos"><IngredientsPage /></ConFuncion>} />
+            <Route path="salon" element={<ConFuncion f="salon"><SalonPanel /></ConFuncion>} />
+            <Route path="salon-config" element={<ConFuncion f="salon"><SalonConfig /></ConFuncion>} />
+            <Route path="impresion" element={<ConFuncion f="salon"><CentralImpresion /></ConFuncion>} />
             {/* Subruta desconocida dentro del panel: al inicio, que para un
                 usuario con sesión es su propio tablero. Pintar aquí la pantalla
                 completa de 404 la metería dentro del layout. */}
