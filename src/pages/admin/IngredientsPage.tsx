@@ -18,6 +18,7 @@ import dayjs from "dayjs";
 import { TbPlus, TbTrash } from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
+import { INVENTARIO_LISTO } from "../../utilities/planes";
 
 interface Insumo {
   id: number;
@@ -267,8 +268,8 @@ export default function IngredientsPage() {
   return (
     <>
       <PageHeader
-        titulo="Existencias"
-        descripcion="Lo que tienes en almacén: insumos que compras (carne, arroz, gaseosas) y preparaciones que haces (salsas, masas). Los platos los descuentan según su receta al cobrar; las compras se registran en Inventario → Compras."
+        titulo={INVENTARIO_LISTO ? "Existencias" : "Insumos"}
+        descripcion="Lo que tienes en almacén: insumos que compras (carne, arroz, gaseosas) y preparaciones que haces (salsas, masas). Los platos los descuentan según su receta al cobrar."
         acciones={
           <>
             <Input.Search

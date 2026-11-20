@@ -1,4 +1,11 @@
 /**
+ * Interruptor del módulo Inventario nuevo (compras, conteo, movimientos,
+ * reportes). Mientras sea false el menú muestra solo «Insumos» en Catálogo,
+ * como antes, y el superadmin no ofrece el complemento.
+ */
+export const INVENTARIO_LISTO = false;
+
+/**
  * Lo que el front necesita saber de los planes: qué función exige cada
  * pantalla del panel y cómo se llaman las cosas. La lista de funciones de
  * cada plan la manda el backend (`business.funciones`).

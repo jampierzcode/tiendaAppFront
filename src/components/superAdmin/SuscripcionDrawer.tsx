@@ -17,6 +17,7 @@ import {
 } from "antd";
 import dayjs from "dayjs";
 import { apiTienda } from "../../api/apiTienda";
+import { INVENTARIO_LISTO } from "../../utilities/planes";
 import type { Business, Plan, Suscripcion } from "../../types/main";
 import {
   ESTADO_SUSCRIPCION,
@@ -445,7 +446,7 @@ export default function SuscripcionDrawer({
             </Button>
           </Space>
 
-          {Object.keys(complementos).length > 0 && (
+          {INVENTARIO_LISTO && Object.keys(complementos).length > 0 && (
             <>
               <Divider orientation="left">Complementos</Divider>
               <Space direction="vertical">

@@ -41,7 +41,7 @@ import { HiOutlineChevronLeft } from "react-icons/hi2";
 import { useAuth } from "../../context/AuthContext";
 import { apiTienda } from "../../api/apiTienda";
 import { useBusiness, useFunciones } from "../../context/BusinessContext";
-import { FUNCION_DE_PANTALLA } from "../../utilities/planes";
+import { FUNCION_DE_PANTALLA, INVENTARIO_LISTO } from "../../utilities/planes";
 
 interface SidebarProps {
   open: boolean;
@@ -136,11 +136,12 @@ export default function Sidebar({
         { titulo: "Platos", url: `/b/${uuid_business}/products`, icono: <BiPackage /> },
         { titulo: "Categorías", url: `/b/${uuid_business}/categories`, icono: <BiCategoryAlt /> },
         { titulo: "Modificadores", url: `/b/${uuid_business}/modifiers`, icono: <BiSliderAlt /> },
+        ...(INVENTARIO_LISTO ? [] : [{ titulo: "Insumos", url: `/b/${uuid_business}/ingredients`, icono: <TbBox /> }]),
         { titulo: "Promociones", url: `/b/${uuid_business}/discounts`, icono: <MdOutlineDiscount /> },
         { titulo: "Galería", url: `/b/${uuid_business}/gallery`, icono: <TbPhoto /> },
       ],
     },
-    {
+    ...(!INVENTARIO_LISTO ? [] : [{
       titulo: "Inventario",
       items: [
         { titulo: "Existencias", url: `/b/${uuid_business}/ingredients`, icono: <TbBox /> },
@@ -150,7 +151,7 @@ export default function Sidebar({
         { titulo: "Movimientos", url: `/b/${uuid_business}/movimientos`, icono: <TbArrowsExchange /> },
         { titulo: "Reportes", url: `/b/${uuid_business}/reportes-inventario`, icono: <TbChartPie /> },
       ],
-    },
+    }]),
     {
       titulo: "Reportes",
       items: [
