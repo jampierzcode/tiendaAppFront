@@ -57,6 +57,11 @@ import CentralImpresion from "./salon/CentralImpresion";
 import PdvPersonal from "./salon/PdvPersonal";
 import CajaPage from "./salon/CajaPage";
 import MonitorPage from "./salon/MonitorPage";
+import ComprasPage from "./inventario/ComprasPage";
+import ConteoPage from "./inventario/ConteoPage";
+import MovimientosPage from "./inventario/MovimientosPage";
+import ReportesInventarioPage from "./inventario/ReportesInventarioPage";
+import RecetasPage from "./inventario/RecetasPage";
 
 /**
  * Es una SPA: cambiar de página no reinicia el scroll. Al entrar a otra ruta
@@ -195,6 +200,11 @@ export default function App() {
             <Route path="whatsapp" element={<ConFuncion f="whatsapp"><WhatsappPage /></ConFuncion>} />
             <Route path="vendedor-ia" element={<ConFuncion f="vendedor_ia"><SellerAgentPage /></ConFuncion>} />
             <Route path="ingredients" element={<ConFuncion f="insumos"><IngredientsPage /></ConFuncion>} />
+            <Route path="recetas" element={<ConFuncion f="insumos"><RecetasPage /></ConFuncion>} />
+            <Route path="compras-insumos" element={<ConFuncion f="insumos"><ComprasPage /></ConFuncion>} />
+            <Route path="conteo" element={<ConFuncion f="insumos"><ConteoPage /></ConFuncion>} />
+            <Route path="movimientos" element={<ConFuncion f="insumos"><MovimientosPage /></ConFuncion>} />
+            <Route path="reportes-inventario" element={<ConFuncion f="insumos"><ReportesInventarioPage /></ConFuncion>} />
             <Route path="salon" element={<ConFuncion f="salon"><SalonPanel /></ConFuncion>} />
             <Route path="infraestructura" element={<ConFuncion f="salon"><Infraestructura /></ConFuncion>} />
             <Route path="salon-config" element={<Navigate to="../infraestructura" replace />} />

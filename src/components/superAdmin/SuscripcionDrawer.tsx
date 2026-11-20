@@ -13,6 +13,7 @@ import {
   Table,
   Tag,
   message,
+  Switch,
 } from "antd";
 import dayjs from "dayjs";
 import { apiTienda } from "../../api/apiTienda";
@@ -48,6 +49,9 @@ export default function SuscripcionDrawer({
 }: Props) {
   const [planes, setPlanes] = useState<Plan[]>([]);
   const [historial, setHistorial] = useState<Suscripcion[]>([]);
+  /** Complementos aparte del plan (p. ej. Inventario +S/10 sobre PDV). */
+  const [complementos, setComplementos] = useState<Record<string, { label: string; precio: number }>>({});
+  const [extras, setExtras] = useState<string[]>([]);
   const [cargando, setCargando] = useState(false);
 
   const [planId, setPlanId] = useState<number | null>(null);
@@ -77,6 +81,8 @@ export default function SuscripcionDrawer({
         apiTienda.get("/plans"),
       ]);
       setHistorial(h.data.data.subscriptions ?? []);
+      setComplementos(h.data.data.complementos ?? {});
+      setExtras(h.data.data.business?.extraFeatures ?? []);
       const disponibles = (p.data.data as Plan[]).filter(
         (x) =>
           x.isActive &&
@@ -438,6 +444,33 @@ export default function SuscripcionDrawer({
               Registrar {soles(total)}
             </Button>
           </Space>
+
+          {Object.keys(complementos).length > 0 && (
+            <>
+              <Divider orientation="left">Complementos</Divider>
+              <Space direction="vertical">
+                {Object.entries(complementos).map(([k, c]) => (
+                  <label key={k} className="flex items-center gap-2 text-[13px]">
+                    <Switch
+                      size="small"
+                      checked={extras.includes(k)}
+                      onChange={async (on) => {
+                        const nuevos = on ? [...extras, k] : extras.filter((x) => x !== k);
+                        try {
+                          await apiTienda.put(`/businesses/${business!.id}/addons`, { features: nuevos });
+                          setExtras(nuevos);
+                          message.success(on ? `${c.label} activado` : `${c.label} quitado`);
+                        } catch (e) {
+                          message.error(errorDe(e, "No se pudo guardar"));
+                        }
+                      }}
+                    />
+                    {c.label} <span className="text-muted">(+{soles(c.precio)}/mes; súmalo al registrar el pago)</span>
+                  </label>
+                ))}
+              </Space>
+            </>
+          )}
 
           <Divider orientation="left">Prueba gratis</Divider>
           <Space wrap>

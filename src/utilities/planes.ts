@@ -15,6 +15,11 @@ export const FUNCION_DE_PANTALLA: Record<string, string> = {
   whatsapp: "whatsapp",
   "vendedor-ia": "vendedor_ia",
   ingredients: "insumos",
+  recetas: "insumos",
+  "compras-insumos": "insumos",
+  conteo: "insumos",
+  movimientos: "insumos",
+  "reportes-inventario": "insumos",
   discounts: "promociones",
   inventory: "inventario",
   purchases: "compras",
@@ -40,7 +45,7 @@ export const NOMBRE_FUNCION: Record<string, string> = {
   reportes: "Reportes de ventas",
   whatsapp: "WhatsApp conectado",
   vendedor_ia: "Vendedor IA 24/7",
-  insumos: "Insumos y recetas",
+  insumos: "Inventario",
   salon: "PDV de salón",
 };
 
