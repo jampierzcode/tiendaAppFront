@@ -18,6 +18,7 @@ import {
   TbPaperBag,
   TbPlus,
   TbPrinter,
+  TbReceipt,
   TbRefresh,
   TbSearch,
   TbTrash,
@@ -126,6 +127,20 @@ const ESTILO_MESA: Record<Mesa["estado"], { caja: string; texto: string }> = {
   impresa: { caja: "border-warn bg-warn-bg text-warn shadow-md", texto: "Cuenta impresa" },
   por_liberar: { caja: "border-dashed border-muted bg-line-soft text-muted", texto: "Por liberar" },
 };
+
+/** Ícono de la cuenta: mesa si tiene mesa, ticket si es comedor sin mesa, bolsa o moto según el servicio. */
+function IconoCuenta({ c }: { c: { service: Servicio; mesa: string | null } }) {
+  if (c.mesa) {
+    return (
+      <span className="flex flex-col items-center leading-none">
+        <TbArmchair className="text-[16px]" />
+        <span className="mt-0.5 max-w-[34px] truncate text-[10px] font-bold">{c.mesa}</span>
+      </span>
+    );
+  }
+  if (c.service === "comedor") return <TbReceipt />;
+  return <>{ICONO_SERVICIO[c.service]}</>;
+}
 
 const ICONO_SERVICIO: Record<Servicio, React.ReactNode> = {
   comedor: null,
@@ -779,6 +794,7 @@ function ListaCuentas({
   const [modo, setModo] = useState<"abiertas" | "cerradas">("abiertas");
   const [cerradas, setCerradas] = useState<ResumenCuenta[] | null>(null);
   const [busqueda, setBusqueda] = useState<ResumenCuenta[] | null>(null);
+  const [cerrada, setCerrada] = useState<ResumenCuenta | null>(null);
 
   useEffect(() => {
     const t = setTimeout(async () => {
@@ -815,7 +831,7 @@ function ListaCuentas({
           onChange={(v) => setModo(v as "abiertas" | "cerradas")}
           options={[
             { value: "abiertas", label: "Abiertas" },
-            { value: "cerradas", label: "Cerradas hoy" },
+            { value: "cerradas", label: "Cerradas del turno" },
           ]}
         />
       </div>
@@ -826,17 +842,12 @@ function ListaCuentas({
             key={c.id}
             onClick={() => {
               if (modo === "abiertas") return onAbrir(c.id);
-              if (c.status !== "entregado") return;
-              Modal.confirm({
-                title: `Reimprimir nota de venta ${c.folio ?? ""}`,
-                okText: "Reimprimir",
-                onOk: () => accion((pin) => api.post(`/accounts/${c.id}/reprint-note`, {}, conPin(pin)), "Enviada a la impresora"),
-              });
+              if (c.status === "entregado") setCerrada(c);
             }}
             className="card flex items-center gap-3 p-3 text-left active:scale-[0.99]"
           >
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-[18px] text-brand-600">
-              {ICONO_SERVICIO[c.service] ?? <span className="text-[13px] font-bold">{c.mesa ?? "M"}</span>}
+              <IconoCuenta c={c} />
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate font-semibold text-ink">{c.etiqueta}</span>
@@ -851,12 +862,85 @@ function ListaCuentas({
               <span className="block font-mono text-[14px] font-semibold">{c.total !== null ? dinero(c.total) : "—"}</span>
               {Boolean(c.listos) && <span className="pill bg-ok-bg text-ok">🔔 {c.listos} listos</span>}
               {c.accountStatus === "impresa" && <span className="pill bg-warn-bg text-warn">Impresa</span>}
+              {c.status === "entregado" && <span className="pill bg-ok-bg text-ok">Cobrada</span>}
               {c.status === "cancelado" && <span className="pill bg-danger-bg text-danger">Cancelada</span>}
+              {c.reabierta && <span className="pill ml-1 bg-info-bg text-info">Reabierta</span>}
             </span>
+            {c.motivo && <span className="sr-only">{c.motivo}</span>}
           </button>
         ))}
       </div>
+
+      <CuentaCerradaModal
+        cuenta={cerrada}
+        onClose={() => setCerrada(null)}
+        onReimprimir={async (c) => {
+          await accion((pin) => api.post(`/accounts/${c.id}/reprint-note`, {}, conPin(pin)), "Nota de venta enviada a la impresora");
+        }}
+        onReabrir={async (c, motivo, devolver) => {
+          const r = await accion(
+            (pin) => api.post(`/accounts/${c.id}/reopen-paid`, { reason: motivo, devolver }, conPin(pin)),
+            devolver ? "Reabierta y devuelto el pago" : "Reabierta: al cobrar se cobra solo la diferencia"
+          );
+          if (r !== null) {
+            setCerrada(null);
+            onAbrir(c.id);
+          }
+        }}
+      />
     </div>
+  );
+}
+
+/** Cuenta cobrada del turno: reimprimir su nota o reabrirla (con o sin devolver el pago). */
+function CuentaCerradaModal({
+  cuenta,
+  onClose,
+  onReimprimir,
+  onReabrir,
+}: {
+  cuenta: ResumenCuenta | null;
+  onClose: () => void;
+  onReimprimir: (c: ResumenCuenta) => Promise<void>;
+  onReabrir: (c: ResumenCuenta, motivo: string, devolver: boolean) => Promise<void>;
+}) {
+  const [motivo, setMotivo] = useState("");
+  const [devolver, setDevolver] = useState(false);
+  useEffect(() => {
+    setMotivo("");
+    setDevolver(false);
+  }, [cuenta]);
+  if (!cuenta) return null;
+  return (
+    <Modal open title={`${cuenta.etiqueta} · ${cuenta.folio ?? ""}`} footer={null} onCancel={onClose}>
+      <Button block size="large" icon={<TbPrinter />} onClick={() => onReimprimir(cuenta)}>
+        Reimprimir nota de venta
+      </Button>
+      <div className="mt-4 rounded-xl border border-line p-3">
+        <div className="mb-1 font-semibold text-ink">Reabrir la cuenta</div>
+        <p className="mb-2 text-[12.5px] text-muted">
+          Solo cuentas del turno abierto y con permiso (o autorización). El folio no cambia.
+        </p>
+        <Segmented
+          block
+          value={devolver ? "devolver" : "mantener"}
+          onChange={(v) => setDevolver(v === "devolver")}
+          options={[
+            { value: "mantener", label: "Mantener el pago" },
+            { value: "devolver", label: "Devolver el pago" },
+          ]}
+        />
+        <p className="mt-2 text-[12px] text-muted">
+          {devolver
+            ? "Se registra la devolución en tu caja y la cuenta queda como sin pagar."
+            : "Lo pagado se queda: al volver a cobrar solo se cobra (o devuelve) la diferencia."}
+        </p>
+        <Input className="mt-2" placeholder="Motivo: pidió algo más, error en el cobro…" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+        <Button className="mt-2" type="primary" danger={devolver} block disabled={!motivo.trim()} onClick={() => onReabrir(cuenta, motivo.trim(), devolver)}>
+          Reabrir
+        </Button>
+      </div>
+    </Modal>
   );
 }
 
@@ -1600,9 +1684,13 @@ function CobrarModal({
   const [cargando, setCargando] = useState(false);
   const [hecho, setHecho] = useState<Cuenta | null>(null);
 
-  const total = r2(cuenta.total - (cuenta.total * descuento) / 100);
+  const envio = Number(cuenta.shippingCost ?? 0);
+  const total = r2(cuenta.total - ((cuenta.total - envio) * descuento) / 100);
+  /** Cuenta reabierta: lo ya pagado se descuenta y solo se cobra la diferencia. */
+  const yaPagado = Number(cuenta.paidTotal ?? 0);
+  const aCobrar = r2(total - yaPagado);
   const pagado = r2(pagos.reduce((t, p) => t + Number(p.amount ?? 0), 0));
-  const falta = r2(total - pagado);
+  const falta = r2(Math.max(0, aCobrar) - pagado);
 
   const confirmar = async () => {
     setCargando(true);
@@ -1623,6 +1711,9 @@ function CobrarModal({
         <div className="py-4 text-center">
           <div className="text-[13px] text-muted">Nota de venta {hecho.folio}</div>
           <div className="mt-1 font-mono text-[28px] font-bold">{dinero(hecho.total)}</div>
+          {Number(hecho.devuelto) > 0 && (
+            <div className="mt-3 rounded-xl bg-warn-bg py-3 text-[18px] font-bold text-warn">Devolver: {dinero(Number(hecho.devuelto))}</div>
+          )}
           {Number(hecho.vuelto) > 0 && (
             <div className="mt-3 rounded-xl bg-ok-bg py-3 text-[18px] font-bold text-ok">Vuelto: {dinero(Number(hecho.vuelto))}</div>
           )}
@@ -1645,6 +1736,12 @@ function CobrarModal({
         <span className="text-muted">Total {cuenta.folio ? `· ${cuenta.folio}` : ""}</span>
         <span className="font-mono text-[26px] font-bold">{dinero(total)}</span>
       </div>
+      {yaPagado > 0 && (
+        <div className="mb-3 rounded-lg bg-info-bg px-3 py-2 text-[13px] text-info">
+          Ya pagado: {dinero(yaPagado)} ·{" "}
+          {aCobrar >= 0 ? <b>Por cobrar: {dinero(aCobrar)}</b> : <b>Se devolverá: {dinero(-aCobrar)}</b>}
+        </div>
+      )}
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <span className="text-[13px]">Descuento %</span>
         <InputNumber min={0} max={100} value={descuento} onChange={(v) => setDescuento(Number(v) || 0)} />
@@ -1660,6 +1757,7 @@ function CobrarModal({
             min={0}
             step={1}
             placeholder={String(Math.max(0, falta + Number(p.amount ?? 0)).toFixed(2))}
+            disabled={aCobrar <= 0}
             value={p.amount}
             onChange={(v) => setPagos(pagos.map((x, j) => (j === i ? { ...x, amount: v === null ? null : Number(v) } : x)))}
           />
@@ -1672,7 +1770,7 @@ function CobrarModal({
       <Button type="dashed" block icon={<TbPlus />} onClick={() => setPagos([...pagos, { method: "yape", amount: null }])}>
         Pagar con otro método (dividir)
       </Button>
-      {pagado > total && <div className="mt-3 rounded-lg bg-ok-bg px-3 py-2 font-semibold text-ok">Vuelto: {dinero(r2(pagado - total))}</div>}
+      {pagado > Math.max(0, aCobrar) && <div className="mt-3 rounded-lg bg-ok-bg px-3 py-2 font-semibold text-ok">Vuelto: {dinero(r2(pagado - Math.max(0, aCobrar)))}</div>}
     </Modal>
   );
 }

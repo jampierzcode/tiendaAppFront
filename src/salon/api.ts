@@ -91,6 +91,8 @@ export interface ResumenCuenta {
   mesa: string | null;
   mesaId: number | null;
   status?: string;
+  motivo?: string | null;
+  reabierta?: boolean;
 }
 
 export interface Mesa {
@@ -170,6 +172,8 @@ export interface Cuenta {
   items: ItemCuenta[];
   payments: { method: string; amount: number; cobradoPor: string | null }[];
   vuelto?: number;
+  devuelto?: number;
+  shippingCost?: number;
 }
 
 export type Permisos = Record<string, boolean | number | string>;
