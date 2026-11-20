@@ -214,8 +214,8 @@ export default function Sidebar({
                 icono: <TbCash />,
               },
               {
-                titulo: "Configurar salón",
-                url: `/b/${uuid_business}/salon-config`,
+                titulo: "Infraestructura",
+                url: `/b/${uuid_business}/infraestructura`,
                 icono: <TbSettings />,
               },
               {

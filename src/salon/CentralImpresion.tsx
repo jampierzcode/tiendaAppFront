@@ -7,7 +7,7 @@ import PageHeader from "../components/ui/PageHeader";
 import { usePolling } from "../hooks/usePolling";
 import { crearApiSalon, mensajeError } from "./api";
 import { conectada, emparejar, hayBluetooth, imprimir, nombreEquipo, olvidar, reconectar } from "./bluetooth";
-import { ticketEscPos, type TrabajoImpresion } from "./escpos";
+import { copiasDe, ticketEscPos, type TrabajoImpresion } from "./escpos";
 
 interface Impresora {
   id: number;
@@ -29,6 +29,10 @@ const ETIQUETA: Record<string, string> = {
   anulacion: "Anulación",
   precuenta: "Precuenta",
   nota_venta: "Nota de venta",
+  cancelacion: "Cancelación",
+  corte_x: "Corte X",
+  corte_z: "Corte Z",
+  corte_global: "Corte global",
   prueba: "Prueba",
 };
 
@@ -107,7 +111,8 @@ export default function CentralImpresion() {
           continue;
         }
         try {
-          await imprimir(clave(imp.id), ticketEscPos(job, imp.paperWidth));
+          const bytes = ticketEscPos(job, imp.paperWidth);
+          for (let c = 0; c < copiasDe(job); c++) await imprimir(clave(imp.id), bytes);
           await api.post(`/print-jobs/${job.id}/result`, { ok: true });
         } catch (e) {
           await api.post(`/print-jobs/${job.id}/result`, { ok: false, error: (e as Error).message }).catch(() => {});

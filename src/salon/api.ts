@@ -2,19 +2,39 @@ import axios, { type AxiosInstance } from "axios";
 
 /**
  * Cliente del PDV de salón. Lo usan el dueño (con su sesión del panel) y el
- * personal (token propio guardado por negocio, separado del del dueño para
- * que un mismo celular pueda tener las dos sesiones sin pisarse).
+ * personal (que entra con PIN en un equipo vinculado; su token se guarda
+ * aparte para que el mismo celular pueda tener las dos sesiones).
  */
-export const claveTokenPersonal = (uuid: string) => `pdv_token_${uuid}`;
+const CLAVE_EQUIPO = "pdv_equipo";
+const CLAVE_SESION = "pdv_sesion";
 
-export function tokenPersonal(uuid: string) {
-  return localStorage.getItem(claveTokenPersonal(uuid));
+export interface EquipoGuardado {
+  deviceToken: string;
+  negocio: { uuid: string; name: string };
+  equipo: string;
 }
+
+export function equipoGuardado(): EquipoGuardado | null {
+  try {
+    return JSON.parse(localStorage.getItem(CLAVE_EQUIPO) ?? "null");
+  } catch {
+    return null;
+  }
+}
+
+export function guardarEquipo(e: EquipoGuardado | null) {
+  if (e) localStorage.setItem(CLAVE_EQUIPO, JSON.stringify(e));
+  else localStorage.removeItem(CLAVE_EQUIPO);
+}
+
+export const tokenPersonal = () => localStorage.getItem(CLAVE_SESION);
+export const guardarTokenPersonal = (t: string | null) =>
+  t ? localStorage.setItem(CLAVE_SESION, t) : localStorage.removeItem(CLAVE_SESION);
 
 export function crearApiSalon(uuid: string, modo: "dueno" | "personal", alSalir?: () => void): AxiosInstance {
   const api = axios.create({ baseURL: `${import.meta.env.VITE_API_URL}/b/${uuid}/salon` });
   api.interceptors.request.use((config) => {
-    const token = modo === "dueno" ? localStorage.getItem("token") : tokenPersonal(uuid);
+    const token = modo === "dueno" ? localStorage.getItem("token") : tokenPersonal();
     if (token) config.headers.Authorization = `Bearer ${token}`;
     return config;
   });
@@ -22,7 +42,7 @@ export function crearApiSalon(uuid: string, modo: "dueno" | "personal", alSalir?
     (r) => r,
     (error) => {
       if (error.response?.status === 401 && modo === "personal") {
-        localStorage.removeItem(claveTokenPersonal(uuid));
+        guardarTokenPersonal(null);
         alSalir?.();
       }
       return Promise.reject(error);
@@ -41,20 +61,37 @@ export function mensajeError(e: unknown, porDefecto = "No se pudo completar") {
 
 // ---- tipos
 
+export type Servicio = "comedor" | "para_llevar" | "delivery";
+export const NOMBRE_SERVICIO: Record<Servicio, string> = {
+  comedor: "Comedor",
+  para_llevar: "Para llevar",
+  delivery: "Delivery",
+};
+
+export interface ResumenCuenta {
+  id: number;
+  propia: boolean;
+  visible: boolean;
+  mesero: string | null;
+  service: Servicio;
+  etiqueta: string;
+  accountStatus: "abierta" | "impresa" | "reabierta" | null;
+  folio: string | null;
+  total: number | null;
+  guests: number | null;
+  items: number;
+  abiertaDesde: string;
+  mesa: string | null;
+  status?: string;
+}
+
 export interface Mesa {
   id: number;
   name: string;
   zone: string | null;
   seats: number | null;
-  cuenta: {
-    id: number;
-    code: string;
-    total: number;
-    guests: number | null;
-    items: number;
-    abiertaDesde: string;
-    mesero: string | null;
-  } | null;
+  estado: "libre" | "ocupada" | "impresa" | "por_liberar";
+  cuenta: ResumenCuenta | null;
 }
 
 export interface GrupoMod {
@@ -91,12 +128,24 @@ export interface ItemCuenta {
   modifiers: { name: string; quantity: number }[];
   voided: boolean;
   voidReason: string | null;
+  courtesy: boolean;
+  courtesyReason: string | null;
 }
 
 export interface Cuenta {
   id: number;
   code: string;
   status: string;
+  accountStatus: "abierta" | "impresa" | "reabierta" | null;
+  service: Servicio;
+  etiqueta: string;
+  customerName: string;
+  customerPhone: string | null;
+  deliveryAddress: string | null;
+  mesero: string | null;
+  folio: string | null;
+  printCount: number;
+  discountReason: string | null;
   mesa: { id: number | null; name: string | null };
   guests: number | null;
   subtotal: number;
@@ -107,16 +156,25 @@ export interface Cuenta {
   abiertaDesde: string;
   rondas: { id: number; number: number; userName: string | null; createdAt: string }[];
   items: ItemCuenta[];
-  payments: { method: string; amount: number }[];
+  payments: { method: string; amount: number; cobradoPor: string | null }[];
   vuelto?: number;
 }
 
+export type Permisos = Record<string, boolean | number | string>;
+
 export interface Yo {
   name: string;
-  role: "dueno" | "cajero" | "mesero";
-  puedeCobrar: boolean;
+  role: "dueno" | "cajero" | "mesero" | "gerente";
+  permisos: Permisos;
+  caja: { id: number; name: string } | null;
+  servicios: Record<Servicio, boolean>;
+  inactividadSegundos: number;
+  liberarMesaManual: boolean;
   negocio: { name: string; uuid: string; simbolo: string };
 }
+
+/** ¿El actor tiene el permiso? (los "alcance" se consultan por valor). */
+export const puede = (yo: Yo | null, p: string) => yo?.permisos?.[p] === true;
 
 /** Línea del carrito de la comanda (aún no enviada). */
 export interface LineaCarrito {

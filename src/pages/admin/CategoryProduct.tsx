@@ -9,6 +9,7 @@ import {
   Tag,
   Space,
   Switch,
+  Select,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { MenuOutlined, PlusOutlined } from "@ant-design/icons";
@@ -29,6 +30,8 @@ interface Subcategory {
 }
 
 interface Category {
+  /** Área de impresión del PDV de salón. */
+  productionAreaId?: number | null;
   id: number;
   name: string;
   slug: string;
@@ -54,6 +57,15 @@ export function CategoriesPage() {
   const [ordenSub, setOrdenSub] = useState<Orden>("manual");
   const { business } = useBusiness();
   const esRestaurante = useEsRestaurante();
+  // Áreas de impresión del PDV de salón: los platos de la categoría salen a esa área.
+  const [areas, setAreas] = useState<{ id: number; name: string }[]>([]);
+  useEffect(() => {
+    if (!esRestaurante) return;
+    apiTienda
+      .get("/salon/areas")
+      .then((r) => setAreas(r.data.data ?? []))
+      .catch(() => setAreas([]));
+  }, [esRestaurante]);
 
   // 🔹 Traer categorías con preload de subcategorías
   const fetchList = async () => {
@@ -286,7 +298,7 @@ export function CategoriesPage() {
             size="small"
             onClick={() => {
               setEditing(row);
-              form.setFieldsValue(row);
+              form.setFieldsValue({ ...row, production_area_id: row.productionAreaId ?? 0 });
               setOpen(true);
             }}
           >
@@ -414,6 +426,16 @@ export function CategoriesPage() {
           <Form.Item name="description" label="Descripción">
             <Input.TextArea rows={3} />
           </Form.Item>
+          {esRestaurante && areas.length > 0 && (
+            <Form.Item
+              name="production_area_id"
+              label="Área de impresión"
+              initialValue={0}
+              extra="Los platos de esta categoría salen a esta área, salvo los que tengan una propia."
+            >
+              <Select options={[{ value: 0, label: "Sin área (sale por caja)" }, ...areas.map((a) => ({ value: a.id, label: a.name }))]} />
+            </Form.Item>
+          )}
           <Form.Item name="image_url" label="URL de imagen">
             <Input />
           </Form.Item>

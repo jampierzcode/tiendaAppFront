@@ -2,9 +2,10 @@
 import { useCallback, useEffect, useState } from "react";
 import type { AxiosInstance } from "axios";
 import { Button, Collapse, Input, InputNumber, Modal, Select, Spin, message } from "antd";
-import { TbCash, TbLock, TbMinus, TbPlus, TbPrinter, TbReceipt } from "react-icons/tb";
+import { TbCash, TbHandFinger, TbLock, TbMinus, TbPlus, TbPrinter, TbReceipt } from "react-icons/tb";
 import dayjs from "dayjs";
 import { mensajeError } from "./api";
+import { conPin, fueCancelado, useConAutorizacion } from "./autorizacionCtx";
 
 const METODOS: { value: string; label: string }[] = [
   { value: "efectivo", label: "Efectivo" },
@@ -24,7 +25,16 @@ interface Resumen {
   ingresos: number;
   retiros: number;
   efectivoEsperado: number;
-  movimientos: { type: string; amount: number; reason: string; userName: string | null; createdAt: string }[];
+}
+
+interface PendienteMesero {
+  userId: number;
+  nombre: string;
+  metodos: string[];
+  esperado: Record<string, number> | null;
+  declarado: Record<string, number> | null;
+  diferencia: number | null;
+  recibidoPor: string | null;
 }
 
 interface Estado {
@@ -39,31 +49,29 @@ interface Estado {
     closedAt: string | null;
     zNumber: number | null;
     difference: number | null;
+    propia: boolean;
     resumen: Resumen | null;
+    pendientesMeseros: PendienteMesero[];
   }[];
-  miSesion: number | null;
   mesasAbiertas: number;
+  visibilidad: "todo" | "ciego" | "nada";
+  permisos: { operar: boolean; corteX: boolean; cerrarOtras: boolean; corteGlobal: boolean };
 }
 
 /**
- * Caja: apertura con fondo, ingresos/retiros, corte X (parcial), corte Z
- * (cierre con conteo a ciegas) y corte global del turno.
+ * Caja: apertura con fondo, ingresos/retiros, lo que entregan los meseros
+ * que cobraron, corte X, corte Z (conteo a ciegas) y corte global del turno.
+ * Lo que cada quien ve de los montos depende de su rol (todo / ciego / nada).
  */
-export default function CajaPanel({
-  api,
-  simbolo,
-  esDueno,
-}: {
-  api: AxiosInstance;
-  simbolo: string;
-  esDueno: boolean;
-}) {
+export default function CajaPanel({ api, simbolo, esDueno }: { api: AxiosInstance; simbolo: string; esDueno: boolean }) {
   const [e, setE] = useState<Estado | null>(null);
   const [abrir, setAbrir] = useState<{ registerId: number | null; fondo: number | null } | null>(null);
   const [mov, setMov] = useState<{ sesion: number; type: "ingreso" | "retiro"; amount: number | null; reason: string } | null>(null);
   const [zDe, setZDe] = useState<number | null>(null);
+  const [recibir, setRecibir] = useState<{ sesion: number; p: PendienteMesero } | null>(null);
   const [informe, setInforme] = useState<{ titulo: string; datos: any } | null>(null);
   const [historial, setHistorial] = useState<any[] | null>(null);
+  const conAut = useConAutorizacion();
   const dinero = (n: number) => `${simbolo} ${Number(n ?? 0).toFixed(2)}`;
 
   const cargar = useCallback(async () => {
@@ -76,40 +84,42 @@ export default function CajaPanel({
   }, [api]);
 
   const cargarHistorial = useCallback(async () => {
-    if (!esDueno) return;
     try {
       const { data } = await api.get("/cash/history");
       setHistorial(data.data);
     } catch {
-      /* opcional */
+      setHistorial(null);
     }
-  }, [api, esDueno]);
+  }, [api]);
 
   useEffect(() => {
     void cargar();
-    void cargarHistorial();
-  }, [cargar, cargarHistorial]);
+  }, [cargar]);
+  useEffect(() => {
+    if (e?.permisos.corteGlobal) void cargarHistorial();
+  }, [e?.permisos.corteGlobal, cargarHistorial]);
 
-  const accion = async (fn: () => Promise<unknown>, ok?: string) => {
+  const accion = async (fn: (pin: string | null) => Promise<unknown>, ok?: string) => {
     try {
-      const r = await fn();
+      const r = await conAut(fn);
       if (ok) message.success(ok);
       await cargar();
-      return r;
+      return r as any;
     } catch (err) {
-      message.error(mensajeError(err));
+      if (!fueCancelado(err)) message.error(mensajeError(err));
       return null;
     }
   };
 
   if (!e) return <Spin />;
 
+  const ver = e.visibilidad === "todo";
   const abiertas = e.sesiones.filter((s) => s.status === "abierta");
   const cerradas = e.sesiones.filter((s) => s.status === "cerrada");
   const cajasLibres = e.cajas.filter((c) => !c.sesionAbierta);
 
   const corteGlobal = async (force = false) => {
-    const r = (await accion(() => api.post("/cash/close-shift", { force }))) as { data: { data: any } } | null;
+    const r = await accion((pin) => api.post("/cash/close-shift", { force }, conPin(pin)));
     if (r) {
       setInforme({ titulo: `Corte global · Turno #${r.data.data.turno}`, datos: r.data.data });
       void cargarHistorial();
@@ -130,14 +140,14 @@ export default function CajaPanel({
           ) : (
             <div className="font-semibold text-ink">Sin turno abierto: se abre solo al abrir la primera caja.</div>
           )}
-          {e.mesasAbiertas > 0 && <div className="text-[12.5px] text-warn">{e.mesasAbiertas} mesa(s) con cuenta abierta</div>}
+          {e.mesasAbiertas > 0 && <div className="text-[12.5px] text-warn">{e.mesasAbiertas} cuenta(s) abiertas sin cobrar</div>}
         </div>
         {cajasLibres.length > 0 && (
           <Button type="primary" icon={<TbCash />} onClick={() => setAbrir({ registerId: cajasLibres[0].id, fondo: null })}>
             Abrir caja
           </Button>
         )}
-        {esDueno && e.turno && (
+        {e.permisos.corteGlobal && e.turno && (
           <Button
             danger
             icon={<TbLock />}
@@ -148,7 +158,7 @@ export default function CajaPanel({
                 title: "Corte global del turno",
                 content:
                   e.mesasAbiertas > 0
-                    ? `Hay ${e.mesasAbiertas} mesa(s) sin cobrar. Si cierras igual, quedarán para el próximo turno.`
+                    ? `Hay ${e.mesasAbiertas} cuenta(s) sin cobrar. Si cierras igual, quedarán para el próximo turno.`
                     : "Se cierra el turno y se imprime el resumen del día.",
                 okText: "Cerrar turno",
                 okButtonProps: { danger: true },
@@ -163,44 +173,90 @@ export default function CajaPanel({
 
       {/* Cajas abiertas */}
       {abiertas.map((s) => {
-        const r = s.resumen!;
+        const r = s.resumen;
+        const pendientes = s.pendientesMeseros.filter((p) => !p.declarado);
         return (
-          <div key={s.id} className={`card p-4 ${s.id === e.miSesion ? "ring-2 ring-brand-300" : ""}`}>
+          <div key={s.id} className={`card p-4 ${s.propia ? "ring-2 ring-brand-300" : ""}`}>
             <div className="mb-3 flex flex-wrap items-baseline gap-2">
               <span className="text-[16px] font-bold text-ink">{s.caja}</span>
               <span className="text-[12.5px] text-muted">
                 {s.userName} · desde {dayjs(s.openedAt).format("HH:mm")}
               </span>
-              <span className="ml-auto font-mono text-[18px] font-bold">{dinero(r.totalVentas)}</span>
+              {r && <span className="ml-auto font-mono text-[18px] font-bold">{dinero(r.totalVentas)}</span>}
             </div>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[13px] sm:grid-cols-3">
-              {Object.entries(r.porMetodo).map(([m, v]) => (
-                <div key={m} className="flex justify-between">
-                  <span className="text-muted">{nombre(m)}</span>
-                  <span className="font-mono">{dinero(v)}</span>
+
+            {r ? (
+              <>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-[13px] sm:grid-cols-3">
+                  {Object.entries(r.porMetodo).map(([m, v]) => (
+                    <div key={m} className="flex justify-between">
+                      <span className="text-muted">{nombre(m)}</span>
+                      <span className="font-mono">{dinero(v)}</span>
+                    </div>
+                  ))}
+                  {!Object.keys(r.porMetodo).length && <span className="text-muted">Aún sin ventas</span>}
                 </div>
-              ))}
-              {!Object.keys(r.porMetodo).length && <span className="text-muted">Aún sin ventas</span>}
-            </div>
-            <div className="mt-3 rounded-lg bg-canvas px-3 py-2 text-[13px]">
-              <div className="flex justify-between"><span>Fondo</span><span className="font-mono">{dinero(r.fondo)}</span></div>
-              {r.ingresos > 0 && <div className="flex justify-between"><span>Ingresos</span><span className="font-mono">+{dinero(r.ingresos)}</span></div>}
-              {r.retiros > 0 && <div className="flex justify-between"><span>Retiros</span><span className="font-mono">−{dinero(r.retiros)}</span></div>}
-              <div className="flex justify-between font-semibold"><span>Efectivo que debería haber</span><span className="font-mono">{dinero(r.efectivoEsperado)}</span></div>
-            </div>
+                <div className="mt-3 rounded-lg bg-canvas px-3 py-2 text-[13px]">
+                  <div className="flex justify-between"><span>Fondo</span><span className="font-mono">{dinero(r.fondo)}</span></div>
+                  {r.ingresos > 0 && <div className="flex justify-between"><span>Ingresos</span><span className="font-mono">+{dinero(r.ingresos)}</span></div>}
+                  {r.retiros > 0 && <div className="flex justify-between"><span>Retiros</span><span className="font-mono">−{dinero(r.retiros)}</span></div>}
+                  <div className="flex justify-between font-semibold"><span>Efectivo que debería haber</span><span className="font-mono">{dinero(r.efectivoEsperado)}</span></div>
+                </div>
+              </>
+            ) : (
+              <p className="text-[12.5px] text-muted">Los montos esperados los revisa el encargado. Tú cuentas y declaras al cerrar.</p>
+            )}
+
+            {s.pendientesMeseros.length > 0 && (
+              <div className="mt-3 rounded-lg border border-line p-3">
+                <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">Lo que cobraron los meseros</div>
+                {s.pendientesMeseros.map((p) => (
+                  <div key={p.userId} className="flex items-center gap-2 py-1 text-[13px]">
+                    <span className="flex-1">
+                      {p.nombre}
+                      {ver && p.esperado && (
+                        <span className="text-muted">
+                          {" "}
+                          · {Object.entries(p.esperado).map(([m, v]) => `${nombre(m)} ${dinero(v)}`).join(", ")}
+                        </span>
+                      )}
+                    </span>
+                    {p.declarado ? (
+                      ver && p.diferencia !== null ? (
+                        <Diferencia valor={p.diferencia} dinero={dinero} />
+                      ) : (
+                        <span className="pill bg-ok-bg text-ok">Recibido</span>
+                      )
+                    ) : (
+                      <Button size="small" icon={<TbHandFinger />} onClick={() => setRecibir({ sesion: s.id, p })}>
+                        Recibir
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="mt-3 flex flex-wrap gap-2">
               <Button icon={<TbPlus />} onClick={() => setMov({ sesion: s.id, type: "ingreso", amount: null, reason: "" })}>Ingreso</Button>
               <Button icon={<TbMinus />} onClick={() => setMov({ sesion: s.id, type: "retiro", amount: null, reason: "" })}>Retiro / gasto</Button>
               <Button
                 icon={<TbPrinter />}
                 onClick={async () => {
-                  const res = (await accion(() => api.post(`/cash/sessions/${s.id}/x`), "Corte X enviado a la impresora")) as { data: { data: any } } | null;
+                  const res = await accion((pin) => api.post(`/cash/sessions/${s.id}/x`, {}, conPin(pin)), "Corte X enviado a la impresora");
                   if (res) setInforme({ titulo: `Corte X · ${s.caja}`, datos: res.data.data });
                 }}
               >
                 Corte X
               </Button>
-              <Button type="primary" danger icon={<TbReceipt />} onClick={() => setZDe(s.id)}>
+              <Button
+                type="primary"
+                danger
+                icon={<TbReceipt />}
+                disabled={pendientes.length > 0}
+                title={pendientes.length ? "Primero recibe lo que cobraron los meseros" : ""}
+                onClick={() => setZDe(s.id)}
+              >
                 Corte Z (cerrar caja)
               </Button>
             </div>
@@ -215,15 +271,17 @@ export default function CajaPanel({
           {cerradas.map((s) => (
             <div key={s.id} className="flex items-center gap-2 border-t border-line-soft py-2 text-[13px] first:border-0">
               <span className="font-mono text-muted">Z#{s.zNumber}</span>
-              <span className="flex-1">{s.caja} · {s.userName} · {dayjs(s.closedAt).format("HH:mm")}</span>
-              <Diferencia valor={Number(s.difference ?? 0)} dinero={dinero} />
+              <span className="flex-1">
+                {s.caja} · {s.userName} · {dayjs(s.closedAt).format("HH:mm")}
+              </span>
+              {s.difference !== null ? <Diferencia valor={Number(s.difference)} dinero={dinero} /> : <span className="pill bg-line-soft text-muted">Cerrada</span>}
             </div>
           ))}
         </div>
       )}
 
       {/* Historial de turnos */}
-      {esDueno && historial && historial.length > 0 && (
+      {e.permisos.corteGlobal && historial && historial.length > 0 && (
         <div className="card p-4">
           <div className="mb-2 font-semibold">Turnos anteriores</div>
           <Collapse
@@ -244,7 +302,7 @@ export default function CajaPanel({
                     className="mt-2"
                     size="small"
                     icon={<TbPrinter />}
-                    onClick={() => accion(() => api.post(`/cash/shifts/${t.id}/reprint`), "Enviado a la impresora")}
+                    onClick={() => accion((pin) => api.post(`/cash/shifts/${t.id}/reprint`, {}, conPin(pin)), "Enviado a la impresora")}
                   >
                     Reimprimir
                   </Button>
@@ -263,7 +321,10 @@ export default function CajaPanel({
         onCancel={() => setAbrir(null)}
         onOk={async () => {
           if (!abrir) return;
-          const ok = await accion(() => api.post("/cash/open", { registerId: abrir.registerId, openingFloat: abrir.fondo ?? 0 }), "Caja abierta");
+          const ok = await accion(
+            (pin) => api.post("/cash/open", { registerId: abrir.registerId, openingFloat: abrir.fondo ?? 0 }, conPin(pin)),
+            "Caja abierta"
+          );
           if (ok) setAbrir(null);
         }}
       >
@@ -281,22 +342,7 @@ export default function CajaPanel({
               <div className="mb-1 text-[13px]">Fondo inicial (sencillo en efectivo)</div>
               <InputNumber className="w-full" size="large" min={0} prefix={simbolo} value={abrir.fondo} onChange={(v) => setAbrir({ ...abrir, fondo: v === null ? null : Number(v) })} />
             </div>
-            {esDueno && (
-              <Button
-                type="link"
-                className="!px-0"
-                onClick={() => {
-                  let nombreCaja = "";
-                  Modal.confirm({
-                    title: "Nueva caja",
-                    content: <Input placeholder="Barra, Caja 2…" onChange={(ev) => (nombreCaja = ev.target.value)} />,
-                    onOk: () => accion(() => api.post("/cash/registers", { name: nombreCaja }), "Caja creada"),
-                  });
-                }}
-              >
-                + Crear otra caja (si cobran en dos puntos a la vez)
-              </Button>
-            )}
+            {esDueno && <p className="text-[12px] text-muted">Las cajas y sus series de folio se crean en Infraestructura → Cajas y folios.</p>}
           </div>
         )}
       </Modal>
@@ -310,7 +356,7 @@ export default function CajaPanel({
         okButtonProps={{ disabled: !mov?.amount || !mov.reason.trim() }}
         onOk={async () => {
           if (!mov) return;
-          const ok = await accion(() => api.post(`/cash/sessions/${mov.sesion}/movements`, mov), "Registrado");
+          const ok = await accion((pin) => api.post(`/cash/sessions/${mov.sesion}/movements`, mov, conPin(pin)), "Registrado");
           if (ok) setMov(null);
         }}
       >
@@ -319,7 +365,9 @@ export default function CajaPanel({
             <InputNumber className="w-full" size="large" min={0} prefix={simbolo} value={mov.amount} onChange={(v) => setMov({ ...mov, amount: v === null ? null : Number(v) })} />
             <div className="flex flex-wrap gap-1">
               {(mov.type === "ingreso" ? ["Sencillo", "Aporte del dueño"] : ["Compra de insumos", "Gas", "Pago a proveedor", "Retiro del dueño"]).map((m) => (
-                <Button key={m} size="small" onClick={() => setMov({ ...mov, reason: m })}>{m}</Button>
+                <Button key={m} size="small" onClick={() => setMov({ ...mov, reason: m })}>
+                  {m}
+                </Button>
               ))}
             </div>
             <Input placeholder="Motivo" value={mov.reason} onChange={(ev) => setMov({ ...mov, reason: ev.target.value })} />
@@ -327,22 +375,64 @@ export default function CajaPanel({
         )}
       </Modal>
 
-      {zDe && (
-        <CorteZModal
-          api={api}
-          sesionId={zDe}
+      {/* Recibir lo de un mesero */}
+      {recibir && (
+        <DeclararModal
+          titulo={`Recibir de ${recibir.p.nombre}`}
+          texto="Cuenta lo que te entrega por cada método con el que cobró."
+          metodosFijos={recibir.p.metodos}
           simbolo={simbolo}
+          onClose={() => setRecibir(null)}
+          onConfirmar={async (declared) => {
+            const r = await accion(
+              (pin) => api.post(`/cash/sessions/${recibir.sesion}/collector`, { userId: recibir.p.userId, declared }, conPin(pin)),
+              `Recibido de ${recibir.p.nombre}`
+            );
+            if (r) {
+              setRecibir(null);
+              const d = r.data.data;
+              if (d.diferencia !== undefined) {
+                setInforme({ titulo: `Entrega de ${recibir.p.nombre}`, datos: { entrega: d } });
+              }
+            }
+          }}
+        />
+      )}
+
+      {zDe && (
+        <DeclararModal
+          titulo="Corte Z: cerrar caja"
+          texto="Cuenta el efectivo de la caja (con el fondo y lo que te entregaron los meseros) y suma lo cobrado por Yape, Plin y tarjeta."
+          simbolo={simbolo}
+          conNota
+          peligro
+          okText="Cerrar caja e imprimir"
           onClose={() => setZDe(null)}
-          onHecho={(datos) => {
-            setZDe(null);
-            setInforme({ titulo: `Corte Z #${datos.z}`, datos });
-            void cargar();
+          onConfirmar={async (declared, note) => {
+            const r = await accion((pin) => api.post(`/cash/sessions/${zDe}/z`, { declared, note }, conPin(pin)));
+            if (r) {
+              setZDe(null);
+              const d = r.data.data;
+              setInforme({ titulo: `Corte Z #${d.z}`, datos: d });
+            }
           }}
         />
       )}
 
       <Modal open={Boolean(informe)} title={informe?.titulo} footer={<Button type="primary" onClick={() => setInforme(null)}>Listo</Button>} onCancel={() => setInforme(null)}>
-        {informe && (informe.datos.turno ? <InformeGlobal datos={informe.datos} dinero={dinero} /> : <InformeCaja datos={informe.datos} dinero={dinero} />)}
+        {informe &&
+          (informe.datos.entrega ? (
+            <InformeEntrega d={informe.datos.entrega} dinero={dinero} />
+          ) : informe.datos.turno ? (
+            <InformeGlobal datos={informe.datos} dinero={dinero} />
+          ) : informe.datos.ciego ? (
+            <div className="py-2 text-center">
+              <p className="font-semibold text-ink">Caja cerrada.</p>
+              <p className="mt-1 text-[13px] text-muted">El ticket salió a la impresora. Las diferencias las revisa el encargado.</p>
+            </div>
+          ) : (
+            <InformeCaja datos={informe.datos} dinero={dinero} />
+          ))}
       </Modal>
     </div>
   );
@@ -357,21 +447,31 @@ function Diferencia({ valor, dinero }: { valor: number; dinero: (n: number) => s
   );
 }
 
-/** Corte Z a ciegas: se cuenta sin ver cuánto "debería" haber. */
-function CorteZModal({
-  api,
-  sesionId,
+/** Declaración a ciegas por método: se cuenta sin ver cuánto "debería" haber. */
+function DeclararModal({
+  titulo,
+  texto,
+  metodosFijos,
   simbolo,
+  conNota,
+  peligro,
+  okText = "Confirmar",
   onClose,
-  onHecho,
+  onConfirmar,
 }: {
-  api: AxiosInstance;
-  sesionId: number;
+  titulo: string;
+  texto: string;
+  metodosFijos?: string[];
   simbolo: string;
+  conNota?: boolean;
+  peligro?: boolean;
+  okText?: string;
   onClose: () => void;
-  onHecho: (datos: any) => void;
+  onConfirmar: (declared: Record<string, number | null>, note: string) => Promise<void>;
 }) {
-  const [declarado, setDeclarado] = useState<Record<string, number | null>>({ efectivo: null });
+  const [declarado, setDeclarado] = useState<Record<string, number | null>>(
+    Object.fromEntries((metodosFijos?.length ? metodosFijos : ["efectivo"]).map((m) => [m, null]))
+  );
   const [nota, setNota] = useState("");
   const [cargando, setCargando] = useState(false);
   const usados = Object.keys(declarado);
@@ -379,40 +479,36 @@ function CorteZModal({
   return (
     <Modal
       open
-      title="Corte Z: cerrar caja"
-      okText="Cerrar caja e imprimir"
-      okButtonProps={{ danger: true, loading: cargando }}
+      title={titulo}
+      okText={okText}
+      okButtonProps={{ danger: peligro, loading: cargando }}
       onCancel={onClose}
       onOk={async () => {
         setCargando(true);
         try {
-          const { data } = await api.post(`/cash/sessions/${sesionId}/z`, { declared: declarado, note: nota });
-          onHecho(data.data);
-        } catch (err) {
-          message.error(mensajeError(err));
+          await onConfirmar(declarado, nota);
         } finally {
           setCargando(false);
         }
       }}
     >
-      <p className="mb-3 text-[13px] text-muted">
-        Cuenta el efectivo de la caja (con el fondo) y suma lo cobrado por Yape, Plin y tarjeta. El sistema te dirá si cuadra
-        después de cerrar.
-      </p>
+      <p className="mb-3 text-[13px] text-muted">{texto}</p>
       {usados.map((m) => (
         <div key={m} className="mb-2 flex items-center gap-2">
           <span className="w-28 text-[13px]">{nombre(m)}</span>
           <InputNumber className="flex-1" min={0} prefix={simbolo} value={declarado[m]} onChange={(v) => setDeclarado({ ...declarado, [m]: v === null ? null : Number(v) })} />
         </div>
       ))}
-      <div className="mb-3 flex flex-wrap gap-1">
-        {METODOS.filter((m) => !usados.includes(m.value)).map((m) => (
-          <Button key={m.value} size="small" icon={<TbPlus />} onClick={() => setDeclarado({ ...declarado, [m.value]: null })}>
-            {m.label}
-          </Button>
-        ))}
-      </div>
-      <Input placeholder="Nota (opcional)" value={nota} onChange={(ev) => setNota(ev.target.value)} />
+      {!metodosFijos && (
+        <div className="mb-3 flex flex-wrap gap-1">
+          {METODOS.filter((m) => !usados.includes(m.value)).map((m) => (
+            <Button key={m.value} size="small" icon={<TbPlus />} onClick={() => setDeclarado({ ...declarado, [m.value]: null })}>
+              {m.label}
+            </Button>
+          ))}
+        </div>
+      )}
+      {conNota && <Input placeholder="Nota (opcional)" value={nota} onChange={(ev) => setNota(ev.target.value)} />}
     </Modal>
   );
 }
@@ -422,6 +518,19 @@ function Fila({ izq, der, fuerte }: { izq: string; der: string; fuerte?: boolean
     <div className={`flex justify-between py-0.5 text-[13px] ${fuerte ? "font-semibold" : ""}`}>
       <span>{izq}</span>
       <span className="font-mono">{der}</span>
+    </div>
+  );
+}
+
+function InformeEntrega({ d, dinero }: { d: any; dinero: (n: number) => string }) {
+  return (
+    <div>
+      {Object.keys(d.declarado).map((m) => (
+        <Fila key={m} izq={nombre(m)} der={`${dinero(d.declarado[m])} / ${dinero(d.esperado?.[m] ?? 0)}`} />
+      ))}
+      <div className="mt-2 flex justify-end">
+        <Diferencia valor={d.diferencia} dinero={dinero} />
+      </div>
     </div>
   );
 }
@@ -445,7 +554,9 @@ function InformeCaja({ datos, dinero }: { datos: any; dinero: (n: number) => str
           {datos.lineas.map((l: any) => (
             <div key={l.metodo} className="flex items-center justify-between py-1 text-[13px]">
               <span>{nombre(l.metodo)}</span>
-              <span className="font-mono text-muted">{Number(l.declarado).toFixed(2)} / {Number(l.esperado).toFixed(2)}</span>
+              <span className="font-mono text-muted">
+                {Number(l.declarado).toFixed(2)} / {Number(l.esperado).toFixed(2)}
+              </span>
               <Diferencia valor={l.diferencia} dinero={dinero} />
             </div>
           ))}
@@ -462,10 +573,14 @@ function InformeGlobal({ datos, dinero }: { datos: any; dinero: (n: number) => s
   if (!datos) return null;
   return (
     <div>
-      <div className="mb-2 text-[12.5px] text-muted">{datos.apertura} → {datos.cierre} · cerró {datos.cerradoPor}</div>
+      <div className="mb-2 text-[12.5px] text-muted">
+        {datos.apertura} → {datos.cierre} · cerró {datos.cerradoPor}
+      </div>
       {(datos.sesiones ?? []).map((s: any) => (
         <div key={s.z} className="flex items-center justify-between py-1 text-[13px]">
-          <span>Z#{s.z} {s.caja} · {s.usuario}</span>
+          <span>
+            Z#{s.z} {s.caja} · {s.usuario}
+          </span>
           <Diferencia valor={s.diferencia} dinero={dinero} />
         </div>
       ))}

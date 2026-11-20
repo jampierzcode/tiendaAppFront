@@ -86,6 +86,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
 }) => {
   const [form] = Form.useForm();
   const esRestaurante = useEsRestaurante();
+  const [areas, setAreas] = useState<{ id: number; name: string }[]>([]);
   const { business } = useBusiness();
   const impuesto = impuestoDe((business as any)?.country);
   const [loading, setLoading] = useState(false);
@@ -154,7 +155,14 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         setTags(t.data.data ?? []);
       })
       .catch(() => message.error("No se pudieron cargar categorías y etiquetas"));
-  }, [open]);
+    // Áreas de impresión del PDV de salón (si el plan no lo incluye, el campo no aparece).
+    if (esRestaurante) {
+      apiTienda
+        .get("/salon/areas")
+        .then((r) => setAreas(r.data.data ?? []))
+        .catch(() => setAreas([]));
+    }
+  }, [open, esRestaurante]);
 
   useEffect(() => {
     if (editData) {
@@ -173,6 +181,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
           keyOf(l.categoryId, l.subcategoryId)
         ),
         tagIds: (editData.tags ?? []).map((t: any) => t.id),
+        productionAreaId: editData.productionAreaId ?? 0,
       });
       setHasVariations(productoTieneVariaciones(editData));
       setFotosExtra([]);
@@ -202,6 +211,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         unlimitedStock: false,
         aiFaqs: [],
         stock: 0,
+        productionAreaId: 0,
       });
       setHasVariations(false);
       setSelectedImage(null);
@@ -278,6 +288,7 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
         category_links,
         tag_ids,
         price_mode: priceMode,
+        ...(esRestaurante && areas.length ? { production_area_id: values.productionAreaId || null } : {}),
       };
 
       // El stock inicial solo existe al crear. Después se ajusta con el botón
@@ -439,6 +450,23 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
               options={categoryOptions}
             />
           </Form.Item>
+
+          {esRestaurante && areas.length > 0 && (
+            <Form.Item
+              label="Área de impresión"
+              name="productionAreaId"
+              extra={
+                <span>
+                  A qué área sale la comanda de este plato (Cocina, Barra…).{" "}
+                  <a href={`${window.location.pathname.split("/").slice(0, 3).join("/")}/infraestructura`}>Configurar áreas</a>
+                </span>
+              }
+            >
+              <Select
+                options={[{ value: 0, label: "Según su categoría" }, ...areas.map((a) => ({ value: a.id, label: a.name }))]}
+              />
+            </Form.Item>
+          )}
 
           {!esRestaurante && (
           <Form.Item

@@ -51,7 +51,7 @@ import WhatsappPage from "./pages/admin/WhatsappPage";
 import SellerAgentPage from "./pages/admin/SellerAgentPage";
 import IngredientsPage from "./pages/admin/IngredientsPage";
 import SalonPanel from "./salon/SalonPanel";
-import SalonConfig from "./salon/SalonConfig";
+import Infraestructura from "./salon/Infraestructura";
 import CentralImpresion from "./salon/CentralImpresion";
 import PdvPersonal from "./salon/PdvPersonal";
 import CajaPage from "./salon/CajaPage";
@@ -80,7 +80,8 @@ export default function App() {
           <Route path="/suscripcion" element={<Subscribe />} />
           <Route path="/mis-pedidos" element={<MisPedidosRedirect />} />
           {/* Comandero del personal (meseras): entra con nombre y PIN, sin correo */}
-          <Route path="/pdv/:uuid" element={<PdvPersonal />} />
+          <Route path="/pdv" element={<PdvPersonal />} />
+          <Route path="/pdv/:uuid" element={<Navigate to="/pdv" replace />} />
 
           {/* Tienda pública: sin sesión, es lo que abre el cliente del QR */}
           <Route
@@ -188,7 +189,8 @@ export default function App() {
             <Route path="vendedor-ia" element={<ConFuncion f="vendedor_ia"><SellerAgentPage /></ConFuncion>} />
             <Route path="ingredients" element={<ConFuncion f="insumos"><IngredientsPage /></ConFuncion>} />
             <Route path="salon" element={<ConFuncion f="salon"><SalonPanel /></ConFuncion>} />
-            <Route path="salon-config" element={<ConFuncion f="salon"><SalonConfig /></ConFuncion>} />
+            <Route path="infraestructura" element={<ConFuncion f="salon"><Infraestructura /></ConFuncion>} />
+            <Route path="salon-config" element={<Navigate to="../infraestructura" replace />} />
             <Route path="impresion" element={<ConFuncion f="salon"><CentralImpresion /></ConFuncion>} />
             <Route path="caja" element={<ConFuncion f="salon"><CajaPage /></ConFuncion>} />
             {/* Subruta desconocida dentro del panel: al inicio, que para un

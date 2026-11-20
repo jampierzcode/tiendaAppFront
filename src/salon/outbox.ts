@@ -8,7 +8,15 @@ import type { LineaCarrito } from "./api";
  */
 export interface ComandaPendiente {
   clientRequestId: string;
-  tableId: number;
+  /** Destino: una mesa, una cuenta abierta, o una cuenta nueva sin mesa. */
+  tableId?: number | null;
+  orderId?: number | null;
+  service?: "para_llevar" | "delivery" | null;
+  alias?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  deliveryAddress?: string | null;
+  /** Para mostrar: "Mesa 4", "Juan (delivery)"… */
   tableName: string;
   guests: number | null;
   items: LineaCarrito[];
@@ -57,7 +65,13 @@ export async function enviarPendientes(uuid: string, api: AxiosInstance): Promis
       if (c.error) continue;
       try {
         await api.post("/command", {
-          tableId: c.tableId,
+          tableId: c.tableId ?? null,
+          orderId: c.orderId ?? null,
+          service: c.service ?? null,
+          alias: c.alias ?? null,
+          customerName: c.customerName ?? null,
+          customerPhone: c.customerPhone ?? null,
+          deliveryAddress: c.deliveryAddress ?? null,
           clientRequestId: c.clientRequestId,
           guests: c.guests,
           items: c.items.map((l) => ({

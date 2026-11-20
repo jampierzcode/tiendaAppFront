@@ -20,6 +20,7 @@ export const FUNCION_DE_PANTALLA: Record<string, string> = {
   purchases: "compras",
   salon: "salon",
   "salon-config": "salon",
+  infraestructura: "salon",
   impresion: "salon",
   caja: "salon",
 };
