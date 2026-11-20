@@ -40,9 +40,13 @@ const ETIQUETA: Record<string, string> = {
 const clave = (id: number) => `printer-${id}`;
 
 /** Cómo imprime esta central a cada impresora (se guarda en este equipo). */
-type Conexion = "bluetooth" | "sistema";
-const conexionDe = (id: number): Conexion =>
-  (localStorage.getItem(`pdv_con_${id}`) as Conexion) || (hayBluetooth() ? "bluetooth" : "sistema");
+type Conexion = "bluetooth" | "sistema" | "ninguna";
+/** Sin elegir no imprime: así nunca se abre el diálogo de impresión por sorpresa. */
+const conexionDe = (id: number): Conexion => (localStorage.getItem(`pdv_con_${id}`) as Conexion) || "ninguna";
+
+/** Solo se imprime solo lo reciente; lo viejo (de horas atrás) se decide a mano. */
+const RECIENTE_MS = 15 * 60_000;
+const esReciente = (j: { createdAt: string }) => Date.now() - new Date(j.createdAt).getTime() < RECIENTE_MS;
 
 /**
  * Central de impresión: el celular Android del local que recibe las
@@ -61,6 +65,9 @@ export default function CentralImpresion() {
   const [, setTick] = useState(0);
   const [historial, setHistorial] = useState<Job[]>([]);
   const [esperando, setEsperando] = useState<Job[]>([]);
+  const [atrasados, setAtrasados] = useState<Job[]>([]);
+  /** Atrasados que el usuario pidió imprimir igual. */
+  const forzar = useRef<Set<number>>(new Set());
   const [nueva, setNueva] = useState("");
   const ocupado = useRef(false);
   const wake = useRef<{ release?: () => Promise<void> } | null>(null);
@@ -104,16 +111,20 @@ export default function CentralImpresion() {
       const { data } = await api.get("/print-queue");
       const lista: Impresora[] = data.data.printers;
       setImpresoras(lista);
+      const todos = data.data.jobs as Job[];
+      setAtrasados(todos.filter((j) => !esReciente(j) && !forzar.current.has(j.id)));
+      const porImprimir = todos.filter((j) => esReciente(j) || forzar.current.has(j.id));
       if (!activa) {
-        setEsperando(data.data.jobs);
+        setEsperando(porImprimir);
         return;
       }
       const sinImpresora: Job[] = [];
-      for (const job of data.data.jobs as Job[]) {
+      for (const job of porImprimir) {
         const destino = job.printerId ?? caja ?? (lista.length === 1 ? lista[0].id : null);
         const imp = lista.find((p) => p.id === destino);
-        const porSistema = imp ? conexionDe(imp.id) === "sistema" : false;
-        if (!imp || (!porSistema && !(await reconectar(clave(imp.id))))) {
+        const con = imp ? conexionDe(imp.id) : "ninguna";
+        const porSistema = con === "sistema";
+        if (!imp || con === "ninguna" || (!porSistema && !(await reconectar(clave(imp.id))))) {
           sinImpresora.push(job);
           continue;
         }
@@ -181,7 +192,7 @@ export default function CentralImpresion() {
     <div className="mx-auto max-w-3xl">
       <PageHeader
         titulo="Central de impresión"
-        descripcion="Deja esta pantalla abierta en el equipo que está junto a las impresoras: un celular o tablet Android (Bluetooth) o la PC de caja (impresora USB o de red). Todo lo que se comanda o cobra en el local sale por aquí."
+        descripcion="Es la pantalla que imprime. Ábrela en el equipo que está junto a las impresoras (un celular o tablet Android con Bluetooth, o la PC de caja con su impresora), elige cómo se conecta cada impresora y actívala: todo lo que se comanda o cobra en el local sale por aquí. Las impresoras y a qué área van se crean en Infraestructura."
       />
 
       <Alert
@@ -216,6 +227,42 @@ export default function CentralImpresion() {
         {esperando.length > 0 && <Tag color="orange">{esperando.length} en espera</Tag>}
       </div>
 
+      {atrasados.length > 0 && (
+        <Alert
+          className="mb-4"
+          type="info"
+          showIcon
+          message={`${atrasados.length} ticket(s) de hace más de 15 minutos sin imprimir`}
+          description={
+            <div>
+              <p className="mb-2 text-[12.5px]">No se imprimen solos para no sacar de golpe comandas viejas. ¿Qué hago con ellos?</p>
+              <div className="flex gap-2">
+                <Button
+                  size="small"
+                  onClick={() => {
+                    atrasados.forEach((j) => forzar.current.add(j.id));
+                    ahora();
+                  }}
+                >
+                  Imprimirlos igual
+                </Button>
+                <Button
+                  size="small"
+                  danger
+                  onClick={async () => {
+                    await api.post("/print-jobs/discard", { ids: atrasados.map((j) => j.id) });
+                    message.success("Descartados");
+                    ahora();
+                  }}
+                >
+                  Descartarlos
+                </Button>
+              </div>
+            </div>
+          }
+        />
+      )}
+
       {esperando.length > 0 && activa && (
         <Alert
           className="mb-4"
@@ -239,7 +286,9 @@ export default function CentralImpresion() {
                   {p.name} <span className="text-[12px] font-normal text-muted">{p.paperWidth} mm</span>
                 </div>
                 <div className={`text-[12px] ${ok ? "text-ok" : "text-muted"}`}>
-                  {con === "sistema"
+                  {con === "ninguna"
+                    ? "○ Elige cómo se conecta: Bluetooth (celular Android) o Esta PC"
+                    : con === "sistema"
                     ? "● Impresora de esta PC (la predeterminada)"
                     : ok
                       ? `● Conectada (${nombreEquipo(clave(p.id))})`
@@ -256,7 +305,7 @@ export default function CentralImpresion() {
                   repintar();
                 }}
               >
-                <Radio.Button value="bluetooth" disabled={!hayBluetooth()}>
+                <Radio.Button value="bluetooth" disabled={!hayBluetooth()} title={hayBluetooth() ? "" : "Este navegador no tiene Bluetooth: usa Chrome en Android"}>
                   Bluetooth
                 </Radio.Button>
                 <Radio.Button value="sistema">Esta PC</Radio.Button>

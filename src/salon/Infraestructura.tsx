@@ -15,7 +15,23 @@ import {
   Tag,
   message,
 } from "antd";
-import { TbCopy, TbPlus, TbPrinter, TbRefresh, TbTrash } from "react-icons/tb";
+import {
+  TbAdjustments,
+  TbArmchair,
+  TbCash,
+  TbCopy,
+  TbDeviceMobile,
+  TbEdit,
+  TbFlame,
+  TbPlus,
+  TbPrinter,
+  TbReceipt,
+  TbRefresh,
+  TbShieldLock,
+  TbToolsKitchen2,
+  TbTrash,
+  TbUsers,
+} from "react-icons/tb";
 import dayjs from "dayjs";
 import PageHeader from "../components/ui/PageHeader";
 import { crearApiSalon, mensajeError } from "./api";
@@ -66,7 +82,8 @@ interface Ajustes {
 interface Config {
   printers: { id: number; name: string; paperWidth: number }[];
   areas: { id: number; name: string; printerId: number | null }[];
-  tables: { id: number; name: string; zone: string | null; isActive: boolean }[];
+  tables: { id: number; name: string; zone: string | null; diningAreaId: number | null; isActive: boolean }[];
+  areasComedor: { id: number; name: string; sortOrder: number }[];
   staff: { id: number; name: string; role: Rol; isActive: boolean }[];
   categories: { id: number; name: string; productionAreaId: number | null }[];
   products: { id: number; name: string; productionAreaId: number | null; categoryIds: number[] }[];
@@ -144,15 +161,15 @@ export default function Infraestructura() {
         activeKey={params.get("tab") ?? "mesas"}
         onChange={(k) => setParams({ tab: k }, { replace: true })}
         items={[
-          { key: "mesas", label: "Mesas", children: <TabMesas {...props} /> },
-          { key: "areas", label: "Áreas e impresoras", children: <TabAreas {...props} /> },
-          { key: "platos", label: "Platos por área", children: <TabPlatos {...props} /> },
-          { key: "cajas", label: "Cajas y folios", children: <TabCajas {...props} /> },
-          { key: "personal", label: "Personal", children: <TabPersonal {...props} /> },
-          { key: "permisos", label: "Permisos", children: <TabPermisos {...props} /> },
-          { key: "equipos", label: "Equipos", children: <TabEquipos {...props} /> },
-          { key: "tickets", label: "Tickets", children: <TabTickets {...props} /> },
-          { key: "opciones", label: "Opciones", children: <TabOpciones {...props} /> },
+          { key: "mesas", label: <span className="flex items-center gap-1.5"><TbArmchair />Comedor: áreas y mesas</span>, children: <TabMesas {...props} /> },
+          { key: "areas", label: <span className="flex items-center gap-1.5"><TbFlame />Áreas de producción</span>, children: <TabAreas {...props} /> },
+          { key: "platos", label: <span className="flex items-center gap-1.5"><TbToolsKitchen2 />Platos por área</span>, children: <TabPlatos {...props} /> },
+          { key: "cajas", label: <span className="flex items-center gap-1.5"><TbCash />Cajas y folios</span>, children: <TabCajas {...props} /> },
+          { key: "personal", label: <span className="flex items-center gap-1.5"><TbUsers />Personal</span>, children: <TabPersonal {...props} /> },
+          { key: "permisos", label: <span className="flex items-center gap-1.5"><TbShieldLock />Permisos</span>, children: <TabPermisos {...props} /> },
+          { key: "equipos", label: <span className="flex items-center gap-1.5"><TbDeviceMobile />Equipos</span>, children: <TabEquipos {...props} /> },
+          { key: "tickets", label: <span className="flex items-center gap-1.5"><TbReceipt />Tickets</span>, children: <TabTickets {...props} /> },
+          { key: "opciones", label: <span className="flex items-center gap-1.5"><TbAdjustments />Opciones</span>, children: <TabOpciones {...props} /> },
         ]}
       />
     </div>
@@ -162,47 +179,108 @@ export default function Infraestructura() {
 // ---------------------------------------------------------------------- mesas
 
 function TabMesas({ c, api, hacer }: TabProps) {
-  const [cantidad, setCantidad] = useState<number | null>(10);
-  const [zona, setZona] = useState("");
-  const [nombre, setNombre] = useState("");
-  const zonas = [...new Set(c.tables.map((t) => t.zone ?? ""))];
+  const [nueva, setNueva] = useState("");
+  const sinArea = c.tables.filter((t) => !t.diningAreaId);
   return (
     <div className="space-y-4">
-      <div className="card p-4">
-        <div className="mb-2 font-semibold">Crear varias mesas</div>
-        <div className="flex flex-wrap gap-2">
-          <InputNumber min={1} max={100} value={cantidad} onChange={setCantidad} addonAfter="mesas" />
-          <Input className="max-w-[200px]" placeholder="Zona (opcional): Terraza" value={zona} onChange={(e) => setZona(e.target.value)} />
-          <Button type="primary" icon={<TbPlus />} onClick={() => hacer(() => api.post("/tables/bulk", { count: cantidad, zone: zona }), "Mesas creadas")}>
-            Crear
-          </Button>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Input className="max-w-[200px]" placeholder="O una: Barra 1" value={nombre} onChange={(e) => setNombre(e.target.value)} />
-          <Button onClick={() => hacer(() => api.post("/tables", { name: nombre, zone: zona || null }), "Mesa creada").then((ok) => ok && setNombre(""))}>
-            Agregar una
-          </Button>
-        </div>
+      <div className="card p-4 text-[13px] text-ink-soft">
+        Las <b>áreas del comedor</b> son los espacios donde están las mesas: Primer piso, Segundo piso, Terraza, Patio… En el Punto de
+        venta se filtra por ellas. (Las áreas de <i>producción</i>, como Cocina o Barra, son otra cosa: están en su pestaña).
       </div>
-      {zonas.map((z) => (
-        <div key={z} className="card p-4">
-          <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">{z || "Sin zona"}</div>
+      {c.areasComedor.map((a) => (
+        <AreaComedor key={a.id} area={a} mesas={c.tables.filter((t) => t.diningAreaId === a.id)} api={api} hacer={hacer} />
+      ))}
+      {sinArea.length > 0 && (
+        <div className="card p-4">
+          <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">Mesas sin área</div>
           <div className="flex flex-wrap gap-2">
-            {c.tables
-              .filter((t) => (t.zone ?? "") === z)
-              .map((t) => (
-                <Tag key={t.id} className="!px-3 !py-1 text-[14px]">
-                  {t.name}
-                  <Popconfirm title="¿Borrar la mesa?" onConfirm={() => hacer(() => api.delete(`/tables/${t.id}`))}>
-                    <TbTrash className="ml-2 inline cursor-pointer text-danger" />
-                  </Popconfirm>
-                </Tag>
-              ))}
+            {sinArea.map((t) => (
+              <Mesa key={t.id} t={t} c={c} api={api} hacer={hacer} />
+            ))}
           </div>
         </div>
-      ))}
-      {!c.tables.length && <div className="card p-4 text-muted">Aún no hay mesas.</div>}
+      )}
+      <div className="card flex flex-wrap items-center gap-2 p-4">
+        <Input className="max-w-[260px]" placeholder="Nueva área: Primer piso, Terraza…" value={nueva} onChange={(e) => setNueva(e.target.value)} />
+        <Button type="primary" icon={<TbPlus />} onClick={() => hacer(() => api.post("/dining-areas", { name: nueva }), "Área creada").then((ok) => ok && setNueva(""))}>
+          Agregar área
+        </Button>
+      </div>
     </div>
+  );
+}
+
+function AreaComedor({
+  area,
+  mesas,
+  api,
+  hacer,
+}: {
+  area: Config["areasComedor"][number];
+  mesas: Config["tables"];
+  api: Api;
+  hacer: Hacer;
+}) {
+  const [cantidad, setCantidad] = useState<number | null>(4);
+  const [prefijo, setPrefijo] = useState("");
+  const [una, setUna] = useState("");
+  return (
+    <div className="card p-4">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <TbArmchair className="text-[18px] text-brand-600" />
+        <Input
+          variant="borderless"
+          className="!max-w-[260px] !px-1 text-[15px] font-bold"
+          defaultValue={area.name}
+          suffix={<TbEdit className="text-muted" />}
+          onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== area.name && hacer(() => api.put(`/dining-areas/${area.id}`, { name: e.target.value }), "Área renombrada")}
+        />
+        <span className="text-[12px] text-muted">{mesas.length} mesas</span>
+        <Popconfirm title="¿Borrar el área?" description="Solo se puede si no tiene mesas." onConfirm={() => hacer(() => api.delete(`/dining-areas/${area.id}`))}>
+          <Button className="ml-auto" size="small" type="text" danger icon={<TbTrash />} />
+        </Popconfirm>
+      </div>
+      <div className="mb-3 flex flex-wrap gap-2">
+        {mesas.map((t) => (
+          <Mesa key={t.id} t={t} api={api} hacer={hacer} />
+        ))}
+        {!mesas.length && <span className="text-[13px] text-muted">Aún sin mesas.</span>}
+      </div>
+      <div className="flex flex-wrap items-center gap-2 border-t border-line-soft pt-3">
+        <span className="text-[12.5px] text-muted">Agregar</span>
+        <InputNumber min={1} max={100} value={cantidad} onChange={setCantidad} addonAfter="mesas" className="w-36" />
+        <Input className="max-w-[150px]" placeholder="Prefijo (opcional): T" value={prefijo} onChange={(e) => setPrefijo(e.target.value)} />
+        <Button icon={<TbPlus />} onClick={() => hacer(() => api.post("/tables/bulk", { count: cantidad, prefix: prefijo, diningAreaId: area.id }), "Mesas creadas")}>
+          Crear
+        </Button>
+        <span className="text-[12.5px] text-muted">o una:</span>
+        <Input className="max-w-[140px]" placeholder="Barra 1" value={una} onChange={(e) => setUna(e.target.value)} />
+        <Button onClick={() => hacer(() => api.post("/tables", { name: una, diningAreaId: area.id }), "Mesa creada").then((ok) => ok && setUna(""))}>
+          Agregar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function Mesa({ t, api, hacer, c }: { t: Config["tables"][number]; api: Api; hacer: Hacer; c?: Config }) {
+  return (
+    <Tag className="!flex !items-center !gap-2 !px-3 !py-1 text-[14px]">
+      {t.name}
+      {c && (
+        <Select
+          size="small"
+          variant="borderless"
+          placeholder="Mover a…"
+          className="w-28"
+          options={c.areasComedor.map((a) => ({ value: a.id, label: a.name }))}
+          onChange={(v) => hacer(() => api.put(`/tables/${t.id}`, { name: t.name, diningAreaId: v }), "Mesa movida")}
+        />
+      )}
+      <Popconfirm title="¿Borrar la mesa?" onConfirm={() => hacer(() => api.delete(`/tables/${t.id}`))}>
+        <TbTrash className="cursor-pointer text-danger" />
+      </Popconfirm>
+    </Tag>
   );
 }
 
@@ -246,7 +324,7 @@ function TabAreas({ c, api, hacer }: TabProps) {
         <p className="mt-2 text-[12px] text-muted">El Bluetooth se empareja en «Central de impresión», en el celular Android del local.</p>
       </div>
       <div className="card p-4">
-        <div className="mb-2 font-semibold">Áreas de impresión</div>
+        <div className="mb-2 font-semibold">Áreas de producción</div>
         {c.areas.map((a) => (
           <div key={a.id} className="flex flex-wrap items-center gap-2 border-t border-line-soft py-2 first:border-0">
             <Input
@@ -651,43 +729,44 @@ function TabEquipos({ c, api, hacer }: TabProps) {
 
 // -------------------------------------------------------------------- tickets
 
-const CAMPOS: Record<TipoTicket, { k: string; label: string }[]> = {
+/** Campos que se pueden ocultar, agrupados por la parte del ticket donde salen. */
+const CAMPOS: Record<TipoTicket, { k: string; label: string; parte: "titulo" | "pie" }[]> = {
   comanda: [
-    { k: "servicio", label: "Para llevar / Delivery en grande" },
-    { k: "mesero", label: "Mesero" },
-    { k: "hora", label: "Hora" },
-    { k: "ronda", label: "Número de ronda" },
-    { k: "cuenta", label: "Código de cuenta" },
+    { k: "servicio", label: "PARA LLEVAR / DELIVERY en grande", parte: "titulo" },
+    { k: "hora", label: "Hora", parte: "titulo" },
+    { k: "ronda", label: "Número de ronda", parte: "titulo" },
+    { k: "mesero", label: "Mesero", parte: "titulo" },
+    { k: "cuenta", label: "Código de cuenta", parte: "pie" },
   ],
   cuenta: [
-    { k: "ruc", label: "RUC" },
-    { k: "direccion", label: "Dirección" },
-    { k: "telefono", label: "Teléfono" },
-    { k: "folio", label: "Folio" },
-    { k: "mesero", label: "Mesero" },
-    { k: "comensales", label: "Personas" },
-    { k: "hora", label: "Fecha y hora" },
-    { k: "leyenda", label: "Leyenda (no es comprobante)" },
+    { k: "ruc", label: "RUC", parte: "titulo" },
+    { k: "direccion", label: "Dirección", parte: "titulo" },
+    { k: "telefono", label: "Teléfono", parte: "titulo" },
+    { k: "folio", label: "Folio", parte: "titulo" },
+    { k: "hora", label: "Fecha y hora", parte: "titulo" },
+    { k: "mesero", label: "Mesero", parte: "titulo" },
+    { k: "comensales", label: "Personas", parte: "titulo" },
+    { k: "leyenda", label: "Leyenda «no es comprobante»", parte: "pie" },
   ],
   nota_venta: [
-    { k: "ruc", label: "RUC" },
-    { k: "direccion", label: "Dirección" },
-    { k: "telefono", label: "Teléfono" },
-    { k: "folio", label: "Folio" },
-    { k: "mesero", label: "Mesero" },
-    { k: "hora", label: "Fecha y hora" },
-    { k: "pagos", label: "Métodos de pago" },
-    { k: "vuelto", label: "Vuelto" },
-    { k: "cajero", label: "Cajero" },
-    { k: "leyenda", label: "Leyenda" },
+    { k: "ruc", label: "RUC", parte: "titulo" },
+    { k: "direccion", label: "Dirección", parte: "titulo" },
+    { k: "telefono", label: "Teléfono", parte: "titulo" },
+    { k: "folio", label: "Folio", parte: "titulo" },
+    { k: "hora", label: "Fecha y hora", parte: "titulo" },
+    { k: "mesero", label: "Mesero", parte: "titulo" },
+    { k: "pagos", label: "Métodos de pago", parte: "pie" },
+    { k: "vuelto", label: "Vuelto", parte: "pie" },
+    { k: "cajero", label: "Cajero", parte: "pie" },
+    { k: "leyenda", label: "Leyenda", parte: "pie" },
   ],
   cancelacion: [
-    { k: "motivo", label: "Motivo" },
-    { k: "firma", label: "Línea de firma" },
+    { k: "motivo", label: "Motivo", parte: "pie" },
+    { k: "firma", label: "Línea de firma", parte: "pie" },
   ],
   corte: [
-    { k: "firma", label: "Línea de firma" },
-    { k: "top", label: "Más vendidos (corte global)" },
+    { k: "top", label: "Más vendidos (corte global)", parte: "pie" },
+    { k: "firma", label: "Línea de firma", parte: "pie" },
   ],
 };
 
@@ -781,11 +860,18 @@ function muestra(tipo: TipoTicket, estilo: unknown): TrabajoImpresion {
   };
 }
 
+const NIVELES = [
+  { value: 1, label: "Normal" },
+  { value: 2, label: "Alto" },
+  { value: 3, label: "Grande" },
+];
+
 function TabTickets({ c, api, hacer }: TabProps) {
   const [t, setT] = useState(c.ajustes.ticket);
-  const [tipo, setTipo] = useState<TipoTicket>("cuenta");
+  const [sel, setSel] = useState<TipoTicket | "negocio">("cuenta");
   const [papel, setPapel] = useState<58 | 80>(58);
   useEffect(() => setT(c.ajustes.ticket), [c.ajustes.ticket]);
+  const tipo: TipoTicket = sel === "negocio" ? "cuenta" : sel;
   const e = t.tipos[tipo];
   const setE = (cambios: Partial<EstiloTicket>) => setT({ ...t, tipos: { ...t.tipos, [tipo]: { ...e, ...cambios } } });
   const sucio = JSON.stringify(t) !== JSON.stringify(c.ajustes.ticket);
@@ -796,59 +882,99 @@ function TabTickets({ c, api, hacer }: TabProps) {
   };
   const vista = vistaPrevia(muestra(tipo, estilo), papel);
 
-  const Sec = ({ nombre, k }: { nombre: string; k: "titulo" | "detalle" | "total" }) => (
-    <div className="flex items-center gap-2">
-      <span className="w-20 text-[13px]">{nombre}</span>
-      <Segmented
-        size="small"
-        value={e[k].tamano ?? 1}
-        onChange={(v) => setE({ [k]: { ...e[k], tamano: v as 1 | 2 | 3 } })}
-        options={[
-          { value: 1, label: "Normal" },
-          { value: 2, label: "Alto" },
-          { value: 3, label: "Grande" },
-        ]}
-      />
-      <Switch size="small" checked={Boolean(e[k].negrita)} onChange={(v) => setE({ [k]: { ...e[k], negrita: v } })} />
-      <span className="text-[12px] text-muted">negrita</span>
-    </div>
-  );
-
-  return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
-      <div className="space-y-4">
-        <div className="card space-y-2 p-4">
-          <div className="font-semibold">Datos del negocio en los tickets</div>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <Input placeholder="Nombre comercial" value={t.nombre} onChange={(ev) => setT({ ...t, nombre: ev.target.value })} />
-            <Input placeholder="RUC" value={t.ruc} onChange={(ev) => setT({ ...t, ruc: ev.target.value })} />
-            <Input placeholder="Dirección" value={t.direccion} onChange={(ev) => setT({ ...t, direccion: ev.target.value })} />
-            <Input placeholder="Teléfono" value={t.telefono} onChange={(ev) => setT({ ...t, telefono: ev.target.value })} />
-          </div>
-          <Input.TextArea rows={2} maxLength={200} placeholder="Texto de encabezado (opcional)" value={t.encabezado} onChange={(ev) => setT({ ...t, encabezado: ev.target.value })} />
-          <Input.TextArea rows={2} maxLength={200} placeholder="Pie: Gracias por su visita…" value={t.pie} onChange={(ev) => setT({ ...t, pie: ev.target.value })} />
-          <Input placeholder="Leyenda: Documento no válido como comprobante de pago" value={t.leyenda} onChange={(ev) => setT({ ...t, leyenda: ev.target.value })} />
-        </div>
-
-        <div className="card space-y-3 p-4">
-          <Segmented value={tipo} onChange={(v) => setTipo(v as TipoTicket)} options={(Object.keys(NOMBRE_TIPO) as TipoTicket[]).map((k) => ({ value: k, label: NOMBRE_TIPO[k] }))} />
-          <Sec nombre="Título" k="titulo" />
-          <Sec nombre={tipo === "comanda" ? "Platos" : "Detalle"} k="detalle" />
-          {tipo !== "comanda" && <Sec nombre="Total" k="total" />}
-          <div className="flex items-center gap-2">
-            <span className="w-20 text-[13px]">Copias</span>
-            <InputNumber size="small" min={1} max={5} value={e.copias} onChange={(v) => setE({ copias: Number(v) || 1 })} />
-          </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1">
-            {CAMPOS[tipo].map((f) => (
-              <label key={f.k} className="flex items-center gap-1.5 text-[13px]">
+  /** Una parte del ticket: tamaño, negrita y los campos que salen en ella. */
+  const Parte = ({ nombre, k, campos }: { nombre: string; k: "titulo" | "detalle" | "total"; campos?: "titulo" | "pie" }) => (
+    <div className="border-t border-line-soft py-3 first:border-0">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="w-24 font-semibold text-ink">{nombre}</span>
+        <Select size="small" className="w-28" value={e[k].tamano ?? 1} options={NIVELES} onChange={(v) => setE({ [k]: { ...e[k], tamano: v } })} />
+        <label className="flex items-center gap-1.5 text-[12.5px] text-muted">
+          <Switch size="small" checked={Boolean(e[k].negrita)} onChange={(v) => setE({ [k]: { ...e[k], negrita: v } })} />
+          Negrita
+        </label>
+      </div>
+      {campos && CAMPOS[tipo].some((f) => f.parte === campos) && (
+        <div className="mt-2 grid gap-1.5 pl-1 sm:grid-cols-2">
+          {CAMPOS[tipo]
+            .filter((f) => f.parte === campos)
+            .map((f) => (
+              <label key={f.k} className="flex items-center gap-2 text-[13px]">
                 <Switch size="small" checked={e.campos?.[f.k] !== false} onChange={(v) => setE({ campos: { ...e.campos, [f.k]: v } })} />
                 {f.label}
               </label>
             ))}
-          </div>
         </div>
-        <div className="flex justify-end gap-2">
+      )}
+    </div>
+  );
+
+  const items: { k: TipoTicket | "negocio"; label: string; nota: string }[] = [
+    { k: "negocio", label: "Datos del negocio", nota: "Nombre, RUC, dirección, pie" },
+    { k: "comanda", label: "Comanda", nota: "Lo que sale en cocina y barra" },
+    { k: "cuenta", label: "Cuenta", nota: "Al imprimir la cuenta (con folio)" },
+    { k: "nota_venta", label: "Nota de venta", nota: "Al cobrar" },
+    { k: "cancelacion", label: "Cancelación", nota: "Cuenta cancelada" },
+    { k: "corte", label: "Cortes de caja", nota: "Corte X, Z y global" },
+  ];
+
+  return (
+    <div className="grid gap-4 xl:grid-cols-[220px_1fr_340px]">
+      {/* Tipos de ticket */}
+      <div className="card h-fit overflow-hidden p-0">
+        {items.map((i) => (
+          <button
+            key={i.k}
+            onClick={() => setSel(i.k)}
+            className={`block w-full border-b border-line-soft px-4 py-3 text-left last:border-0 ${sel === i.k ? "bg-brand-50" : "hover:bg-canvas"}`}
+          >
+            <span className={`block text-[13.5px] ${sel === i.k ? "font-bold text-brand-700" : "font-semibold text-ink"}`}>{i.label}</span>
+            <span className="block text-[11.5px] text-muted">{i.nota}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Edición */}
+      <div className="card h-fit p-4">
+        {sel === "negocio" ? (
+          <div className="space-y-2">
+            <div className="mb-1 font-bold text-ink">Datos del negocio</div>
+            <p className="text-[12.5px] text-muted">Salen arriba de la cuenta, la nota de venta y la cancelación.</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Input placeholder="Nombre comercial" value={t.nombre} onChange={(ev) => setT({ ...t, nombre: ev.target.value })} />
+              <Input placeholder="RUC" value={t.ruc} onChange={(ev) => setT({ ...t, ruc: ev.target.value })} />
+              <Input placeholder="Dirección" value={t.direccion} onChange={(ev) => setT({ ...t, direccion: ev.target.value })} />
+              <Input placeholder="Teléfono" value={t.telefono} onChange={(ev) => setT({ ...t, telefono: ev.target.value })} />
+            </div>
+            <Input.TextArea rows={2} maxLength={200} placeholder="Texto de encabezado (opcional)" value={t.encabezado} onChange={(ev) => setT({ ...t, encabezado: ev.target.value })} />
+            <Input.TextArea rows={2} maxLength={200} placeholder="Pie: Gracias por su visita…" value={t.pie} onChange={(ev) => setT({ ...t, pie: ev.target.value })} />
+            <Input placeholder="Leyenda: Documento no válido como comprobante de pago" value={t.leyenda} onChange={(ev) => setT({ ...t, leyenda: ev.target.value })} />
+          </div>
+        ) : (
+          <>
+            <div className="mb-1 flex items-center gap-2">
+              <span className="flex-1 font-bold text-ink">{NOMBRE_TIPO[tipo]}</span>
+              <span className="text-[12.5px] text-muted">Copias</span>
+              <InputNumber size="small" min={1} max={5} value={e.copias} onChange={(v) => setE({ copias: Number(v) || 1 })} />
+            </div>
+            <Parte nombre="Encabezado" k="titulo" campos="titulo" />
+            <Parte nombre={tipo === "comanda" ? "Platos" : "Detalle"} k="detalle" />
+            {tipo !== "comanda" && <Parte nombre="Total" k="total" campos="pie" />}
+            {tipo === "comanda" && CAMPOS.comanda.some((f) => f.parte === "pie") && (
+              <div className="border-t border-line-soft pt-3">
+                <div className="mb-2 font-semibold text-ink">Pie</div>
+                {CAMPOS.comanda
+                  .filter((f) => f.parte === "pie")
+                  .map((f) => (
+                    <label key={f.k} className="flex items-center gap-2 text-[13px]">
+                      <Switch size="small" checked={e.campos?.[f.k] !== false} onChange={(v) => setE({ campos: { ...e.campos, [f.k]: v } })} />
+                      {f.label}
+                    </label>
+                  ))}
+              </div>
+            )}
+          </>
+        )}
+        <div className="mt-4 flex justify-end gap-2 border-t border-line pt-3">
           {sucio && <Button onClick={() => setT(c.ajustes.ticket)}>Deshacer</Button>}
           <Button icon={<TbPrinter />} onClick={() => hacer(() => api.post("/print-test", { kind: "muestra" }), "Cuenta de muestra enviada a la central")}>
             Imprimir muestra
@@ -859,7 +985,8 @@ function TabTickets({ c, api, hacer }: TabProps) {
         </div>
       </div>
 
-      <div>
+      {/* Papel */}
+      <div className="xl:sticky xl:top-4 xl:h-fit">
         <div className="mb-2 flex items-center gap-2 text-[12px] text-muted">
           Vista previa
           <Segmented
@@ -889,6 +1016,7 @@ function TabTickets({ c, api, hacer }: TabProps) {
             </div>
           ))}
         </div>
+        <p className="mt-2 text-center text-[11.5px] text-muted">Vista aproximada: el papel real lo dibuja la impresora.</p>
       </div>
     </div>
   );
