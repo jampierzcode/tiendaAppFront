@@ -17,6 +17,7 @@ import {
   TbChartHistogram,
   TbChefHat,
   TbArmchair,
+  TbFlame,
   TbCash,
   TbPrinter,
   TbSettings,
@@ -212,6 +213,11 @@ export default function Sidebar({
                 titulo: "Caja y cortes",
                 url: `/b/${uuid_business}/caja`,
                 icono: <TbCash />,
+              },
+              {
+                titulo: "Monitor de producción",
+                url: `/b/${uuid_business}/monitor`,
+                icono: <TbFlame />,
               },
               {
                 titulo: "Infraestructura",

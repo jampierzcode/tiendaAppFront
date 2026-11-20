@@ -72,7 +72,15 @@ interface Config {
   products: { id: number; name: string; productionAreaId: number | null; categoryIds: number[] }[];
   registers: { id: number; name: string; folioSeriesId: number | null }[];
   series: { id: number; code: string; name: string | null; nextNumber: number; isActive: boolean }[];
-  devices: { id: number; name: string; cashRegisterId: number | null; lastSeenAt: string | null; createdAt: string }[];
+  devices: {
+    id: number;
+    name: string;
+    mode: "pdv" | "monitor";
+    areaIds: number[];
+    cashRegisterId: number | null;
+    lastSeenAt: string | null;
+    createdAt: string;
+  }[];
   pairingCode: string;
   ajustes: Ajustes;
   catalogoPermisos: Record<string, DefPermiso>;
@@ -594,13 +602,35 @@ function TabEquipos({ c, api, hacer }: TabProps) {
               defaultValue={d.name}
               onBlur={(e) => e.target.value.trim() !== d.name && hacer(() => api.put(`/devices/${d.id}`, { name: e.target.value }))}
             />
-            <span className="text-[12px] text-muted">cobra en</span>
             <Select
-              className="w-48"
-              value={d.cashRegisterId ?? 0}
-              options={[{ value: 0, label: "La caja abierta" }, ...c.registers.map((r) => ({ value: r.id, label: r.name }))]}
-              onChange={(v) => hacer(() => api.put(`/devices/${d.id}`, { cashRegisterId: v || null }))}
+              className="w-44"
+              value={d.mode}
+              options={[
+                { value: "pdv", label: "PDV (con PIN)" },
+                { value: "monitor", label: "Monitor de producción" },
+              ]}
+              onChange={(v) => hacer(() => api.put(`/devices/${d.id}`, { mode: v }), v === "monitor" ? "Ahora es monitor: recarga la página en ese equipo" : "Guardado")}
             />
+            {d.mode === "monitor" ? (
+              <Select
+                mode="multiple"
+                className="min-w-48"
+                placeholder="Todas las áreas"
+                value={d.areaIds}
+                options={c.areas.map((a) => ({ value: a.id, label: a.name }))}
+                onChange={(v) => hacer(() => api.put(`/devices/${d.id}`, { areaIds: v }))}
+              />
+            ) : (
+              <>
+                <span className="text-[12px] text-muted">cobra en</span>
+                <Select
+                  className="w-44"
+                  value={d.cashRegisterId ?? 0}
+                  options={[{ value: 0, label: "La caja abierta" }, ...c.registers.map((r) => ({ value: r.id, label: r.name }))]}
+                  onChange={(v) => hacer(() => api.put(`/devices/${d.id}`, { cashRegisterId: v || null }))}
+                />
+              </>
+            )}
             <span className="flex-1 text-[12px] text-muted">{d.lastSeenAt ? `Último uso ${dayjs(d.lastSeenAt).format("DD/MM HH:mm")}` : "Sin uso"}</span>
             <Popconfirm title="¿Desvincular el equipo?" description="Se cierran las sesiones abiertas en él." onConfirm={() => hacer(() => api.delete(`/devices/${d.id}`), "Equipo desvinculado")}>
               <Button size="small" danger>
@@ -612,6 +642,7 @@ function TabEquipos({ c, api, hacer }: TabProps) {
         {!c.devices.length && <div className="text-muted">Aún no hay equipos vinculados.</div>}
         <p className="mt-2 text-[12px] text-muted">
           «Cobra en»: si hay varias cajas abiertas, los cobros hechos desde ese equipo van a esa caja (y su serie de folios).
+          Un equipo en modo «Monitor de producción» (una tablet o TV en cocina o barra) muestra los platos de sus áreas sin pedir PIN.
         </p>
       </div>
     </div>

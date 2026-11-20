@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Input, Modal, Spin, message } from "antd";
 import { TbBackspace, TbDeviceMobile, TbLink } from "react-icons/tb";
 import SalonApp from "./SalonApp";
+import MonitorProduccion, { type TicketMonitor } from "./MonitorProduccion";
 import {
   apiPublica,
   crearApiSalon,
@@ -38,8 +39,9 @@ export default function PdvPersonal() {
     apiPublica
       .post("/pos/device", { deviceToken: equipo.deviceToken })
       .then(({ data }) => {
-        const actualizado = { ...equipo, negocio: data.data.negocio, equipo: data.data.equipo };
+        const actualizado = { ...equipo, negocio: data.data.negocio, equipo: data.data.equipo, modo: data.data.modo };
         guardarEquipo(actualizado);
+        setEquipo(actualizado);
       })
       .catch((e) => {
         if ((e as { response?: unknown }).response) {
@@ -74,6 +76,8 @@ export default function PdvPersonal() {
             setEquipo(e);
           }}
         />
+      ) : equipo.modo === "monitor" ? (
+        <MonitorEquipo equipo={equipo} />
       ) : token ? (
         <Sesion equipo={equipo} onSalir={salir} onExpirada={() => setToken(null)} />
       ) : (
@@ -89,6 +93,32 @@ export default function PdvPersonal() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/** Equipo fijo en cocina o barra: muestra sus áreas sin pedir PIN. */
+function MonitorEquipo({ equipo }: { equipo: EquipoGuardado }) {
+  const [info, setInfo] = useState<{ negocio: string; areas: string[] } | null>(null);
+  const cargar = useCallback(async () => {
+    const { data } = await apiPublica.post("/pos/monitor", { deviceToken: equipo.deviceToken });
+    setInfo({ negocio: data.data.negocio, areas: data.data.areas });
+    return data.data.tickets as TicketMonitor[];
+  }, [equipo.deviceToken]);
+  const cambiar = useCallback(
+    async (ids: number[], estado: string) => {
+      await apiPublica.post("/pos/monitor/items", { deviceToken: equipo.deviceToken, ids, estado });
+    },
+    [equipo.deviceToken]
+  );
+  return (
+    <div className="-mx-3 -mt-4">
+      <MonitorProduccion
+        titulo={info?.areas.length ? info.areas.join(" · ") : "Todas las áreas"}
+        subtitulo={`${equipo.equipo} · ${info?.negocio ?? equipo.negocio.name}`}
+        cargar={cargar}
+        cambiar={cambiar}
+      />
     </div>
   );
 }

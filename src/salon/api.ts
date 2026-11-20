@@ -12,6 +12,8 @@ export interface EquipoGuardado {
   deviceToken: string;
   negocio: { uuid: string; name: string };
   equipo: string;
+  /** pdv: comandero/caja con PIN · monitor: pantalla de producción. */
+  modo?: "pdv" | "monitor";
 }
 
 export function equipoGuardado(): EquipoGuardado | null {
@@ -80,6 +82,8 @@ export interface ResumenCuenta {
   total: number | null;
   guests: number | null;
   items: number;
+  /** Platos que cocina ya terminó y faltan llevar. */
+  listos: number;
   abiertaDesde: string;
   mesa: string | null;
   status?: string;
@@ -130,6 +134,7 @@ export interface ItemCuenta {
   voidReason: string | null;
   courtesy: boolean;
   courtesyReason: string | null;
+  kitchenStatus: "pendiente" | "preparando" | "listo" | "servido" | null;
 }
 
 export interface Cuenta {

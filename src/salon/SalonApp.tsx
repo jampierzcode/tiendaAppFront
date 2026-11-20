@@ -277,7 +277,7 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
             : "Cuenta";
 
   return (
-    <div className="mx-auto max-w-5xl pb-28">
+    <div className="mx-auto max-w-5xl pb-4">
       {/* Barra superior */}
       <div className="mb-3 flex items-center gap-2">
         {!enRaiz && (
@@ -488,6 +488,11 @@ function GrillaMesas({
                     } ${ajena ? "opacity-60" : ""}`}
                   >
                     {espera && <span className="absolute right-2 top-1 text-[14px]">⏳</span>}
+                    {Boolean(m.cuenta?.listos) && (
+                      <span className="absolute right-1.5 top-1.5 animate-pulse rounded-full bg-ok px-2 py-0.5 text-[12px] font-bold text-white shadow">
+                        🔔 {m.cuenta!.listos}
+                      </span>
+                    )}
                     {ajena && <TbLock className="absolute left-2 top-2 text-[13px]" />}
                     <span className="text-[22px] font-bold leading-none">{m.name}</span>
                     {m.cuenta ? (
@@ -600,6 +605,7 @@ function ListaCuentas({
             </span>
             <span className="text-right">
               <span className="block font-mono text-[14px] font-semibold">{c.total !== null ? dinero(c.total) : "—"}</span>
+              {Boolean(c.listos) && <span className="pill bg-ok-bg text-ok">🔔 {c.listos} listos</span>}
               {c.accountStatus === "impresa" && <span className="pill bg-warn-bg text-warn">Impresa</span>}
               {c.status === "cancelado" && <span className="pill bg-danger-bg text-danger">Cancelada</span>}
             </span>
@@ -765,6 +771,23 @@ function VistaCuenta({
               <span className="flex-1">
                 Ronda {r.number} · {dayjs(r.createdAt).format("HH:mm")} {r.userName ? `· ${r.userName}` : ""}
               </span>
+              {r.items.some((i) => !i.voided && i.kitchenStatus === "listo") && (
+                <Button
+                  size="small"
+                  type="primary"
+                  className="!bg-ok"
+                  onClick={() =>
+                    tras(
+                      accion(
+                        () => api.post("/items/serve", { ids: r.items.filter((i) => !i.voided && i.kitchenStatus === "listo").map((i) => i.id) }),
+                        "Marcado como servido"
+                      )
+                    )
+                  }
+                >
+                  Servido
+                </Button>
+              )}
               <Button
                 size="small"
                 type="text"
@@ -792,7 +815,10 @@ function VistaCuenta({
                   {i.courtesy && <span className="block text-[12px] text-ok">🎁 {i.courtesyReason}</span>}
                   {i.area && !i.voided && <span className="block text-[11px] text-muted">→ {i.area}</span>}
                 </span>
-                <span className="font-mono text-[13px]">{dinero(i.lineTotal)}</span>
+                <span className="text-right">
+                  <span className="block font-mono text-[13px]">{dinero(i.lineTotal)}</span>
+                  {!i.voided && i.kitchenStatus && <EstadoCocina estado={i.kitchenStatus} />}
+                </span>
               </button>
             ))}
           </div>
@@ -810,7 +836,7 @@ function VistaCuenta({
       </div>
 
       {/* Acciones fijas abajo, al alcance del pulgar */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-white/95 p-3 backdrop-blur">
+      <div className="sticky bottom-0 z-20 -mx-1 mt-4 rounded-t-2xl border-t border-line bg-white/95 p-3 shadow-[0_-4px_16px_rgba(20,18,67,0.06)] backdrop-blur">
         <div className="mx-auto flex max-w-5xl gap-2">
           {impresa ? (
             <Button
@@ -957,6 +983,18 @@ function VistaCuenta({
       />
     </div>
   );
+}
+
+const COCINA: Record<string, { texto: string; clase: string }> = {
+  pendiente: { texto: "En cola", clase: "bg-line-soft text-muted" },
+  preparando: { texto: "Preparando", clase: "bg-warn-bg text-warn" },
+  listo: { texto: "🔔 Listo", clase: "bg-ok-bg text-ok" },
+  servido: { texto: "Servido", clase: "bg-line-soft text-muted" },
+};
+
+function EstadoCocina({ estado }: { estado: string }) {
+  const e = COCINA[estado];
+  return e ? <span className={`pill mt-0.5 inline-block text-[10.5px] ${e.clase}`}>{e.texto}</span> : null;
 }
 
 function MotivoModal({
@@ -1212,7 +1250,7 @@ function Comandar({
       </div>
 
       {carrito.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-white/95 p-3 backdrop-blur">
+        <div className="sticky bottom-0 z-20 -mx-1 mt-4 rounded-t-2xl border-t border-line bg-white/95 p-3 shadow-[0_-4px_16px_rgba(20,18,67,0.06)] backdrop-blur">
           <div className="mx-auto flex max-w-5xl gap-2">
             <Button size="large" className="flex-1" onClick={() => setVerCarrito(true)}>
               Ver ({unidades}) · {dinero(totalCarrito)}

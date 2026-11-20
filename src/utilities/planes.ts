@@ -23,6 +23,7 @@ export const FUNCION_DE_PANTALLA: Record<string, string> = {
   infraestructura: "salon",
   impresion: "salon",
   caja: "salon",
+  monitor: "salon",
 };
 
 export const NOMBRE_FUNCION: Record<string, string> = {
