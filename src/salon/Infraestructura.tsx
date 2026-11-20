@@ -226,16 +226,16 @@ function AreaComedor({
   const [una, setUna] = useState("");
   return (
     <div className="card p-4">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <TbArmchair className="text-[18px] text-brand-600" />
+      <div className="mb-3 flex items-center gap-2">
+        <TbArmchair className="shrink-0 text-[18px] text-brand-600" />
         <Input
           variant="borderless"
-          className="!max-w-[260px] !px-1 text-[15px] font-bold"
+          className="min-w-0 flex-1 !max-w-[260px] !px-1 text-[15px] font-bold"
           defaultValue={area.name}
           suffix={<TbEdit className="text-muted" />}
           onBlur={(e) => e.target.value.trim() && e.target.value.trim() !== area.name && hacer(() => api.put(`/dining-areas/${area.id}`, { name: e.target.value }), "Área renombrada")}
         />
-        <span className="text-[12px] text-muted">{mesas.length} mesas</span>
+        <span className="shrink-0 text-[12px] text-muted">{mesas.length} mesas</span>
         <Popconfirm title="¿Borrar el área?" description="Solo se puede si no tiene mesas." onConfirm={() => hacer(() => api.delete(`/dining-areas/${area.id}`))}>
           <Button className="ml-auto" size="small" type="text" danger icon={<TbTrash />} />
         </Popconfirm>
@@ -248,13 +248,14 @@ function AreaComedor({
       </div>
       <div className="flex flex-wrap items-center gap-2 border-t border-line-soft pt-3">
         <span className="text-[12.5px] text-muted">Agregar</span>
-        <InputNumber min={1} max={100} value={cantidad} onChange={setCantidad} addonAfter="mesas" className="w-36" />
-        <Input className="max-w-[150px]" placeholder="Prefijo (opcional): T" value={prefijo} onChange={(e) => setPrefijo(e.target.value)} />
+        <InputNumber min={1} max={100} value={cantidad} onChange={setCantidad} addonAfter="mesas" className="w-32" />
+        <Input className="min-w-0 flex-1 sm:max-w-[150px] sm:flex-none" placeholder="Prefijo: T (opcional)" value={prefijo} onChange={(e) => setPrefijo(e.target.value)} />
         <Button icon={<TbPlus />} onClick={() => hacer(() => api.post("/tables/bulk", { count: cantidad, prefix: prefijo, diningAreaId: area.id }), "Mesas creadas")}>
           Crear
         </Button>
+        <span className="basis-full sm:hidden" />
         <span className="text-[12.5px] text-muted">o una:</span>
-        <Input className="max-w-[140px]" placeholder="Barra 1" value={una} onChange={(e) => setUna(e.target.value)} />
+        <Input className="min-w-0 flex-1 sm:max-w-[140px] sm:flex-none" placeholder="Barra 1" value={una} onChange={(e) => setUna(e.target.value)} />
         <Button onClick={() => hacer(() => api.post("/tables", { name: una, diningAreaId: area.id }), "Mesa creada").then((ok) => ok && setUna(""))}>
           Agregar
         </Button>
@@ -413,13 +414,14 @@ function TabCajas({ c, api, hacer }: TabProps) {
         {c.registers.map((r) => (
           <div key={r.id} className="flex flex-wrap items-center gap-2 border-t border-line-soft py-2 first:border-0">
             <Input
-              className="max-w-[220px]"
+              className="min-w-0 flex-1 sm:max-w-[220px] sm:flex-none"
               defaultValue={r.name}
               onBlur={(e) => e.target.value.trim() !== r.name && hacer(() => api.put(`/registers/${r.id}`, { name: e.target.value }))}
             />
+            <span className="basis-full sm:hidden" />
             <span className="text-[12px] text-muted">serie</span>
             <Select
-              className="w-48"
+              className="min-w-0 flex-1 sm:w-48 sm:flex-none"
               value={r.folioSeriesId ?? 0}
               options={[{ value: 0, label: "La primera (por defecto)" }, ...opcionesSerie]}
               onChange={(v) => hacer(() => api.put(`/registers/${r.id}`, { name: r.name, folioSeriesId: v || null }))}
@@ -441,7 +443,8 @@ function TabCajas({ c, api, hacer }: TabProps) {
         {c.series.map((s) => (
           <div key={s.id} className="flex flex-wrap items-center gap-2 border-t border-line-soft py-2 first:border-0">
             <span className="w-16 font-mono font-bold">{s.code}</span>
-            <span className="flex-1 text-[13px] text-muted">{s.name}</span>
+            <span className="min-w-0 flex-1 truncate text-[13px] text-muted">{s.name}</span>
+            <span className="basis-full sm:hidden" />
             <span className="text-[12px]">Siguiente folio</span>
             <InputNumber
               min={s.nextNumber}
@@ -487,8 +490,10 @@ function TabPersonal({ c, api, hacer }: TabProps) {
         </div>
         {c.staff.map((s) => (
           <div key={s.id} className="flex flex-wrap items-center gap-2 border-t border-line-soft py-2 first:border-0">
-            <span className={`flex-1 ${s.isActive ? "" : "text-muted line-through"}`}>{s.name}</span>
-            <Tag color={s.role === "gerente" ? "gold" : s.role === "cajero" ? "purple" : "blue"}>{NOMBRE_ROL[s.role]}</Tag>
+            <span className={`min-w-0 flex-1 truncate ${s.isActive ? "" : "text-muted line-through"}`}>{s.name}</span>
+            <Tag className="!me-0" color={s.role === "gerente" ? "gold" : s.role === "cajero" ? "purple" : "blue"}>{NOMBRE_ROL[s.role]}</Tag>
+            {/* En celular las acciones van debajo del nombre, para no cortarlo. */}
+            <span className="flex shrink-0 gap-1 max-sm:w-full max-sm:justify-end">
             <Button size="small" onClick={() => setForm({ id: s.id, name: s.name, pin: "", role: s.role })}>
               Editar
             </Button>
@@ -498,6 +503,7 @@ function TabPersonal({ c, api, hacer }: TabProps) {
             <Popconfirm title="¿Borrar a esta persona?" onConfirm={() => hacer(() => api.delete(`/staff/${s.id}`))}>
               <Button size="small" danger icon={<TbTrash />} />
             </Popconfirm>
+            </span>
           </div>
         ))}
         {!c.staff.length && <div className="text-muted">Aún no hay personal.</div>}
@@ -545,6 +551,22 @@ function TabPermisos({ c, api, hacer }: TabProps) {
   const grupos = [...new Set(Object.values(c.catalogoPermisos).map((p) => p.grupo))];
   const cambiar = (rol: Rol, k: string, v: boolean | number | string) => setPermisos({ ...permisos, [rol]: { ...permisos[rol], [k]: v } });
   const sucio = JSON.stringify(permisos) !== JSON.stringify(c.ajustes.permisos);
+  /** En celular no caben tres columnas: se elige el rol y se ve una sola. */
+  const [rolMovil, setRolMovil] = useState<Rol>(c.roles[0]);
+  const control = (r: Rol, k: string, d: (typeof c.catalogoPermisos)[string]) =>
+    d.tipo === "si_no" ? (
+      <Switch size="small" checked={permisos[r][k] === true} onChange={(v) => cambiar(r, k, v)} />
+    ) : d.tipo === "tope" ? (
+      <InputNumber size="small" className="!w-24" min={0} max={100} addonAfter="%" value={Number(permisos[r][k] ?? 0)} onChange={(v) => cambiar(r, k, Number(v) || 0)} />
+    ) : (
+      <Select
+        size="small"
+        className="w-36"
+        value={String(permisos[r][k])}
+        options={Object.entries(d.opciones ?? {}).map(([value, label]) => ({ value, label }))}
+        onChange={(v) => cambiar(r, k, v)}
+      />
+    );
 
   return (
     <div className="space-y-4">
@@ -552,9 +574,27 @@ function TabPermisos({ c, api, hacer }: TabProps) {
         Lo que no tenga permitido una persona, lo puede hacer igual si un encargado escribe su PIN en ese momento («Autorización»):
         queda registrado quién autorizó. El dueño puede todo.
       </div>
+      <Segmented
+        block
+        className="sm:!hidden"
+        value={rolMovil}
+        onChange={(v) => setRolMovil(v as Rol)}
+        options={c.roles.map((r) => ({ value: r, label: NOMBRE_ROL[r] }))}
+      />
       {grupos.map((g) => (
-        <div key={g} className="card overflow-x-auto p-4">
+        <div key={g} className="card p-4">
           <div className="mb-2 font-semibold">{g}</div>
+          <div className="sm:hidden">
+            {Object.entries(c.catalogoPermisos)
+              .filter(([, d]) => d.grupo === g)
+              .map(([k, d]) => (
+                <div key={k} className="flex items-center gap-3 border-t border-line-soft py-2 text-[13px] first:border-0">
+                  <span className="min-w-0 flex-1">{d.label}</span>
+                  <span className="shrink-0">{control(rolMovil, k, d)}</span>
+                </div>
+              ))}
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
           <table className="w-full min-w-[560px] text-[13px]">
             <thead>
               <tr className="text-left text-[12px] text-muted">
@@ -574,28 +614,17 @@ function TabPermisos({ c, api, hacer }: TabProps) {
                     <td className="py-2 pr-2">{d.label}</td>
                     {c.roles.map((r) => (
                       <td key={r} className="py-2 text-center">
-                        {d.tipo === "si_no" ? (
-                          <Switch size="small" checked={permisos[r][k] === true} onChange={(v) => cambiar(r, k, v)} />
-                        ) : d.tipo === "tope" ? (
-                          <InputNumber size="small" min={0} max={100} addonAfter="%" value={Number(permisos[r][k] ?? 0)} onChange={(v) => cambiar(r, k, Number(v) || 0)} />
-                        ) : (
-                          <Select
-                            size="small"
-                            className="w-36"
-                            value={String(permisos[r][k])}
-                            options={Object.entries(d.opciones ?? {}).map(([value, label]) => ({ value, label }))}
-                            onChange={(v) => cambiar(r, k, v)}
-                          />
-                        )}
+                        {control(r, k, d)}
                       </td>
                     ))}
                   </tr>
                 ))}
             </tbody>
           </table>
+          </div>
         </div>
       ))}
-      <div className="sticky bottom-3 flex justify-end gap-2">
+      <div className="sticky bottom-3 ml-auto flex w-fit justify-end gap-2 rounded-xl bg-white/90 p-2 shadow-[0_4px_16px_rgba(20,18,67,0.12)] backdrop-blur">
         {sucio && <Button onClick={() => setPermisos(c.ajustes.permisos)}>Deshacer</Button>}
         <Button type="primary" disabled={!sucio} onClick={() => hacer(() => api.put("/settings", { permisos }), "Permisos guardados. Rigen desde la próxima acción.")}>
           Guardar permisos
@@ -660,7 +689,7 @@ function TabEquipos({ c, api, hacer }: TabProps) {
           <li>Escribe este código y ponle un nombre al equipo.</li>
           <li>Listo: desde ahí el personal entra solo con su PIN.</li>
         </ol>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <span className="rounded-xl bg-brand-50 px-5 py-3 font-mono text-[32px] font-bold tracking-[0.3em] text-brand-700">{c.pairingCode}</span>
           <Popconfirm
             title="¿Cambiar el código?"
@@ -676,12 +705,12 @@ function TabEquipos({ c, api, hacer }: TabProps) {
         {c.devices.map((d) => (
           <div key={d.id} className="flex flex-wrap items-center gap-2 border-t border-line-soft py-2 first:border-0">
             <Input
-              className="max-w-[200px]"
+              className="max-sm:w-full sm:max-w-[200px]"
               defaultValue={d.name}
               onBlur={(e) => e.target.value.trim() !== d.name && hacer(() => api.put(`/devices/${d.id}`, { name: e.target.value }))}
             />
             <Select
-              className="w-44"
+              className="max-sm:w-full sm:w-44"
               value={d.mode}
               options={[
                 { value: "pdv", label: "PDV (con PIN)" },
@@ -692,24 +721,24 @@ function TabEquipos({ c, api, hacer }: TabProps) {
             {d.mode === "monitor" ? (
               <Select
                 mode="multiple"
-                className="min-w-48"
+                className="max-sm:w-full sm:min-w-48"
                 placeholder="Todas las áreas"
                 value={d.areaIds}
                 options={c.areas.map((a) => ({ value: a.id, label: a.name }))}
                 onChange={(v) => hacer(() => api.put(`/devices/${d.id}`, { areaIds: v }))}
               />
             ) : (
-              <>
-                <span className="text-[12px] text-muted">cobra en</span>
+              <span className="flex items-center gap-2 max-sm:w-full">
+                <span className="shrink-0 text-[12px] text-muted">cobra en</span>
                 <Select
-                  className="w-44"
+                  className="min-w-0 flex-1 sm:w-44 sm:flex-none"
                   value={d.cashRegisterId ?? 0}
                   options={[{ value: 0, label: "La caja abierta" }, ...c.registers.map((r) => ({ value: r.id, label: r.name }))]}
                   onChange={(v) => hacer(() => api.put(`/devices/${d.id}`, { cashRegisterId: v || null }))}
                 />
-              </>
+              </span>
             )}
-            <span className="flex-1 text-[12px] text-muted">{d.lastSeenAt ? `Último uso ${dayjs(d.lastSeenAt).format("DD/MM HH:mm")}` : "Sin uso"}</span>
+            <span className="min-w-0 flex-1 text-[12px] text-muted">{d.lastSeenAt ? `Último uso ${dayjs(d.lastSeenAt).format("DD/MM HH:mm")}` : "Sin uso"}</span>
             <Popconfirm title="¿Desvincular el equipo?" description="Se cierran las sesiones abiertas en él." onConfirm={() => hacer(() => api.delete(`/devices/${d.id}`), "Equipo desvinculado")}>
               <Button size="small" danger>
                 Desvincular

@@ -176,11 +176,11 @@ export default function KitchenPage() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
         {COLUMNAS.map((c) => {
           const lista = pedidos.filter((p) => p.status === c.estado);
           return (
-            <section key={c.estado}>
+            <section key={c.estado} className="min-w-0">
               <h2 className="eyebrow mb-3">
                 {c.titulo} ({lista.length})
               </h2>
@@ -221,12 +221,12 @@ export default function KitchenPage() {
                       <p className="mt-2 rounded-lg bg-warn-bg px-2 py-1 text-[12px] text-warn">{p.note}</p>
                     )}
 
-                    <div className="mt-4 flex gap-2">
+                    <div className="mt-4 flex flex-wrap gap-2">
                       {c.siguiente && (
                         <Button
                           type="primary"
                           size="large"
-                          block
+                          className="min-w-[55%] flex-1"
                           loading={moviendo === p.id}
                           onClick={() => mover(p, siguienteDe(c, p).a)}
                         >

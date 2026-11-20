@@ -137,12 +137,12 @@ export default function MonitorProduccion({ titulo, subtitulo, cargar, cambiar }
   return (
     <div className="min-h-screen bg-[#14122b] p-3 text-white">
       <div className="mb-3 flex items-center gap-3">
-        <TbFlame className="text-[24px] text-orange-400" />
-        <div className="flex-1">
+        <TbFlame className="shrink-0 text-[24px] text-orange-400" />
+        <div className="min-w-0 flex-1">
           <div className="text-[18px] font-bold">{titulo}</div>
           {subtitulo && <div className="text-[12px] text-white/60">{subtitulo}</div>}
         </div>
-        <span className="text-[13px] text-white/70">{enCurso.length} en curso</span>
+        <span className="shrink-0 whitespace-nowrap text-[13px] text-white/70">{enCurso.length} en curso</span>
         <span className="font-mono text-[20px]">{dayjs(ahora).format("HH:mm")}</span>
         <Button
           type="text"

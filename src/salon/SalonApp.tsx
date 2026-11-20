@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AxiosInstance } from "axios";
-import { AutoComplete, Button, Drawer, Dropdown, Empty, Input, InputNumber, Modal, Segmented, Select, Spin, message } from "antd";
+import { AutoComplete, Button, Drawer, Dropdown, Empty, Input, InputNumber, Modal, Segmented, Select, Spin, message, type InputRef } from "antd";
 import {
   TbArmchair,
   TbArrowLeft,
@@ -86,7 +86,9 @@ type Vista =
 interface EnCurso {
   id: number;
   etiqueta: string;
-  cliente: string;
+  cliente: string | null;
+  /** Lo que lleva: "2× Lomo saltado, 1× Chaufa". */
+  detalle: string;
   telefono: string | null;
   direccion: string | null;
   total: number;
@@ -365,8 +367,8 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
 
   return (
     <div className="mx-auto max-w-6xl pb-4">
-      {/* Barra superior */}
-      <div className="mb-3 flex items-center gap-2">
+      {/* Barra superior: en celular los botones bajan a otra fila antes que aplastar el título. */}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         {!enRaiz && (
           <Button
             icon={<TbArrowLeft />}
@@ -381,11 +383,10 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
             }
           />
         )}
-        <div className="min-w-0 flex-1">
+        <div className="min-w-[150px] flex-1">
           <div className="truncate text-[18px] font-bold text-ink">{titulo}</div>
           <div className="truncate text-[12px] text-muted">
-            {yo.name}
-            {yo.caja ? ` · ${yo.caja.name}` : ""} · {yo.negocio.name}
+            {[yo.name !== yo.negocio.name ? yo.name : null, yo.caja?.name, yo.negocio.name].filter(Boolean).join(" · ")}
           </div>
         </div>
         {enRaiz && (
@@ -422,15 +423,18 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
       )}
 
       {enRaiz && (
-        <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="mb-4 sm:flex">
+          {/* En celular ocupa todo el ancho en partes iguales; sin esto "Delivery" se sale de la pantalla. */}
           <Segmented
             size="large"
+            block
+            className="sm:!w-auto"
             value={vista.tipo}
             onChange={(v) => setVista({ tipo: v as Raiz })}
             options={[
               ...(yo.servicios.comedor ? [{ value: "mesas", label: <Pestana icono={<TbArmchair />} texto="Comedor" /> }] : []),
               ...(yo.servicios.para_llevar
-                ? [{ value: "para_llevar", label: <Pestana icono={<TbPaperBag />} texto="Para llevar" n={enCurso.para_llevar.length} /> }]
+                ? [{ value: "para_llevar", label: <Pestana icono={<TbPaperBag />} texto="Para llevar" corto="Llevar" n={enCurso.para_llevar.length} /> }]
                 : []),
               ...(yo.servicios.delivery
                 ? [{ value: "delivery", label: <Pestana icono={<TbBike />} texto="Delivery" n={enCurso.delivery.length} /> }]
@@ -578,12 +582,21 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
   );
 }
 
-function Pestana({ icono, texto, n }: { icono: React.ReactNode; texto: string; n?: number }) {
+function Pestana({ icono, texto, corto, n }: { icono: React.ReactNode; texto: string; corto?: string; n?: number }) {
   return (
-    <span className="flex items-center gap-1.5 px-1">
-      {icono}
-      {texto}
-      {Boolean(n) && <span className="self-center rounded-full bg-brand-500 px-1.5 text-[11px] font-bold leading-[18px] text-white">{n}</span>}
+    <span className="flex items-center justify-center gap-1 px-0.5 text-[14px] sm:gap-1.5 sm:px-1 sm:text-[16px]">
+      <span className="hidden sm:inline-flex">{icono}</span>
+      <span className="truncate">
+        {corto ? (
+          <>
+            <span className="sm:hidden">{corto}</span>
+            <span className="hidden sm:inline">{texto}</span>
+          </>
+        ) : (
+          texto
+        )}
+      </span>
+      {Boolean(n) && <span className="shrink-0 self-center rounded-full bg-brand-500 px-1.5 text-[11px] font-bold leading-[18px] text-white">{n}</span>}
     </span>
   );
 }
@@ -681,7 +694,7 @@ function VistaComedor({
           <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-muted">Cuentas sin mesa</div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {cuentas.map((c) => (
-              <button key={c.id} onClick={() => onAbrirCuenta(c.id)} className="card flex items-center gap-3 p-3 text-left active:scale-[0.99]">
+              <button key={c.id} onClick={() => onAbrirCuenta(c.id)} className="card flex w-full min-w-0 items-center gap-3 p-3 text-left active:scale-[0.99]">
                 <span className="min-w-0 flex-1">
                   <span className="block font-bold text-ink">{c.etiqueta}</span>
                   <span className="block truncate text-[12px] text-muted">
@@ -690,7 +703,7 @@ function VistaComedor({
                     {c.mesero ?? ""} · {dayjs(c.abiertaDesde).format("HH:mm")}
                   </span>
                 </span>
-                <span className="text-right">
+                <span className="shrink-0 text-right">
                   <span className="block font-mono font-semibold">{c.total !== null ? dinero(c.total) : "—"}</span>
                   {Boolean(c.listos) && <span className="pill bg-ok-bg text-ok">🔔 {c.listos}</span>}
                 </span>
@@ -844,21 +857,23 @@ function ListaCuentas({
               if (modo === "abiertas") return onAbrir(c.id);
               if (c.status === "entregado") setCerrada(c);
             }}
-            className="card flex items-center gap-3 p-3 text-left active:scale-[0.99]"
+            className="card flex w-full min-w-0 items-center gap-3 p-3 text-left active:scale-[0.99]"
           >
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-[18px] text-brand-600">
               <IconoCuenta c={c} />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-semibold text-ink">{c.etiqueta}</span>
+              <span className="block truncate font-semibold text-ink">
+                {c.cliente && c.service !== "comedor" && c.cliente !== c.etiqueta ? `${c.cliente} · ${c.etiqueta}` : c.etiqueta}
+              </span>
               <span className="block truncate text-[12px] text-muted">
                 {NOMBRE_SERVICIO[c.service]}
-                {c.cliente ? ` · ${c.cliente}` : ""}
+                {c.cliente && c.service === "comedor" ? ` · ${c.cliente}` : ""}
                 {c.folio ? ` · ${c.folio}` : ""}
                 {c.mesero ? ` · ${c.mesero}` : ""} · {dayjs(c.abiertaDesde).format("HH:mm")}
               </span>
             </span>
-            <span className="text-right">
+            <span className="shrink-0 text-right">
               <span className="block font-mono text-[14px] font-semibold">{c.total !== null ? dinero(c.total) : "—"}</span>
               {Boolean(c.listos) && <span className="pill bg-ok-bg text-ok">🔔 {c.listos} listos</span>}
               {c.accountStatus === "impresa" && <span className="pill bg-warn-bg text-warn">Impresa</span>}
@@ -912,7 +927,7 @@ function CuentaCerradaModal({
   }, [cuenta]);
   if (!cuenta) return null;
   return (
-    <Modal open title={`${cuenta.etiqueta} · ${cuenta.folio ?? ""}`} footer={null} onCancel={onClose}>
+    <Modal open title={[cuenta.cliente && cuenta.cliente !== cuenta.etiqueta && cuenta.service !== "comedor" ? cuenta.cliente : null, cuenta.etiqueta, cuenta.folio].filter(Boolean).join(" · ")} footer={null} onCancel={onClose}>
       <Button block size="large" icon={<TbPrinter />} onClick={() => onReimprimir(cuenta)}>
         Reimprimir nota de venta
       </Button>
@@ -926,8 +941,8 @@ function CuentaCerradaModal({
           value={devolver ? "devolver" : "mantener"}
           onChange={(v) => setDevolver(v === "devolver")}
           options={[
-            { value: "mantener", label: "Mantener el pago" },
-            { value: "devolver", label: "Devolver el pago" },
+            { value: "mantener", label: "Mantener pago" },
+            { value: "devolver", label: "Devolver pago" },
           ]}
         />
         <p className="mt-2 text-[12px] text-muted">
@@ -967,7 +982,7 @@ function ListaEnCurso({
   const [q, setQ] = useState("");
   const texto = plano(q.trim());
   const visibles = lista.filter(
-    (p) => !texto || [p.etiqueta, p.cliente, p.telefono, p.folio, p.direccion].some((c) => plano(c).includes(texto))
+    (p) => !texto || [p.etiqueta, p.cliente, p.telefono, p.folio, p.direccion, p.detalle].some((c) => plano(c).includes(texto))
   );
   const COCINA: Record<EnCurso["cocina"], { t: string; c: string }> = {
     sin_cocina: { t: "Sin cocina", c: "bg-line-soft text-muted" },
@@ -988,7 +1003,7 @@ function ListaEnCurso({
           allowClear
           className="mb-3 max-w-xs"
           prefix={<TbSearch />}
-          placeholder={delivery ? "Cuenta, cliente, teléfono o dirección" : "Cuenta o cliente"}
+          placeholder={delivery ? "Cuenta, cliente, teléfono o dirección" : "Cliente, cuenta o plato"}
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
@@ -999,12 +1014,11 @@ function ListaEnCurso({
           <div key={p.id} className="card p-3">
             <button className="w-full text-left" onClick={() => onAbrir(p.id)} disabled={p.pagado}>
               <div className="flex items-center gap-2">
-                <span className="flex-1 truncate text-[15px] font-bold text-ink">
-                  {p.etiqueta}
-                  {p.cliente && <span className="font-normal text-ink-soft"> · {p.cliente}</span>}
-                </span>
-                <span className="font-mono font-semibold">{dinero(p.total)}</span>
+                <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-ink">{p.cliente || p.etiqueta}</span>
+                {p.cliente && p.cliente !== p.etiqueta && <span className="shrink-0 rounded bg-line-soft px-1.5 text-[11.5px] font-semibold text-muted">{p.etiqueta}</span>}
+                <span className="shrink-0 font-mono font-semibold">{dinero(p.total)}</span>
               </div>
+              {p.detalle && <div className="mt-0.5 line-clamp-2 text-[12.5px] text-ink-soft">{p.detalle}</div>}
               <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[12px] text-muted">
                 <span className={`pill ${COCINA[p.cocina].c}`}>{COCINA[p.cocina].t}</span>
                 {p.pagado ? <span className="pill bg-ok-bg text-ok">Cobrado {p.folio}</span> : <span className="pill bg-danger-bg text-danger">Por cobrar</span>}
@@ -1267,8 +1281,18 @@ function VistaCuenta({
     <div>
       <div className="card mb-4 p-4">
         <div className="flex flex-wrap items-baseline gap-2">
-          <span className="text-[16px] font-bold text-ink">{cuenta.etiqueta}</span>
-          {cuenta.cliente && <span className="text-[14px] text-ink-soft">· {cuenta.cliente}</span>}
+          {/* Para llevar / delivery: manda el nombre del cliente; el número (L011) queda de referencia. */}
+          {cuenta.cliente && cuenta.service !== "comedor" && cuenta.cliente !== cuenta.etiqueta ? (
+            <>
+              <span className="text-[16px] font-bold text-ink">{cuenta.cliente}</span>
+              <span className="text-[13px] text-muted">{cuenta.etiqueta}</span>
+            </>
+          ) : (
+            <>
+              <span className="text-[16px] font-bold text-ink">{cuenta.etiqueta}</span>
+              {cuenta.cliente && cuenta.cliente !== cuenta.etiqueta && <span className="text-[14px] text-ink-soft">· {cuenta.cliente}</span>}
+            </>
+          )}
           <span className="pill bg-brand-50 text-brand-600">{NOMBRE_SERVICIO[cuenta.service]}</span>
           {impresa && <span className="pill bg-warn-bg text-warn">Cuenta impresa · {cuenta.folio}</span>}
           {cuenta.accountStatus === "reabierta" && <span className="pill bg-info-bg text-info">Reabierta · {cuenta.folio}</span>}
@@ -1358,24 +1382,25 @@ function VistaCuenta({
 
       {/* Acciones fijas abajo, al alcance del pulgar */}
       <div className="sticky bottom-0 z-20 -mx-1 mt-4 rounded-t-2xl border-t border-line bg-white/95 p-3 shadow-[0_-4px_16px_rgba(20,18,67,0.06)] backdrop-blur">
-        <div className="mx-auto flex max-w-5xl gap-2">
+        {/* En celular: dos filas (Agregar · Imprimir / Cobrar · más) para que nada se salga. */}
+        <div className="mx-auto flex max-w-5xl flex-wrap gap-2 sm:flex-nowrap">
           {impresa ? (
             <Button
               size="large"
-              className="flex-1"
+              className="!min-w-0 flex-1 basis-[40%] sm:basis-0"
               icon={<TbLockOpen />}
               onClick={() => tras(accion((pin) => api.post(`/accounts/${cuenta.id}/reopen`, {}, conPin(pin)), "Cuenta reabierta"))}
             >
               Reabrir
             </Button>
           ) : (
-            <Button size="large" className="flex-1" icon={<TbPlus />} onClick={() => onAgregar(cuenta)}>
+            <Button size="large" className="!min-w-0 flex-1 basis-[40%] sm:basis-0" icon={<TbPlus />} onClick={() => onAgregar(cuenta)}>
               Agregar
             </Button>
           )}
           <Button
             size="large"
-            className="flex-1"
+            className="!min-w-0 flex-1 basis-[40%] sm:basis-0"
             icon={<TbPrinter />}
             onClick={() =>
               tras(
@@ -1388,7 +1413,7 @@ function VistaCuenta({
           >
             {impresa ? "Reimprimir" : "Imprimir cuenta"}
           </Button>
-          <Button size="large" type="primary" className="flex-1" icon={<TbCash />} onClick={() => setCobrar(true)}>
+          <Button size="large" type="primary" className="!min-w-0 flex-1 basis-[40%] sm:basis-0" icon={<TbCash />} onClick={() => setCobrar(true)}>
             Cobrar
           </Button>
           <Dropdown
@@ -1726,7 +1751,7 @@ function CobrarModal({
   return (
     <Modal
       open
-      title={`Cobrar · ${cuenta.etiqueta}`}
+      title={`Cobrar · ${cuenta.cliente && cuenta.cliente !== cuenta.etiqueta ? `${cuenta.cliente} (${cuenta.etiqueta})` : cuenta.etiqueta}`}
       onCancel={onClose}
       okText={falta > 0.009 ? `Falta ${dinero(falta)}` : "Cobrar y cerrar"}
       okButtonProps={{ disabled: falta > 0.009 || (descuento > 0 && !motivo.trim()), loading: cargando }}
@@ -1751,9 +1776,9 @@ function CobrarModal({
       <div className="mt-3" />
       {pagos.map((p, i) => (
         <div key={i} className="mb-2 flex gap-2">
-          <Select className="w-36" value={p.method} options={METODOS} onChange={(v) => setPagos(pagos.map((x, j) => (j === i ? { ...x, method: v } : x)))} />
+          <Select className="w-[118px] shrink-0 sm:w-36" value={p.method} options={METODOS} onChange={(v) => setPagos(pagos.map((x, j) => (j === i ? { ...x, method: v } : x)))} />
           <InputNumber
-            className="flex-1"
+            className="!w-auto min-w-0 flex-1"
             min={0}
             step={1}
             placeholder={String(Math.max(0, falta + Number(p.amount ?? 0)).toFixed(2))}
@@ -1805,6 +1830,7 @@ function Comandar({
   const [buscar, setBuscar] = useState("");
   const [elegir, setElegir] = useState<Plato | null>(null);
   const [verCarrito, setVerCarrito] = useState(false);
+  const campoNombre = useRef<InputRef>(null);
 
   const platos = useMemo(() => {
     const q = plano(buscar.trim());
@@ -1824,6 +1850,17 @@ function Comandar({
   const totalCarrito = carrito.reduce((t, l) => t + precioLinea(l), 0);
   const unidades = carrito.reduce((t, l) => t + l.quantity, 0);
   const sinMesa = destino.tipo === "nueva" && destino.service !== "comedor";
+  /** Para llevar: sin el nombre, luego nadie sabe de quién es "L011". */
+  const pideNombre = destino.tipo === "nueva" && destino.service === "para_llevar";
+  const enviar = (cobrar: boolean) => {
+    if (pideNombre && !nombre.trim()) {
+      message.warning("Escribe el nombre del cliente");
+      campoNombre.current?.focus();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    onEnviar(cobrar);
+  };
   const envio = destino.tipo === "nueva" ? Number(destino.shippingCost ?? 0) : 0;
 
   /** Líneas del ticket con +/− y nota: se usa en el panel de la derecha (PC) y en el cajón (celular). */
@@ -1863,15 +1900,15 @@ function Comandar({
   const botones = (bloque: boolean) =>
     sinMesa ? (
       <>
-        <Button size="large" block={bloque} className={bloque ? "" : "flex-1"} disabled={!carrito.length} onClick={() => onEnviar(false)}>
+        <Button size="large" block={bloque} className={bloque ? "" : "!min-w-0"} disabled={!carrito.length} onClick={() => enviar(false)}>
           Solo enviar
         </Button>
-        <Button size="large" block={bloque} type="primary" className={bloque ? "" : "flex-1"} icon={<TbCash />} disabled={!carrito.length} onClick={() => onEnviar(true)}>
+        <Button size="large" block={bloque} type="primary" className={bloque ? "" : "!min-w-0"} icon={<TbCash />} disabled={!carrito.length} onClick={() => enviar(true)}>
           Enviar y cobrar
         </Button>
       </>
     ) : (
-      <Button size="large" block={bloque} type="primary" className={bloque ? "" : "flex-1"} disabled={!carrito.length} onClick={() => onEnviar(false)}>
+      <Button size="large" block={bloque} type="primary" className={bloque ? "" : "!min-w-0"} disabled={!carrito.length} onClick={() => enviar(false)}>
         Enviar comanda
       </Button>
     );
@@ -1884,6 +1921,19 @@ function Comandar({
             <span>Personas</span>
             <InputNumber min={1} max={99} value={comensales} onChange={(v) => setComensales(v ? Number(v) : null)} />
           </div>
+        )}
+        {pideNombre && (
+          <Input
+            ref={campoNombre}
+            size="large"
+            autoFocus
+            className="mb-3"
+            prefix={<TbUser />}
+            placeholder="Nombre del cliente"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            status={!nombre.trim() && carrito.length ? "warning" : undefined}
+          />
         )}
         <Input allowClear size="large" prefix={<TbSearch />} placeholder="Buscar plato" value={buscar} onChange={(e) => setBuscar(e.target.value)} className="mb-3" />
         <div className="-mx-1 mb-3 flex gap-2 overflow-x-auto pb-1">
@@ -1927,9 +1977,6 @@ function Comandar({
       <aside className="hidden lg:block">
         <div className="card sticky top-4 flex max-h-[calc(100vh-2rem)] flex-col p-4">
           <div className="mb-1 font-bold text-ink">{destino.nombre}</div>
-          {destino.tipo === "nueva" && destino.service === "para_llevar" && (
-            <Input className="mb-2" placeholder="Nombre del cliente (opcional)" value={nombre} onChange={(e) => setNombre(e.target.value)} />
-          )}
           <div className="-mx-1 flex-1 overflow-y-auto px-1">{lineas}</div>
           <div className="mt-3 border-t border-line pt-3">
             {envio > 0 && (
@@ -1950,9 +1997,12 @@ function Comandar({
       {/* Celular: barra abajo y el ticket en un cajón */}
       {carrito.length > 0 && (
         <div className="sticky bottom-0 z-20 -mx-1 mt-4 rounded-t-2xl border-t border-line bg-white/95 p-3 shadow-[0_-4px_16px_rgba(20,18,67,0.06)] backdrop-blur lg:hidden">
-          <div className="mx-auto flex max-w-5xl gap-2">
-            <Button size="large" className="flex-1" onClick={() => setVerCarrito(true)}>
-              Ver ({unidades}) · {dinero(totalCarrito + envio)}
+          {/* Con dos acciones (para llevar / delivery) el resumen va en su propia fila: en 360 px no caben tres botones. */}
+          <div className={`mx-auto grid max-w-5xl gap-2 ${sinMesa ? "grid-cols-2" : "grid-cols-[minmax(0,1fr)_auto]"}`}>
+            <Button size="large" className={`!min-w-0 ${sinMesa ? "col-span-2" : ""}`} icon={<TbList />} onClick={() => setVerCarrito(true)}>
+              <span className="truncate">
+                {unidades} · {dinero(totalCarrito + envio)}
+              </span>
             </Button>
             {botones(false)}
           </div>
@@ -1970,9 +2020,6 @@ function Comandar({
       />
 
       <Drawer open={verCarrito} placement="bottom" height="75vh" title={`Comanda · ${destino.nombre}`} onClose={() => setVerCarrito(false)}>
-        {destino.tipo === "nueva" && destino.service === "para_llevar" && (
-          <Input className="mb-2" placeholder="Nombre del cliente (opcional)" value={nombre} onChange={(e) => setNombre(e.target.value)} />
-        )}
         {lineas}
       </Drawer>
     </div>

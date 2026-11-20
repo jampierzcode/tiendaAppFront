@@ -32,11 +32,11 @@ export default function AvisosBanner() {
   return (
     <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
       <TbBell className="shrink-0 text-xl text-brand-600" />
-      <p className="min-w-0 flex-1 text-[13px] text-ink-soft">
+      <p className="min-w-0 flex-1 basis-[220px] text-[13px] text-ink-soft">
         <b className="text-ink">Activa las notificaciones</b> para enterarte de mensajes, pedidos y comprobantes
         aunque estés en otra pestaña o con el panel cerrado. Al tocarlas te llevan directo.
       </p>
-      <Button type="primary" loading={cargando} onClick={activar}>
+      <Button type="primary" className="max-sm:flex-1" loading={cargando} onClick={activar}>
         Activar notificaciones
       </Button>
       <button

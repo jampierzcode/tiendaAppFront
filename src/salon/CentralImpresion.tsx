@@ -236,7 +236,7 @@ export default function CentralImpresion() {
           description={
             <div>
               <p className="mb-2 text-[12.5px]">No se imprimen solos para no sacar de golpe comandas viejas. ¿Qué hago con ellos?</p>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button
                   size="small"
                   onClick={() => {
@@ -359,8 +359,8 @@ export default function CentralImpresion() {
         </div>
         {historial.map((j) => (
           <div key={j.id} className="flex items-center gap-2 border-t border-line-soft py-2 text-[13px] first:border-0">
-            <span className="w-12 font-mono text-muted">{dayjs(j.createdAt).format("HH:mm")}</span>
-            <span className="flex-1">
+            <span className="w-11 shrink-0 font-mono text-muted">{dayjs(j.createdAt).format("HH:mm")}</span>
+            <span className="min-w-0 flex-1">
               {ETIQUETA[j.kind] ?? j.kind}
               {j.payload?.mesa ? ` · Mesa ${j.payload.mesa}` : ""}
               {j.payload?.area && j.kind === "comanda" ? ` · ${j.payload.area}` : ""}

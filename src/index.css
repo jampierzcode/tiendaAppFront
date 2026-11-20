@@ -318,3 +318,10 @@
     overflow-y: auto;
   }
 }
+
+/* Paneles laterales: el ancho fijo (480, 560, 720 px) no puede pasarse de la
+   pantalla del celular; en móvil ocupan todo el ancho. */
+.ant-drawer-left > .ant-drawer-content-wrapper,
+.ant-drawer-right > .ant-drawer-content-wrapper {
+  max-width: 100vw;
+}
