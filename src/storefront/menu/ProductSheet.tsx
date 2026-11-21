@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
-import type { PlatoMenu } from "../api";
+import { modoCarta, urlConsulta, type PlatoMenu } from "../api";
 import { useStore } from "../StoreContext";
 import { useMenuCart, type OpcionElegida } from "./MenuCart";
 
@@ -15,8 +15,10 @@ interface Props {
  * habilita hasta que todo lo obligatorio está elegido, y muestra el total real.
  */
 export default function ProductSheet({ plato, onClose }: Props) {
-  const { precio } = useStore();
+  const { precio, tienda } = useStore();
   const { agregar } = useMenuCart();
+  const modo = tienda ? modoCarta(tienda) : "ninguno";
+  const sePide = (modo === "pedidos" || modo === "pedir") && !plato?.agotado;
 
   // groupId -> (optionId -> cantidad)
   const [elegidas, setElegidas] = useState<Record<number, Record<number, number>>>({});
@@ -210,6 +212,7 @@ export default function ProductSheet({ plato, onClose }: Props) {
               );
             })}
 
+            {sePide && (
             <section className="mt-6">
               <label className="font-bold text-neutral-900" htmlFor="nota-plato">
                 ¿Algo más?
@@ -224,9 +227,29 @@ export default function ProductSheet({ plato, onClose }: Props) {
                 className="mt-2 w-full resize-none rounded-2xl border border-neutral-200 p-3 text-sm outline-none focus:border-neutral-400"
               />
             </section>
+            )}
           </div>
         </div>
 
+        {plato.agotado && (
+          <p className="border-t border-neutral-100 bg-neutral-50 p-4 text-center text-sm font-bold text-neutral-600">
+            Hoy no hay este plato
+          </p>
+        )}
+        {!plato.agotado && modo === "consultar" && tienda && (
+          <div className="border-t border-neutral-100 bg-white p-4">
+            <a
+              href={urlConsulta(tienda, plato.name)}
+              target="_blank"
+              rel="noreferrer"
+              className="flex h-12 items-center justify-center rounded-full text-sm font-bold text-white"
+              style={{ backgroundColor: "#25D366" }}
+            >
+              Consultar por WhatsApp
+            </a>
+          </div>
+        )}
+        {sePide && (
         <div className="flex items-center gap-3 border-t border-neutral-100 bg-white p-4">
           <div className="flex items-center rounded-full border border-neutral-200">
             <button
@@ -257,6 +280,7 @@ export default function ProductSheet({ plato, onClose }: Props) {
               : `Agregar · ${precio(unitario * cantidad)}`}
           </button>
         </div>
+        )}
       </motion.div>
     </AnimatePresence>
   );

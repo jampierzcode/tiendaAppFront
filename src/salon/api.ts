@@ -123,6 +123,8 @@ export interface Plato {
   discount?: number;
   promos?: PromoEtiqueta[];
   categoryIds: number[];
+  /** Se acabó hoy: se ve en gris y no se comanda. */
+  agotado?: boolean;
   modifierGroups: GrupoMod[];
 }
 

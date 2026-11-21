@@ -491,6 +491,11 @@ const ProductFormModal: React.FC<ProductFormModalProps> = ({
               valuePropName="checked"
               className="mb-0"
               label={esRestaurante ? "Visible en la carta" : "Visible en la tienda"}
+              extra={
+                esRestaurante
+                  ? "Apágalo si ya no lo vendes. Si solo hoy no hay, usa Menú de hoy → «Se acabó»: vuelve solo mañana."
+                  : undefined
+              }
             >
               <Switch checkedChildren="Activo" unCheckedChildren="Inactivo" />
             </Form.Item>

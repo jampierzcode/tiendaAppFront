@@ -30,6 +30,8 @@ export interface Tienda {
   aceptaPedidos: boolean;
   /** Plan Carta: false → el pedido se manda por WhatsApp, sin pasar por el panel. */
   pedidosEnLinea?: boolean;
+  /** Sin pedidos en línea: solo ver, consultar por plato o pedir por WhatsApp (lo elige el dueño). */
+  cartaWhatsapp?: "ninguno" | "consultar" | "pedir";
   cuentasCliente?: boolean;
   paymentPolicy: "none" | "on_confirm" | "on_delivery";
   paymentInstructions: string | null;
@@ -232,6 +234,8 @@ export interface PlatoMenu {
   categoryIds: number[];
   subcategoryIds: number[];
   tags: { name: string; color: string | null }[];
+  /** Se acabó hoy: se ve en gris y no se puede pedir. */
+  agotado?: boolean;
   modifierGroups: GrupoMenu[];
 }
 
@@ -355,3 +359,26 @@ export const cotizarCarrito = (
   storeApi
     .post<{ data: Cotizacion }>(`${base(slug)}/quote`, { items, couponCode })
     .then((r) => r.data.data);
+
+/**
+ * Qué deja hacer la carta del restaurante:
+ *  - pedidos: carrito → pedido al panel (plan con Pedidos en línea).
+ *  - pedir: carrito → mensaje armado al WhatsApp del negocio.
+ *  - consultar: botón por plato para preguntar por WhatsApp.
+ *  - ninguno: solo ver la carta.
+ */
+export type ModoCarta = "pedidos" | "pedir" | "consultar" | "ninguno";
+
+export function modoCarta(t: Tienda): ModoCarta {
+  if (t.pedidosEnLinea !== false) return "pedidos";
+  const modo = t.cartaWhatsapp ?? "pedir";
+  // Sin número de WhatsApp no hay a dónde escribir: queda solo para ver.
+  if (modo !== "ninguno" && !(t.whatsappPhone ?? "").replace(/\D/g, "")) return "ninguno";
+  return modo;
+}
+
+/** Enlace para consultar un plato por WhatsApp. */
+export function urlConsulta(t: Tienda, plato: string) {
+  const tel = (t.whatsappPhone ?? "").replace(/\D/g, "");
+  return `https://wa.me/${tel}?text=${encodeURIComponent(`Hola, quería consultar por: ${plato}`)}`;
+}

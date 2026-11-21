@@ -21,6 +21,7 @@ import {
   TbReceipt,
   TbBell,
   TbRefresh,
+  TbCalendarCheck,
   TbVolume,
   TbVolumeOff,
   TbSearch,
@@ -47,6 +48,7 @@ import {
   type Yo,
 } from "./api";
 import { AutorizacionProvider } from "./autorizacion";
+import MenuHoyEditor from "../components/admin/MenuHoyEditor";
 import { useAvisosPdv, useSonidoPdv } from "./avisosPdv";
 import { conPin, fueCancelado, useConAutorizacion } from "./autorizacionCtx";
 import CajaPanel from "./CajaPanel";
@@ -183,6 +185,7 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
   const [abrirMesaDe, setAbrirMesaDe] = useState<Mesa | null>(null);
   const [abrirSinMesa, setAbrirSinMesa] = useState(false);
   const [historial, setHistorial] = useState(false);
+  const [menuHoy, setMenuHoy] = useState(false);
   /** Cuenta que se cobra al toque (para llevar "Enviar y cobrar"). */
   const [cobrarAhora, setCobrarAhora] = useState<number | null>(null);
   const [nombres, setNombres] = useState<Record<string, string>>({});
@@ -408,6 +411,11 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
             Caja
           </Button>
         )}
+        {enRaiz && yo.role !== "mesero" && (
+          <Button icon={<TbCalendarCheck />} onClick={() => setMenuHoy(true)} title="Menú de hoy y lo que se acabó">
+            Hoy
+          </Button>
+        )}
         <Button
           icon={sonido ? <TbVolume /> : <TbVolumeOff />}
           title={sonido ? "Avisos con sonido y voz: activados en este equipo" : "Avisos con sonido apagados en este equipo"}
@@ -515,6 +523,19 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
           onNuevaSinMesa={() => setAbrirSinMesa(true)}
         />
       )}
+
+      <Drawer
+        open={menuHoy}
+        width={560}
+        title="Menú de hoy"
+        destroyOnHidden
+        onClose={() => {
+          setMenuHoy(false);
+          void cargarCarta();
+        }}
+      >
+        <MenuHoyEditor api={api} puedeConfigurar={false} ejecutar={conAut} simbolo={yo.negocio.simbolo} />
+      </Drawer>
 
       <Drawer open={historial} width={720} title="Todas las cuentas" onClose={() => setHistorial(false)}>
         <ListaCuentas
@@ -2042,11 +2063,17 @@ function Comandar({
             return (
               <button
                 key={p.id}
+                disabled={p.agotado}
                 onClick={() => (p.modifierGroups.length ? setElegir(p) : agregarSimple(p))}
-                className={`relative flex min-h-[76px] flex-col justify-between rounded-xl border-2 bg-white p-3 text-left transition active:scale-95 ${
-                  n ? "border-brand-500" : "border-line"
+                className={`relative flex min-h-[76px] flex-col justify-between rounded-xl border-2 p-3 text-left transition active:scale-95 disabled:active:scale-100 ${
+                  p.agotado ? "border-line bg-canvas opacity-60" : n ? "border-brand-500 bg-white" : "border-line bg-white"
                 }`}
               >
+                {p.agotado && (
+                  <span className="absolute right-2 top-2 rounded-full bg-ink px-2 py-0.5 text-[10.5px] font-bold text-white">
+                    Se acabó
+                  </span>
+                )}
                 {n > 0 && (
                   <span className="absolute -right-2 -top-2 grid h-6 min-w-6 place-items-center rounded-full bg-brand-500 px-1 text-[12px] font-bold text-white">
                     {n}
