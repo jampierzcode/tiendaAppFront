@@ -62,6 +62,7 @@ import ConteoPage from "./inventario/ConteoPage";
 import MovimientosPage from "./inventario/MovimientosPage";
 import ReportesInventarioPage from "./inventario/ReportesInventarioPage";
 import RecetasPage from "./inventario/RecetasPage";
+import { useVersionNueva } from "./utilities/versionNueva";
 
 /**
  * Es una SPA: cambiar de página no reinicia el scroll. Al entrar a otra ruta
@@ -69,6 +70,7 @@ import RecetasPage from "./inventario/RecetasPage";
  */
 function ScrollAlInicio() {
   const { pathname } = useLocation();
+  useVersionNueva();
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
   }, [pathname]);
