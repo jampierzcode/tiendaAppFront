@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1080">
+  <!-- Favicon Peaky Resto: solo gorra y cara (sin bolitas ni insignia) para que se lea a 16-32 px -->
+  <rect width="1080" height="1080" rx="240" fill="#F26B1D"/>
+  <g transform="translate(540 545) scale(1.4) translate(-638.5 -573)">
+  <path d="M389 309 L792 306 C858 306 896 330 878 384 C864 428 830 475 790 522 C768 478 712 455 640 452 C560 449 495 458 448 466 C400 474 383 440 381 400 C380 368 384 334 389 309 Z" fill="#FFFFFF"/>
+  <path fill-rule="evenodd" d="M450 525 C520 506 590 496 650 498 C720 500 770 535 785 572 L787 668 A169 172 0 0 1 450 668 Z M542 632 L692 632 L692 678 C692 712 664 736 617 736 C570 736 542 712 542 678 Z" fill="#FFFFFF"/>
+  </g>
+</svg>

@@ -61,6 +61,19 @@ export const BusinessProvider = ({ children }: { children: ReactNode }) => {
     fetchBusiness();
   }, [uuid_business]);
 
+  // Nombre de la pestaña con la marca del producto: Peaky Shop (nombre e ícono) en tiendas,
+  // Peaky Resto en restaurantes (y mientras carga).
+  useEffect(() => {
+    const tipo = business?.businessType ?? business?.business_type;
+    const marca = (shop: boolean) => {
+      document.title = shop ? "Peaky Shop" : "Peaky Resto";
+      const icono = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
+      if (icono) icono.href = shop ? "/peaky-shop.svg" : "/peaky-resto.svg";
+    };
+    marca(tipo === "retail");
+    return () => marca(false);
+  }, [business?.businessType, business?.business_type]);
+
   return (
     <BusinessContext.Provider
       value={{ business, loading, refreshBusiness: fetchBusiness }}
