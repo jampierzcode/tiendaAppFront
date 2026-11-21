@@ -22,6 +22,7 @@ self.addEventListener("push", (event) => {
       }
       await self.registration.showNotification(d.title || "Aviso", {
         body: d.body || "",
+        icon: "/pdv-192.png",
         tag: d.tag,
         data: { url: d.url || "/" },
         renotify: Boolean(d.tag),

@@ -48,14 +48,25 @@ export default function NotificationBell() {
     const maxId = lista[0]?.id ?? 0;
     if (ultimoId.current !== null && maxId > ultimoId.current) {
       const nuevo = lista.find((n) => n.id > (ultimoId.current as number));
-      if (nuevo) avisar(nuevo.title, nuevo.body ?? "", `aviso-${nuevo.id}`);
+      if (nuevo)
+        avisar(
+          nuevo.title,
+          nuevo.body ?? "",
+          // Misma etiqueta que el push del servidor: si llegan los dos, se reemplazan.
+          nuevo.orderId ? `${nuevo.type}-${nuevo.orderId}` : `aviso-${nuevo.id}`,
+          nuevo.orderId
+            ? `/b/${uuid_business}/orders?pedido=${nuevo.orderId}${nuevo.type === "mensaje" ? "&chat=1" : ""}`
+            : undefined,
+          nuevo.type === "pedido" ? "Nuevo pedido" : "Nuevo mensaje"
+        );
     }
     ultimoId.current = maxId;
     setItems(lista);
     setSinLeer(r.data.data.unread);
   };
 
-  const refrescar = usePolling(cargar, 20000, Boolean(uuid_business));
+  // También con la pestaña oculta: tiene que avisar aunque estés en otra pestaña.
+  const refrescar = usePolling(cargar, 20000, Boolean(uuid_business), true);
 
   // Si el permiso ya estaba dado, la suscripción push se renueva sola al abrir el panel.
   useEffect(() => {
