@@ -132,11 +132,8 @@ export default function StoreSettingsPage() {
         ...valores,
         banner_image_id: banner?.id ?? config?.bannerImageId ?? null,
       });
-      const cambioTipo = r.data.data.businessType !== config?.businessType;
       setConfig(r.data.data);
       message.success("Configuración guardada");
-      // El menú lateral depende del tipo de negocio: se recarga para reflejarlo.
-      if (cambioTipo) setTimeout(() => window.location.reload(), 600);
     } catch (e: any) {
       message.error(e?.response?.data?.message ?? "No se pudo guardar");
     } finally {
@@ -205,30 +202,17 @@ export default function StoreSettingsPage() {
                     <Form.Item
                       name="country"
                       label="País"
-                      extra={`${impuesto.nombre} ${impuesto.tasa}%: se aplica solo a todos tus productos. También define el formato de tu WhatsApp.`}
+                      extra={`${impuesto.nombre} ${impuesto.tasa}%: se aplica a todos tus productos y define el formato de tu WhatsApp. Se elige al crear la tienda y no se puede cambiar.`}
                     >
-                      <Select options={opcionesPais} />
+                      <Select options={opcionesPais} disabled />
                     </Form.Item>
 
                     <Form.Item
                       name="slug"
                       label="Dirección pública"
-                      extra={`Tu tienda vivirá en ${window.location.origin}/t/…`}
+                      extra="Se genera con el nombre al crear la tienda y no cambia, para que tus enlaces y tu QR sigan funcionando."
                     >
-                      <Input addonBefore="/t/" placeholder="visull-boutique" />
-                    </Form.Item>
-
-                    <Form.Item
-                      name="business_type"
-                      label="Tipo de negocio"
-                      extra="Define cómo se ve tu tienda: catálogo con variaciones, o carta digital con modificadores y cocina."
-                    >
-                      <Select
-                        options={[
-                          { value: "retail", label: "Tienda (ropa, repuestos, calzado…)" },
-                          { value: "restaurant", label: "Restaurante / cafetería (carta digital)" },
-                        ]}
-                      />
+                      <Input addonBefore="/t/" disabled />
                     </Form.Item>
 
                     <Form.Item
