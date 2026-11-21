@@ -125,7 +125,7 @@ export function avisar(titulo: string, cuerpo: string, etiqueta?: string, ruta?:
     .getRegistration()
     .then((reg) =>
       reg
-        ? reg.showNotification(titulo, { body: cuerpo, tag: etiqueta, data: { url: destino }, icon: "/pdv-192.png" })
+        ? reg.showNotification(titulo, { body: cuerpo, tag: etiqueta, data: { url: destino }, icon: "/pdv-192.png", vibrate: [200, 100, 200] } as NotificationOptions)
         : conPagina()
     )
     .catch(conPagina);

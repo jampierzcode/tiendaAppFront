@@ -19,6 +19,7 @@ import {
   TbPlus,
   TbPrinter,
   TbReceipt,
+  TbBell,
   TbRefresh,
   TbVolume,
   TbVolumeOff,
@@ -229,7 +230,7 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
     void cargarCarta();
   }, [api, cargarCarta, onYo]);
 
-  const { sonido, alternar: alternarSonido } = useSonidoPdv();
+  const { sonido, alternar: alternarSonido, permiso: permisoAvisos, activarNotificaciones } = useSonidoPdv(api);
   // Con sonido sigue consultando en segundo plano, para avisar «pedido listo» aunque esté en otra pestaña.
   const refrescar = usePolling(cargar, 6000, true, sonido);
   useAvisosPdv({ api, yo, sonido, mesas, cuentas: cuentasAbiertas, enCurso });
@@ -425,6 +426,19 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
           </Button>
         )}
       </div>
+
+      {enRaiz && sonido && permisoAvisos === "default" && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 px-4 py-3">
+          <TbBell className="shrink-0 text-xl text-brand-600" />
+          <p className="min-w-0 flex-1 basis-[200px] text-[13px] text-ink-soft">
+            <b className="text-ink">Activa las notificaciones</b> para enterarte de «Comanda lista» y pedidos nuevos
+            aunque estés en WhatsApp o con la pantalla apagada.
+          </p>
+          <Button type="primary" className="max-sm:flex-1" onClick={() => void activarNotificaciones()}>
+            Activar
+          </Button>
+        </div>
+      )}
 
       {(sinRed || pendientes.length > 0) && (
         <BannerPendientes
