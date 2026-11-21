@@ -30,6 +30,7 @@ import { usePolling } from "../hooks/usePolling";
 import {
   NOMBRE_SERVICIO,
   mensajeError,
+  opcionesPorGrupo,
   puede,
   type Carta,
   type Cuenta,
@@ -37,6 +38,7 @@ import {
   type LineaCarrito,
   type Mesa,
   type Plato,
+  type PromoEtiqueta,
   type ResumenCuenta,
   type Servicio,
   type Yo,
@@ -1354,10 +1356,21 @@ function VistaCuenta({
                 <span className="w-7 font-bold">{i.quantity}×</span>
                 <span className="flex-1">
                   <span className={i.voided ? "line-through" : ""}>{i.name}</span>
-                  {i.modifiers.length > 0 && <span className="block text-[12px] text-muted">{i.modifiers.map((m) => m.name).join(", ")}</span>}
+                  {i.modifiers.length > 0 &&
+                    opcionesPorGrupo(i.modifiers, dinero).map((g) => (
+                      <span key={g.grupo} className="block text-[12px] text-muted">
+                        {g.grupo && <span className="font-semibold text-ink/70">{g.grupo}: </span>}
+                        {g.texto}
+                      </span>
+                    ))}
                   {i.note && <span className="block text-[12px] text-warn">📝 {i.note}</span>}
                   {i.voided && <span className="block text-[12px] text-danger">Anulado: {i.voidReason}</span>}
                   {i.courtesy && <span className="block text-[12px] text-ok">🎁 {i.courtesyReason}</span>}
+                  {i.promo && !i.voided && (
+                    <span className="block text-[12px] font-semibold text-ok">
+                      🏷 {i.promo.name} · {i.promo.ahorro ? `−${dinero(i.promo.ahorro)}` : `−${Number(i.promo.percent.toFixed(1))}%`}
+                    </span>
+                  )}
                   {i.area && !i.voided && <span className="block text-[11px] text-muted">→ {i.area}</span>}
                 </span>
                 <span className="text-right">
@@ -1829,8 +1842,14 @@ function Comandar({
   const [cat, setCat] = useState<number | null>(null);
   const [buscar, setBuscar] = useState("");
   const [elegir, setElegir] = useState<Plato | null>(null);
+  /** Línea del carrito que se está editando (sus opciones), o null si se agrega una nueva. */
+  const [editando, setEditando] = useState<LineaCarrito | null>(null);
   const [verCarrito, setVerCarrito] = useState(false);
   const campoNombre = useRef<InputRef>(null);
+  // Al enviar (o vaciar) la orden, el cajón se cierra solo.
+  useEffect(() => {
+    if (!carrito.length) setVerCarrito(false);
+  }, [carrito.length]);
 
   const platos = useMemo(() => {
     const q = plano(buscar.trim());
@@ -1842,12 +1861,19 @@ function Comandar({
   const agregarSimple = (p: Plato) => {
     const i = carrito.findIndex((l) => l.productId === p.id && !l.options.length && !l.note);
     if (i >= 0) setCarrito(carrito.map((l, j) => (j === i ? { ...l, quantity: l.quantity + 1 } : l)));
-    else setCarrito([...carrito, { key: nuevoId(), productId: p.id, name: p.name, price: p.price, quantity: 1, note: "", options: [] }]);
+    else
+      setCarrito([
+        ...carrito,
+        { key: nuevoId(), productId: p.id, name: p.name, price: p.price, originalPrice: p.originalPrice, promos: p.promos, quantity: 1, note: "", options: [] },
+      ]);
   };
 
   const cantidadDe = (id: number) => carrito.filter((l) => l.productId === id).reduce((t, l) => t + l.quantity, 0);
   const precioLinea = (l: LineaCarrito) => (l.price + l.options.reduce((s, o) => s + o.priceDelta * o.quantity, 0)) * l.quantity;
   const totalCarrito = carrito.reduce((t, l) => t + precioLinea(l), 0);
+  /** Lo que la promoción descuenta en cada línea (solo el plato; los extras van completos). */
+  const ahorroLinea = (l: LineaCarrito) => Math.max(0, (l.originalPrice ?? l.price) - l.price) * l.quantity;
+  const ahorroCarrito = carrito.reduce((t, l) => t + ahorroLinea(l), 0);
   const unidades = carrito.reduce((t, l) => t + l.quantity, 0);
   const sinMesa = destino.tipo === "nueva" && destino.service !== "comedor";
   /** Para llevar: sin el nombre, luego nadie sabe de quién es "L011". */
@@ -1870,9 +1896,38 @@ function Comandar({
         <div key={l.key} className="border-b border-line-soft py-2.5">
           <div className="flex items-center gap-2">
             <span className="flex-1 text-[13.5px] font-semibold">{l.name}</span>
-            <span className="font-mono text-[12.5px]">{dinero(precioLinea(l))}</span>
+            <span className="text-right font-mono text-[12.5px]">
+              {ahorroLinea(l) > 0 && <span className="mr-1.5 text-[11.5px] text-muted line-through">{dinero(precioLinea(l) + ahorroLinea(l))}</span>}
+              {dinero(precioLinea(l))}
+            </span>
           </div>
-          {l.options.length > 0 && <div className="text-[12px] text-muted">{l.options.map((o) => o.name).join(", ")}</div>}
+          {!!l.promos?.length && <PromoTexto promos={l.promos} />}
+          {l.options.length > 0 && (
+            <div className="mt-0.5 space-y-0.5 text-[12px] text-muted">
+              {opcionesPorGrupo(l.options, dinero).map((g) => (
+                <div key={g.grupo}>
+                  {g.grupo && <span className="font-semibold text-ink/70">{g.grupo}: </span>}
+                  {g.texto}
+                </div>
+              ))}
+            </div>
+          )}
+          {(() => {
+            const plato = carta.platos.find((p) => p.id === l.productId);
+            return plato && plato.modifierGroups.length > 0 ? (
+              <button
+                type="button"
+                className="mt-1 text-[12px] font-semibold text-brand-600 underline-offset-2 hover:underline"
+                onClick={() => {
+                  setVerCarrito(false);
+                  setEditando(l);
+                  setElegir(plato);
+                }}
+              >
+                Cambiar opciones
+              </button>
+            ) : null;
+          })()}
           <div className="mt-1.5 flex items-center gap-2">
             <Button
               size="small"
@@ -1941,8 +1996,18 @@ function Comandar({
             Todo
           </Button>
           {carta.categorias.map((c) => (
-            <Button key={c.id} shape="round" type={cat === c.id ? "primary" : "default"} onClick={() => setCat(c.id)}>
+            <Button
+              key={c.id}
+              shape="round"
+              type={cat === c.id ? "primary" : "default"}
+              onClick={() => setCat(c.id)}
+            >
               {c.name}
+              {!!c.promos?.length && (
+                <span className={`ml-1 rounded-full px-1.5 text-[11px] font-bold ${cat === c.id ? "bg-white/25 text-white" : "bg-ok-bg text-ok"}`}>
+                  {c.promos[0].label}
+                </span>
+              )}
             </Button>
           ))}
         </div>
@@ -1963,10 +2028,16 @@ function Comandar({
                   </span>
                 )}
                 <span className="text-[13.5px] font-semibold leading-tight text-ink">{p.name}</span>
-                <span className="mt-1 font-mono text-[12px] text-muted">
-                  {dinero(p.price)}
+                <span className="mt-1 flex flex-wrap items-center gap-x-1.5 font-mono text-[12px] text-muted">
+                  {(p.originalPrice ?? p.price) > p.price && <span className="text-[11px] line-through">{dinero(p.originalPrice!)}</span>}
+                  <span className={(p.originalPrice ?? p.price) > p.price ? "font-bold text-ok" : ""}>{dinero(p.price)}</span>
                   {p.modifierGroups.length > 0 ? " · opciones" : ""}
                 </span>
+                {!!p.promos?.length && (
+                  <span className="mt-1 self-start rounded-full bg-ok-bg px-2 py-0.5 text-[11px] font-bold text-ok" title={p.promos.map((x) => x.name).join(" · ")}>
+                    🏷 {p.promos.map((x) => x.label).join(" · ")}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -1985,6 +2056,12 @@ function Comandar({
                 <span className="font-mono">{dinero(envio)}</span>
               </div>
             )}
+            {ahorroCarrito > 0 && (
+              <div className="flex justify-between text-[13px] font-semibold text-ok">
+                <span>Ahorro por promociones</span>
+                <span className="font-mono">−{dinero(ahorroCarrito)}</span>
+              </div>
+            )}
             <div className="mb-3 flex items-baseline justify-between">
               <span className="text-muted">Total</span>
               <span className="font-mono text-[22px] font-bold">{dinero(totalCarrito + envio)}</span>
@@ -1999,11 +2076,27 @@ function Comandar({
         <div className="sticky bottom-0 z-20 -mx-1 mt-4 rounded-t-2xl border-t border-line bg-white/95 p-3 shadow-[0_-4px_16px_rgba(20,18,67,0.06)] backdrop-blur lg:hidden">
           {/* Con dos acciones (para llevar / delivery) el resumen va en su propia fila: en 360 px no caben tres botones. */}
           <div className={`mx-auto grid max-w-5xl gap-2 ${sinMesa ? "grid-cols-2" : "grid-cols-[minmax(0,1fr)_auto]"}`}>
-            <Button size="large" className={`!min-w-0 ${sinMesa ? "col-span-2" : ""}`} icon={<TbList />} onClick={() => setVerCarrito(true)}>
-              <span className="truncate">
-                {unidades} · {dinero(totalCarrito + envio)}
+            {/* La orden en curso como un ticket: se toca para ver y editar los platos. */}
+            <button
+              type="button"
+              onClick={() => setVerCarrito(true)}
+              className={`flex min-w-0 items-center gap-2.5 rounded-xl border-2 border-dashed border-brand-500/60 bg-brand-50 px-3 py-1.5 text-left active:scale-[0.98] ${
+                sinMesa ? "col-span-2" : ""
+              }`}
+            >
+              <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-500 text-[18px] text-white">
+                <TbReceipt />
+                <span className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[11px] font-bold text-brand-600 ring-2 ring-brand-500">
+                  {unidades}
+                </span>
               </span>
-            </Button>
+              <span className="min-w-0 flex-1 leading-tight">
+                <span className="block truncate text-[11.5px] font-semibold text-brand-600">Orden · {destino.nombre}</span>
+                <span className="block font-mono text-[15px] font-bold text-ink">{dinero(totalCarrito + envio)}</span>
+                {ahorroCarrito > 0 && <span className="block text-[10.5px] font-semibold text-ok">Ahorra {dinero(ahorroCarrito)}</span>}
+              </span>
+              <span className="shrink-0 text-[11px] font-semibold text-brand-600">Ver ›</span>
+            </button>
             {botones(false)}
           </div>
         </div>
@@ -2011,15 +2104,59 @@ function Comandar({
 
       <OpcionesModal
         plato={elegir}
+        inicial={editando}
         dinero={dinero}
-        onClose={() => setElegir(null)}
-        onAgregar={(l) => {
-          setCarrito([...carrito, l]);
+        onClose={() => {
           setElegir(null);
+          setEditando(null);
+        }}
+        onAgregar={(l) => {
+          // Editando: la línea se reemplaza en su lugar (misma posición en el ticket).
+          setCarrito(editando ? carrito.map((x) => (x.key === editando.key ? { ...l, key: editando.key } : x)) : [...carrito, l]);
+          setElegir(null);
+          setEditando(null);
         }}
       />
 
-      <Drawer open={verCarrito} placement="bottom" height="75vh" title={`Comanda · ${destino.nombre}`} onClose={() => setVerCarrito(false)}>
+      <Drawer
+        open={verCarrito}
+        placement="bottom"
+        height="80vh"
+        title={
+          <span className="flex items-center gap-2">
+            <TbReceipt className="text-brand-500" />
+            Orden · {destino.nombre}
+            <span className="rounded-full bg-brand-50 px-2 text-[12px] font-semibold text-brand-600">
+              {unidades} {unidades === 1 ? "plato" : "platos"}
+            </span>
+          </span>
+        }
+        onClose={() => setVerCarrito(false)}
+        footer={
+          carrito.length > 0 && (
+            <div className="py-1">
+              {envio > 0 && (
+                <div className="flex justify-between text-[13px] text-muted">
+                  <span>Envío</span>
+                  <span className="font-mono">{dinero(envio)}</span>
+                </div>
+              )}
+              {ahorroCarrito > 0 && (
+                <div className="flex justify-between text-[13px] font-semibold text-ok">
+                  <span>Ahorro por promociones</span>
+                  <span className="font-mono">−{dinero(ahorroCarrito)}</span>
+                </div>
+              )}
+              <div className="mb-2 flex items-baseline justify-between">
+                <span className="text-muted">Total</span>
+                <span className="font-mono text-[20px] font-bold">{dinero(totalCarrito + envio)}</span>
+              </div>
+              <div className={`grid gap-2 ${sinMesa ? "grid-cols-2" : ""}`}>{botones(true)}</div>
+            </div>
+          )
+        }
+      >
+        <p className="mb-1 text-[12px] text-muted">Cambia cantidades o agrega notas antes de enviar.</p>
         {lineas}
       </Drawer>
     </div>
@@ -2028,11 +2165,14 @@ function Comandar({
 
 function OpcionesModal({
   plato,
+  inicial,
   dinero,
   onClose,
   onAgregar,
 }: {
   plato: Plato | null;
+  /** Línea ya agregada cuyas opciones se cambian. */
+  inicial?: LineaCarrito | null;
   dinero: (n: number) => string;
   onClose: () => void;
   onAgregar: (l: LineaCarrito) => void;
@@ -2042,10 +2182,10 @@ function OpcionesModal({
   const [cantidad, setCantidad] = useState(1);
 
   useEffect(() => {
-    setElegidas({});
-    setNota("");
-    setCantidad(1);
-  }, [plato]);
+    setElegidas(inicial ? Object.fromEntries(inicial.options.map((o) => [o.optionId, o.quantity])) : {});
+    setNota(inicial?.note ?? "");
+    setCantidad(inicial?.quantity ?? 1);
+  }, [plato, inicial]);
 
   if (!plato) return null;
 
@@ -2070,25 +2210,62 @@ function OpcionesModal({
   };
 
   const opciones = plato.modifierGroups.flatMap((g) =>
-    g.options.filter((o) => elegidas[o.id]).map((o) => ({ optionId: o.id, quantity: elegidas[o.id], name: o.name, priceDelta: o.priceDelta }))
+    g.options
+      .filter((o) => elegidas[o.id])
+      .map((o) => ({ optionId: o.id, quantity: elegidas[o.id], name: o.name, priceDelta: o.priceDelta, groupName: g.name }))
   );
+  const totalModal = (plato.price + opciones.reduce((s, o) => s + o.priceDelta * o.quantity, 0)) * cantidad;
 
   return (
     <Modal
       open
-      title={plato.name}
+      title={
+        <span>
+          {plato.name}
+          <span className="ml-2 font-mono text-[13px] font-normal text-muted">{dinero(plato.price)}</span>
+          {!!plato.promos?.length && (
+            <span className="ml-2 rounded-full bg-ok-bg px-2 py-0.5 text-[12px] font-bold text-ok">🏷 {plato.promos.map((x) => `${x.name} ${x.label}`).join(" · ")}</span>
+          )}
+        </span>
+      }
       onCancel={onClose}
-      okText={faltan.length ? `Elige: ${faltan[0].name}` : "Agregar"}
+      okText={faltan.length ? `Elige: ${faltan[0].name}` : `${inicial ? "Guardar" : "Agregar"} · ${dinero(totalModal)}`}
       okButtonProps={{ disabled: faltan.length > 0 }}
-      onOk={() => onAgregar({ key: nuevoId(), productId: plato.id, name: plato.name, price: plato.price, quantity: cantidad, note: nota, options: opciones })}
+      onOk={() =>
+        onAgregar({
+          key: nuevoId(),
+          productId: plato.id,
+          name: plato.name,
+          price: plato.price,
+          originalPrice: plato.originalPrice,
+          promos: plato.promos,
+          quantity: cantidad,
+          note: nota,
+          options: opciones,
+        })
+      }
     >
       {plato.modifierGroups.map((g) => (
         <div key={g.groupId} className="mb-4">
-          <div className="mb-2 text-[13px] font-semibold">
-            {g.name}{" "}
-            <span className="font-normal text-muted">
-              {g.minSelect > 0 ? "(obligatorio)" : "(opcional)"} {g.maxSelect > 1 ? `· hasta ${g.maxSelect}` : ""}
+          <div className="mb-2 flex items-center gap-2 text-[13px] font-semibold">
+            <span>
+              {g.name}{" "}
+              <span className="font-normal text-muted">
+                {g.minSelect > 0 ? "(obligatorio)" : "(opcional)"} {g.maxSelect > 1 ? `· hasta ${g.maxSelect}` : ""}
+              </span>
             </span>
+            {/* De un vistazo: qué grupo ya está listo y cuál falta. */}
+            {g.minSelect > 0 &&
+              (enGrupo(g) >= g.minSelect ? (
+                <span className="ml-auto rounded-full bg-ok-bg px-2 text-[11px] text-ok">✓ Listo</span>
+              ) : (
+                <span className="ml-auto rounded-full bg-warn-bg px-2 text-[11px] text-warn">Falta elegir</span>
+              ))}
+            {g.maxSelect > 1 && enGrupo(g) > 0 && (
+              <span className={`${g.minSelect > 0 ? "" : "ml-auto "}text-[11px] font-normal text-muted`}>
+                {enGrupo(g)}/{g.maxSelect}
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap gap-2">
             {g.options.map((o) => (
@@ -2106,5 +2283,14 @@ function OpcionesModal({
         <InputNumber min={1} max={99} value={cantidad} onChange={(v) => setCantidad(Number(v) || 1)} />
       </div>
     </Modal>
+  );
+}
+
+/** «🏷 Promo viernes −10%» bajo una línea del ticket. */
+function PromoTexto({ promos }: { promos: PromoEtiqueta[] }) {
+  return (
+    <div className="text-[12px] font-semibold text-ok">
+      🏷 {promos.map((x) => `${x.name} ${x.label}`).join(" · ")}
+    </div>
   );
 }

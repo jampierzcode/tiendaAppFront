@@ -117,12 +117,23 @@ export interface Plato {
   name: string;
   imageUrl: string | null;
   price: number;
+  /** Precio sin promoción; si es mayor que `price`, el plato tiene descuento hoy. */
+  originalPrice?: number;
+  /** % que ahorra la mejor promoción por unidad (0 si no hay o es 2x1). */
+  discount?: number;
+  promos?: PromoEtiqueta[];
   categoryIds: number[];
   modifierGroups: GrupoMod[];
 }
 
+/** Promoción vigente que toca un plato o una categoría: «Promo viernes» · «−10%». */
+export interface PromoEtiqueta {
+  name: string;
+  label: string;
+}
+
 export interface Carta {
-  categorias: { id: number; name: string }[];
+  categorias: { id: number; name: string; promos?: PromoEtiqueta[] }[];
   platos: Plato[];
 }
 
@@ -135,11 +146,13 @@ export interface ItemCuenta {
   lineTotal: number;
   note: string | null;
   area: string | null;
-  modifiers: { name: string; quantity: number }[];
+  modifiers: { name: string; group?: string; quantity: number; priceDelta?: number }[];
   voided: boolean;
   voidReason: string | null;
   courtesy: boolean;
   courtesyReason: string | null;
+  /** Promoción con que se vendió la línea. */
+  promo?: { name: string; percent: number; ahorro?: number } | null;
   kitchenStatus: "pendiente" | "preparando" | "listo" | "servido" | null;
 }
 
@@ -189,6 +202,23 @@ export interface Yo {
   negocio: { name: string; uuid: string; simbolo: string };
 }
 
+/**
+ * Opciones de un plato agrupadas: «Presa: Pierna», «Bebida: Limonada (+S/ 3.00)».
+ * En un combo, la lista plana no dice qué es la bebida y qué el acompañamiento.
+ */
+export function opcionesPorGrupo(
+  opciones: { name: string; group?: string; groupName?: string; quantity: number; priceDelta?: number }[],
+  dinero?: (n: number) => string
+) {
+  const grupos = new Map<string, string[]>();
+  for (const o of opciones) {
+    const g = o.groupName ?? o.group ?? "";
+    const extra = dinero && o.priceDelta ? ` (+${dinero(o.priceDelta * o.quantity)})` : "";
+    grupos.set(g, [...(grupos.get(g) ?? []), `${o.quantity > 1 ? `${o.quantity}× ` : ""}${o.name}${extra}`]);
+  }
+  return [...grupos].map(([grupo, lista]) => ({ grupo, texto: lista.join(", ") }));
+}
+
 /** ¿El actor tiene el permiso? (los "alcance" se consultan por valor). */
 export const puede = (yo: Yo | null, p: string) => yo?.permisos?.[p] === true;
 
@@ -198,7 +228,10 @@ export interface LineaCarrito {
   productId: number;
   name: string;
   price: number;
+  /** Precio sin promoción (para tachar en el ticket). */
+  originalPrice?: number;
+  promos?: PromoEtiqueta[];
   quantity: number;
   note: string;
-  options: { optionId: number; quantity: number; name: string; priceDelta: number }[];
+  options: { optionId: number; quantity: number; name: string; priceDelta: number; groupName?: string }[];
 }
