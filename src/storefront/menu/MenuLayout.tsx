@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { esClaro } from "../color";
 import { useStore } from "../StoreContext";
+import { modoCarta } from "../api";
 import CartSheet from "./CartSheet";
 import { MenuCartProvider, useMenuCart } from "./MenuCart";
 
@@ -39,6 +40,8 @@ function Contenido() {
   }
 
   const textoSobrePrimario = esClaro(tienda.primaryColor) ? "#111827" : "#ffffff";
+  const modo = modoCarta(tienda);
+  const sePide = modo === "pedidos" || modo === "pedir";
   const enSeguimiento = pathname.includes("/pedido/") || pathname.endsWith("/cuenta");
 
   return (
@@ -78,13 +81,13 @@ function Contenido() {
           <div className="min-w-0">
             <h1 className="truncate text-2xl font-black leading-tight">{tienda.name}</h1>
             <p className="mt-0.5 line-clamp-2 text-sm opacity-85">
-              {tienda.schedule || tienda.description || "Haz tu pedido desde aquí"}
+              {tienda.schedule || tienda.description || (sePide ? "Haz tu pedido desde aquí" : "Nuestra carta")}
             </p>
           </div>
         </div>
       </header>
 
-      {!tienda.aceptaPedidos && (
+      {sePide && !tienda.aceptaPedidos && (
         <p className="bg-amber-50 px-5 py-2 text-center text-sm font-medium text-amber-800">
           Por ahora no estamos recibiendo pedidos en línea.
         </p>
@@ -95,7 +98,7 @@ function Contenido() {
       </main>
 
       <AnimatePresence>
-        {totalItems > 0 && !enSeguimiento && (
+        {sePide && totalItems > 0 && !enSeguimiento && (
           <motion.div
             initial={{ y: 80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}

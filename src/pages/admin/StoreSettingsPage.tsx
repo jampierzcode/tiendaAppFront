@@ -23,11 +23,13 @@ import GalleryModal from "../../components/admin/GalleryModal";
 import PhoneInput from "../../components/ui/PhoneInput";
 import { errorWhatsapp, impuestoDe, opcionesPais } from "../../utilities/paises";
 import { useSearchParams } from "react-router-dom";
+import { useFunciones } from "../../context/BusinessContext";
 
 interface Config {
   slug: string;
   businessType?: "retail" | "restaurant";
   paymentPolicy?: "none" | "on_confirm" | "on_delivery";
+  cartaWhatsapp?: "ninguno" | "consultar" | "pedir";
   paymentInstructions?: string | null;
   name: string;
   description: string | null;
@@ -68,6 +70,7 @@ const PLACEHOLDERS: [string, string][] = [
 
 export default function StoreSettingsPage() {
   const [form] = Form.useForm();
+  const { tiene } = useFunciones();
   const [searchParams] = useSearchParams();
   const tabInicial = searchParams.get("tab") ?? "general";
   const [config, setConfig] = useState<Config | null>(null);
@@ -106,6 +109,7 @@ export default function StoreSettingsPage() {
           logo_url: d.logoUrl,
           business_type: d.businessType ?? "retail",
           payment_policy: d.paymentPolicy ?? "none",
+          carta_whatsapp: d.cartaWhatsapp ?? "pedir",
         });
       })
       .catch(() => message.error("No se pudo cargar la configuración"))
@@ -214,6 +218,27 @@ export default function StoreSettingsPage() {
                     >
                       <Input addonBefore="/t/" disabled />
                     </Form.Item>
+
+                    {config?.businessType === "restaurant" && (
+                      <Form.Item
+                        name="carta_whatsapp"
+                        label="WhatsApp en tu carta"
+                        extra={
+                          tiene("pedidos_online")
+                            ? "Tu plan tiene Pedidos en línea: en la carta tus clientes piden y el pedido te llega al panel. Esta opción no aplica."
+                            : "Qué pueden hacer tus clientes desde la carta. Los mensajes llegan a tu WhatsApp y los atiendes tú (o tu propio bot)."
+                        }
+                      >
+                        <Select
+                          disabled={tiene("pedidos_online")}
+                          options={[
+                            { value: "ninguno", label: "Solo ver la carta (sin botones de pedir)" },
+                            { value: "consultar", label: "Consultar: botón de WhatsApp en cada plato" },
+                            { value: "pedir", label: "Pedir: arman su pedido y se envía por WhatsApp" },
+                          ]}
+                        />
+                      </Form.Item>
+                    )}
 
                     <Form.Item
                       name="payment_policy"

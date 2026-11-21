@@ -1,7 +1,7 @@
 import PromoStrip from "../components/PromoStrip";
 import { motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { obtenerMenu, type CartaMenu, type PlatoMenu } from "../api";
+import { modoCarta, obtenerMenu, urlConsulta, type CartaMenu, type PlatoMenu } from "../api";
 import { useStore } from "../StoreContext";
 import ProductSheet from "./ProductSheet";
 
@@ -12,7 +12,9 @@ import ProductSheet from "./ProductSheet";
  * sorprendan.
  */
 export default function MenuPage() {
-  const { slug, precio } = useStore();
+  const { slug, precio, tienda } = useStore();
+  const modo = tienda ? modoCarta(tienda) : "ninguno";
+  const sePide = modo === "pedidos" || modo === "pedir";
   const [carta, setCarta] = useState<CartaMenu | null>(null);
   const [error, setError] = useState(false);
   const [categoria, setCategoria] = useState<number | "todas">("todas");
@@ -183,7 +185,9 @@ export default function MenuPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "0px 0px -40px 0px" }}
                 transition={{ duration: 0.3, delay: Math.min(i * 0.04, 0.2) }}
-                className="flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm"
+                className={`flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm ${
+                  p.agotado ? "opacity-60 grayscale" : ""
+                }`}
               >
                 <button
                   onClick={() => setElegido(p)}
@@ -201,7 +205,12 @@ export default function MenuPage() {
                     ) : (
                       <div className="grid h-full place-items-center text-3xl">🍽️</div>
                     )}
-                    {(p.originalPrice || (p.promos?.length ?? 0) > 0) && (
+                    {p.agotado && (
+                      <span className="absolute inset-x-0 bottom-0 bg-neutral-900/75 py-1 text-center text-xs font-bold text-white">
+                        Hoy no hay
+                      </span>
+                    )}
+                    {!p.agotado && (p.originalPrice || (p.promos?.length ?? 0) > 0) && (
                       <span
                         className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-bold text-white"
                         style={{ backgroundColor: "var(--tienda-secundario)" }}
@@ -230,16 +239,29 @@ export default function MenuPage() {
                   </div>
                 </button>
 
-                <button
-                  onClick={() => setElegido(p)}
-                  className="mx-3 mb-3 flex h-10 items-center justify-center gap-1.5 rounded-full text-sm font-bold text-white"
-                  style={{ backgroundColor: "var(--tienda-primario)" }}
-                >
-                  <span aria-hidden className="text-lg leading-none">
-                    +
-                  </span>
-                  PEDIR
-                </button>
+                {!p.agotado && sePide && (
+                  <button
+                    onClick={() => setElegido(p)}
+                    className="mx-3 mb-3 flex h-10 items-center justify-center gap-1.5 rounded-full text-sm font-bold text-white"
+                    style={{ backgroundColor: "var(--tienda-primario)" }}
+                  >
+                    <span aria-hidden className="text-lg leading-none">
+                      +
+                    </span>
+                    PEDIR
+                  </button>
+                )}
+                {!p.agotado && modo === "consultar" && tienda && (
+                  <a
+                    href={urlConsulta(tienda, p.name)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mx-3 mb-3 flex h-10 items-center justify-center rounded-full border text-sm font-bold"
+                    style={{ borderColor: "var(--tienda-primario)", color: "var(--tienda-primario)" }}
+                  >
+                    Consultar
+                  </a>
+                )}
               </motion.article>
             ))}
           </div>

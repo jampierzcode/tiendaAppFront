@@ -21,6 +21,7 @@ import { BusinessProvider } from "./context/BusinessContext";
 import { CategoriesPage } from "./pages/admin/CategoryProduct";
 import ProductAttributesPage from "./pages/admin/ProductAttributesPage";
 import TagsPage from "./pages/admin/TagsPage";
+import MenuHoyPage from "./pages/admin/MenuHoyPage";
 import ProductsPage from "./pages/admin/ProductsPage";
 import DashboardAdmin from "./pages/admin/DashboardAdmin";
 import MiPlanPage from "./pages/admin/MiPlanPage";
@@ -222,6 +223,7 @@ export default function App() {
             <Route path="inventory" element={<InventoryPage />} />
             <Route path="discounts" element={<ConFuncion f="promociones"><DiscountsPage /></ConFuncion>} />
             <Route path="products" element={<ProductsPage />} />
+            <Route path="menu-hoy" element={<MenuHoyPage />} />
             <Route path="categories" element={<CategoriesPage />} />
             <Route path="attributes" element={<ProductAttributesPage />} />
             <Route path="tags" element={<TagsPage />} />

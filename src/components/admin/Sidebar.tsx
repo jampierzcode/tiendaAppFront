@@ -18,6 +18,7 @@ import {
   TbChefHat,
   TbArmchair,
   TbToolsKitchen2,
+  TbCalendarCheck,
   TbClipboardCheck,
   TbArrowsExchange,
   TbChartPie,
@@ -133,6 +134,7 @@ export default function Sidebar({
     {
       titulo: "Catálogo",
       items: [
+        { titulo: "Menú de hoy", url: `/b/${uuid_business}/menu-hoy`, icono: <TbCalendarCheck /> },
         { titulo: "Platos", url: `/b/${uuid_business}/products`, icono: <BiPackage /> },
         { titulo: "Categorías", url: `/b/${uuid_business}/categories`, icono: <BiCategoryAlt /> },
         { titulo: "Modificadores", url: `/b/${uuid_business}/modifiers`, icono: <BiSliderAlt /> },
