@@ -20,6 +20,8 @@ import {
   TbPrinter,
   TbReceipt,
   TbRefresh,
+  TbVolume,
+  TbVolumeOff,
   TbSearch,
   TbTrash,
   TbUser,
@@ -44,6 +46,7 @@ import {
   type Yo,
 } from "./api";
 import { AutorizacionProvider } from "./autorizacion";
+import { useAvisosPdv, useSonidoPdv } from "./avisosPdv";
 import { conPin, fueCancelado, useConAutorizacion } from "./autorizacionCtx";
 import CajaPanel from "./CajaPanel";
 import { aCuerpo, descartar, encolarComanda, enviarPendientes, leerPendientes, nuevoId, type ComandaPendiente } from "./outbox";
@@ -226,7 +229,10 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
     void cargarCarta();
   }, [api, cargarCarta, onYo]);
 
-  const refrescar = usePolling(cargar, 6000);
+  const { sonido, alternar: alternarSonido } = useSonidoPdv();
+  // Con sonido sigue consultando en segundo plano, para avisar «pedido listo» aunque esté en otra pestaña.
+  const refrescar = usePolling(cargar, 6000, true, sonido);
+  useAvisosPdv({ api, yo, sonido, mesas, cuentas: cuentasAbiertas, enCurso });
 
   const vaciarCola = useCallback(async () => {
     if (!leerPendientes(uuid).some((c) => !c.error)) return;
@@ -401,6 +407,11 @@ function SalonInterno({ api, uuid, onSalir, onYo }: Props) {
             Caja
           </Button>
         )}
+        <Button
+          icon={sonido ? <TbVolume /> : <TbVolumeOff />}
+          title={sonido ? "Avisos con sonido y voz: activados en este equipo" : "Avisos con sonido apagados en este equipo"}
+          onClick={alternarSonido}
+        />
         <Button
           icon={<TbRefresh />}
           onClick={() => {

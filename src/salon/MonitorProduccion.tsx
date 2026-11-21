@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { decir, desbloquearAudio, pitar } from "../hooks/useAvisos";
 import { Button, Empty, Spin, message } from "antd";
 import { TbArrowBackUp, TbBike, TbCheck, TbFlame, TbPaperBag, TbVolume, TbVolumeOff } from "react-icons/tb";
 import dayjs from "dayjs";
@@ -44,24 +45,6 @@ const SIGUIENTE: Record<string, "preparando" | "listo" | "pendiente"> = {
   listo: "pendiente",
 };
 
-/** Pitido corto sin archivos de audio. */
-function pitar() {
-  try {
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new Ctx();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.frequency.value = 880;
-    o.connect(g);
-    g.connect(ctx.destination);
-    g.gain.setValueAtTime(0.25, ctx.currentTime);
-    o.start();
-    o.stop(ctx.currentTime + 0.25);
-  } catch {
-    /* sin audio */
-  }
-}
-
 /**
  * Monitor de producción (KDS): una tarjeta por comanda y área. Se toca un
  * plato para avanzar su estado (pendiente → preparando → listo) o «Listo» para
@@ -79,7 +62,10 @@ export default function MonitorProduccion({ titulo, subtitulo, cargar, cambiar }
     try {
       const lista = await cargar();
       const nuevos = lista.filter((t) => t.estado === "pendiente" && !vistos.current?.has(t.clave));
-      if (vistos.current && nuevos.length && sonido) pitar();
+      if (vistos.current && nuevos.length && sonido) {
+        pitar();
+        decir(nuevos.length > 1 ? `${nuevos.length} comandas nuevas` : "Nueva comanda");
+      }
       vistos.current = new Set(lista.map((t) => t.clave));
       setTickets(lista);
     } catch (e) {
@@ -88,6 +74,7 @@ export default function MonitorProduccion({ titulo, subtitulo, cargar, cambiar }
   }, [cargar, sonido]);
 
   const refrescar = usePolling(leer, 4000, true, true);
+  useEffect(() => desbloquearAudio(), []);
 
   useEffect(() => {
     const t = setInterval(() => setAhora(Date.now()), 15000);
