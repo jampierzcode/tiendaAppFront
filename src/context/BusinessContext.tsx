@@ -61,17 +61,12 @@ export const BusinessProvider = ({ children }: { children: ReactNode }) => {
     fetchBusiness();
   }, [uuid_business]);
 
-  // Nombre de la pestaña con la marca del producto: Peaky Shop (nombre e ícono) en tiendas,
-  // Peaky Resto en restaurantes (y mientras carga).
+  // Marca de la pestaña: Peaky Resto en restaurantes, Peaky Shop en tiendas.
+  // Fuera de un negocio (login, superadmin, o mientras carga) es Peaky Tech.
   useEffect(() => {
     const tipo = business?.businessType ?? business?.business_type;
-    const marca = (shop: boolean) => {
-      document.title = shop ? "Peaky Shop" : "Peaky Resto";
-      const icono = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
-      if (icono) icono.href = shop ? "/peaky-shop.svg" : "/peaky-resto.svg";
-    };
-    marca(tipo === "retail");
-    return () => marca(false);
+    marcaPestana(tipo === "restaurant" ? "resto" : tipo === "retail" ? "shop" : "tech");
+    return () => marcaPestana("tech");
   }, [business?.businessType, business?.business_type]);
 
   return (
@@ -81,6 +76,19 @@ export const BusinessProvider = ({ children }: { children: ReactNode }) => {
       {children}
     </BusinessContext.Provider>
   );
+};
+
+const MARCAS = {
+  tech: { titulo: "Peaky Tech", icono: "/peaky-tech.svg" },
+  resto: { titulo: "Peaky Resto", icono: "/peaky-resto.svg" },
+  shop: { titulo: "Peaky Shop", icono: "/peaky-shop.svg" },
+};
+
+/** Pone el nombre y el ícono de la pestaña. */
+export const marcaPestana = (marca: keyof typeof MARCAS) => {
+  document.title = MARCAS[marca].titulo;
+  const icono = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
+  if (icono) icono.href = MARCAS[marca].icono;
 };
 
 export const useBusiness = () => useContext(BusinessContext);
