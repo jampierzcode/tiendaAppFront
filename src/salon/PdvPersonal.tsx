@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { marcaPestana } from "../context/BusinessContext";
 import { Button, Input, Modal, Spin, message } from "antd";
 import { TbBackspace, TbDeviceMobile, TbLink } from "react-icons/tb";
 import SalonApp from "./SalonApp";
@@ -32,6 +33,7 @@ export default function PdvPersonal() {
   // Instalable como app (Chrome → «Instalar»): en la PC o el celular queda con
   // su propio ícono y ventana, sin barra del navegador.
   useEffect(() => {
+    marcaPestana("resto");
     document.title = "PDV · Peaky Resto";
     const link = document.createElement("link");
     link.rel = "manifest";
