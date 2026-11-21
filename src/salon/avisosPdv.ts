@@ -2,25 +2,50 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { AxiosInstance } from "axios";
 import { avisar, decir, desbloquearAudio, pitar } from "../hooks/useAvisos";
 import { usePolling } from "../hooks/usePolling";
+import { activarPush, pushSoportado } from "../utilities/push";
 import type { Mesa, ResumenCuenta, Yo } from "./api";
 
 const CLAVE = "pdv:sonido";
 
-/** Interruptor de sonido de ESTE equipo (cada celular decide si suena). */
-export function useSonidoPdv() {
+/** Las rutas de push son /api/push (fuera de /b/:uuid/salon): URL absoluta con el mismo token. */
+const RAIZ_API = import.meta.env.VITE_API_URL as string;
+
+/**
+ * Interruptor de sonido de ESTE equipo (cada celular decide si suena) y
+ * avisos push: al activar se pide el permiso de notificaciones y el celular
+ * queda suscrito a nombre de quien entró, para recibir «Comanda lista» o
+ * «Nuevo pedido» aunque esté en WhatsApp o con Chrome cerrado.
+ */
+export function useSonidoPdv(api: AxiosInstance) {
   const [sonido, setSonido] = useState(() => localStorage.getItem(CLAVE) !== "0");
+  const [permiso, setPermiso] = useState<NotificationPermission | "no-soportado">(() =>
+    pushSoportado() ? Notification.permission : "no-soportado"
+  );
   useEffect(() => desbloquearAudio(), []);
+
+  // Si el permiso ya estaba dado, se renueva la suscripción a nombre de quien entró.
+  useEffect(() => {
+    if (pushSoportado() && Notification.permission === "granted") void activarPush(api, RAIZ_API);
+  }, [api]);
+
+  const activarNotificaciones = useCallback(async () => {
+    if (!pushSoportado()) return;
+    await activarPush(api, RAIZ_API, {}, true);
+    setPermiso(Notification.permission);
+  }, [api]);
+
   const alternar = useCallback(() => {
     const nuevo = !sonido;
     localStorage.setItem(CLAVE, nuevo ? "1" : "0");
     setSonido(nuevo);
-    // El toque del botón desbloquea el audio y sirve de prueba.
+    // El toque del botón desbloquea el audio, sirve de prueba y pide el permiso.
     if (nuevo) {
       pitar();
       decir("Sonido activado");
+      void activarNotificaciones();
     }
-  }, [sonido]);
-  return { sonido, alternar };
+  }, [sonido, activarNotificaciones]);
+  return { sonido, alternar, permiso, activarNotificaciones };
 }
 
 interface EnCursoMin {
