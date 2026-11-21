@@ -32,7 +32,7 @@ export default function PdvPersonal() {
   // Instalable como app (Chrome → «Instalar»): en la PC o el celular queda con
   // su propio ícono y ventana, sin barra del navegador.
   useEffect(() => {
-    document.title = "PDV";
+    document.title = "PDV · Peaky Resto";
     const link = document.createElement("link");
     link.rel = "manifest";
     link.href = "/pdv.webmanifest";
