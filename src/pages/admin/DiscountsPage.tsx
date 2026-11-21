@@ -20,7 +20,7 @@ import dayjs from "dayjs";
 import { TbPlus } from "react-icons/tb";
 import { apiTienda } from "../../api/apiTienda";
 import PageHeader from "../../components/ui/PageHeader";
-import { useBusiness } from "../../context/BusinessContext";
+import { useBusiness, useEsRestaurante } from "../../context/BusinessContext";
 
 interface Promo {
   id: number;
@@ -58,6 +58,25 @@ const DIAS = [
   { value: 7, label: "Dom" },
 ];
 
+/**
+ * Días de la semana (1 = lunes … 7 = domingo) que caen entre dos fechas.
+ * null = el rango no está completo, así que cualquier día vale.
+ */
+const diasDelRango = (desde?: dayjs.Dayjs | string | null, hasta?: dayjs.Dayjs | string | null) => {
+  if (!desde || !hasta) return null;
+  const a = dayjs(desde).startOf("day");
+  const b = dayjs(hasta).startOf("day");
+  const dias = new Set<number>();
+  for (let d = a; !d.isAfter(b) && dias.size < 7; d = d.add(1, "day")) dias.add(d.day() === 0 ? 7 : d.day());
+  return dias;
+};
+
+/** Con fechas y días elegidos que no se cruzan, la promoción nunca corre. */
+const nuncaAplica = (p: Pick<Promo, "startDate" | "endDate" | "weekdays">) => {
+  const dias = diasDelRango(p.startDate, p.endDate);
+  return !!dias && p.weekdays.length > 0 && !p.weekdays.some((d) => dias.has(d));
+};
+
 /** Texto corto de a qué aplica la promoción. */
 const alcance = (p: Promo) => {
   if (p.scope === "all") return "Toda la tienda";
@@ -68,6 +87,7 @@ const alcance = (p: Promo) => {
 
 const estado = (p: Promo) => {
   if (!p.isActive) return { texto: "Pausada", clase: "bg-line-soft text-muted" };
+  if (nuncaAplica(p)) return { texto: "Nunca aplica", clase: "bg-danger-bg text-danger" };
   const hoy = dayjs().startOf("day");
   if (p.startDate && hoy.isBefore(dayjs(p.startDate))) return { texto: "Programada", clase: "bg-info-bg text-info" };
   if (p.endDate && hoy.isAfter(dayjs(p.endDate).endOf("day"))) return { texto: "Vencida", clase: "bg-line-soft text-muted" };
@@ -86,6 +106,8 @@ const generarCodigo = () => {
  */
 export default function DiscountsPage() {
   const { business } = useBusiness();
+  // Un restaurante promociona categorías y platos; las variaciones (talla, color…) son de tiendas.
+  const esRestaurante = useEsRestaurante();
   const simbolo = (business as any)?.currencySymbol ?? "S/";
   const [promos, setPromos] = useState<Promo[]>([]);
   const [productos, setProductos] = useState<{ id: number; name: string }[]>([]);
@@ -102,6 +124,18 @@ export default function DiscountsPage() {
   const aplicacion = Form.useWatch("aplicacion", form) as "auto" | "codigo" | undefined;
   const vigenciaModo = Form.useWatch("vigenciaModo", form) as "siempre" | "rango" | undefined;
   const diasModo = Form.useWatch("diasModo", form) as "todos" | "algunos" | undefined;
+  const rango = Form.useWatch("rango", form) as [dayjs.Dayjs | null, dayjs.Dayjs | null] | undefined;
+  // Con un rango de fechas solo se pueden marcar los días que caen dentro (20/11–22/11 → vie, sáb, dom).
+  const diasPosibles = useMemo(
+    () => (vigenciaModo === "rango" ? diasDelRango(rango?.[0], rango?.[1]) : null),
+    [vigenciaModo, rango]
+  );
+  useEffect(() => {
+    if (!diasPosibles) return;
+    const marcados = (form.getFieldValue("weekdays") ?? []) as number[];
+    const validos = marcados.filter((d) => diasPosibles.has(d));
+    if (validos.length !== marcados.length) form.setFieldValue("weekdays", validos);
+  }, [diasPosibles, form]);
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -415,14 +449,16 @@ export default function DiscountsPage() {
               block
               options={[
                 { label: "Toda la tienda", value: "all" },
-                { label: "Productos, variaciones o categorías", value: "selection" },
+                { label: esRestaurante ? "Productos o categorías" : "Productos, variaciones o categorías", value: "selection" },
               ]}
             />
           </Form.Item>
           {scope === "selection" && (
             <div className="mb-4 space-y-3 rounded-lg border border-line-soft p-3">
               <p className="text-[12px] text-muted">
-                Elige lo que quieras: una categoría entera, varios productos, o solo ciertas tallas y colores.
+                {esRestaurante
+                  ? "Elige una categoría entera, varios productos, o ambos."
+                  : "Elige lo que quieras: una categoría entera, varios productos, o solo ciertas tallas y colores."}
               </p>
               <Form.Item name="categoryIds" label="Categorías" className="!mb-0">
                 <Select
@@ -444,7 +480,7 @@ export default function DiscountsPage() {
                   options={productos.map((p) => ({ value: p.id, label: p.name }))}
                 />
               </Form.Item>
-              {variaciones.length > 0 && (
+              {!esRestaurante && variaciones.length > 0 && (
                 <Form.Item name="variationIds" label="Variaciones (talla, color…)" className="!mb-0">
                   <Select
                     mode="multiple"
@@ -511,9 +547,15 @@ export default function DiscountsPage() {
             <Form.Item
               name="weekdays"
               rules={[{ required: true, type: "array", min: 1, message: "Elige al menos un día" }]}
-              extra="Combínalo con las fechas: por ejemplo, todos los viernes y sábados de este mes."
+              extra={
+                diasPosibles && diasPosibles.size < 7
+                  ? `Entre esas fechas solo caen: ${DIAS.filter((d) => diasPosibles.has(d.value))
+                      .map((d) => d.label)
+                      .join(", ")}. Los demás días no se pueden marcar.`
+                  : "Combínalo con las fechas: por ejemplo, todos los viernes y sábados de este mes."
+              }
             >
-              <Checkbox.Group options={DIAS} />
+              <Checkbox.Group options={DIAS.map((d) => ({ ...d, disabled: !!diasPosibles && !diasPosibles.has(d.value) }))} />
             </Form.Item>
           )}
 
